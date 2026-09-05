@@ -31,6 +31,7 @@ def build_options(
     resume: str | None,
     fork: bool,
     session_id: str | None,
+    model: str,
     budget_usd: float,
     context: str,
     servers: list[str],
@@ -42,17 +43,18 @@ def build_options(
     mcp, allowed = build_servers(ctx, servers)
     system_prompt = SYSTEM_PROMPT + (f"\n{context}\n" if context else "")
     logger.debug(
-        "%s options resume=%s fork=%s session=%s budget=%.6f servers=%s",
+        "%s options resume=%s fork=%s session=%s model=%s budget=%.6f servers=%s",
         ctx.prefix,
         resume,
         fork,
         session_id,
+        model,
         budget_usd,
         servers,
     )
     return ClaudeAgentOptions(
         system_prompt=system_prompt,
-        model=settings.claude_model,
+        model=model,
         tools=["WebSearch", "WebFetch"],
         mcp_servers=mcp,
         allowed_tools=allowed,

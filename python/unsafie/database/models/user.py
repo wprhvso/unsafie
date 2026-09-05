@@ -12,6 +12,7 @@ class User(Base):
     budget: Mapped[int] = mapped_column(BigInteger, default=-1, server_default="-1")
     locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     git_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     git_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ssh_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)

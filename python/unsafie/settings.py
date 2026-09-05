@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     log_truncate: int = 2000
     sql_echo: bool = False
 
-    claude_model: str = "claude-fable-5-1"
+    claude_model: str = "claude-opus-5"
     chats_dir: Path = Path("chats")
     claude_config_dir: Path = Field(
         default_factory=lambda: Path.home() / ".claude",

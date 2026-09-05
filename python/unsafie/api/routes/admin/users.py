@@ -15,7 +15,16 @@ async def read(session, user) -> UserRead:
     return UserRead(
         **{
             k: getattr(user, k)
-            for k in ("id", "balance", "budget", "locale", "timezone", "git_name", "git_email")
+            for k in (
+                "id",
+                "balance",
+                "budget",
+                "locale",
+                "timezone",
+                "model",
+                "git_name",
+                "git_email",
+            )
         },
         has_ssh_key=bool(user.ssh_public_key),
         github_logins=logins,

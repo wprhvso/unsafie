@@ -80,17 +80,20 @@ async def _execute(
             ratio = billing.ratio_for(config, cred.kind)
             user = await UserRepository(session).get_or_create(ctx.user_id)
             budget = billing.budget_usd(user.balance, user.budget, ratio)
+            model = user.model or settings.claude_model
             if budget <= 0:
                 logger.warning("%s aborted: empty balance", prefix)
                 return Outcome("empty_balance")
             servers = await available_servers(session, ctx)
             context = await build_context(session, ctx, servers)
         logger.info(
-            "%s attempt=%s credential=%s(%s) ratio=%s budget=%.6f resume=%s fork=%s servers=%s",
+            "%s attempt=%s credential=%s(%s) model=%s ratio=%s budget=%.6f "
+            "resume=%s fork=%s servers=%s",
             prefix,
             attempt,
             cred.id,
             cred.kind,
+            model,
             ratio,
             budget,
             resume,
@@ -103,6 +106,7 @@ async def _execute(
             resume=resume,
             fork=fork,
             session_id=session_id,
+            model=model,
             budget_usd=budget,
             context=context,
             servers=servers,

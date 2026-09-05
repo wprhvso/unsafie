@@ -61,6 +61,12 @@ class UserRepository:
         await self.session.commit()
         return user
 
+    async def set_model(self, user_id: int, model: str | None) -> User:
+        user = await self.get_or_create(user_id)
+        user.model = model
+        await self.session.commit()
+        return user
+
     async def transactions(self, user_id: int, limit: int = 50) -> list[Transaction]:
         rows = await self.session.scalars(
             select(Transaction)

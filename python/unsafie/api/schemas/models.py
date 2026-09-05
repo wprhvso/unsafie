@@ -26,6 +26,7 @@ class UserRead(Base):
     budget: int
     locale: str | None = None
     timezone: str | None = None
+    model: str | None = None
     git_name: str | None = None
     git_email: str | None = None
     has_ssh_key: bool = False

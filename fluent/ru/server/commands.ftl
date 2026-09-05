@@ -4,6 +4,7 @@ commands-start =
 
     /budget — баланс и лимит на сообщение
     /gh — аккаунты GitHub
+    /model — модель Claude
     /ssh — серверы по SSH
     /subs — подписки на события репо
     /tasks — напоминания и поручения по расписанию
@@ -18,4 +19,13 @@ commands-budget-usage =
     /budget N — лимит на одно сообщение (в сотых долях цента, { $units } = $1)
     /budget -1 — без лимита (по умолчанию)
     /budget 0 — экономия по-максимуму
+commands-model-status =
+    Модель: { $model }
+    По умолчанию: { $default }
+
+    /model NAME — сменить модель
+    /model default — вернуть модель по умолчанию
+commands-model-set = Модель: { $model }
+commands-model-reset = Снова модель по умолчанию: { $model }
+commands-model-usage = Имя модели — буквы, цифры, точки и дефисы, например /model claude-opus-5
 commands-budget-zero = Лимит 0. Бот теперь работает бесплатно: молча, вдумчиво и абсолютно ничего не делая. Самый дешёвый ассистент на рынке.
