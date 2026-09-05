@@ -12,6 +12,7 @@ from unsafie.database import SessionLocal, engine
 from unsafie.database.repositories.delivery import DeliveryRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.upgrade import upgrade
+from unsafie.github.cache import sweeper
 from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.cleanup import cleanup
 from unsafie.log import setup
@@ -37,12 +38,12 @@ async def lifespan(app: FastAPI):
     if stale_deliveries:
         logger.warning("%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries)
     await start_all()
-    for loop in (cleanup, runner, watchdog):
+    for loop in (cleanup, runner, watchdog, sweeper):
         loop.start()
     logger.info("lifespan ready")
     yield
     logger.info("lifespan shutdown")
-    for loop in (watchdog, runner, cleanup):
+    for loop in (sweeper, watchdog, runner, cleanup):
         await loop.stop()
     await pool.close_all()
     await stop_all()

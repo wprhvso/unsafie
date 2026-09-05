@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     github_max_rebase_commits: int = 50
     github_connections: int = 16
     github_concurrency: int = 8
+    github_cache_dir: Path = Path("cache")
+    github_cache_memory_bytes: int = 67_108_864
+    github_cache_item_bytes: int = 4_194_304
+    github_cache_disk_bytes: int = 2_147_483_648
+    github_cache_sweep_interval: int = 3600
     webhook_keep_days: int = 7
     webhook_cleanup_interval: int = 3600
 
@@ -82,7 +87,14 @@ class Settings(BaseSettings):
     events_buffer: int = 1000
     events_queue: int = 256
 
-    @field_validator("fluent_dir", "static_dir", "chats_dir", "claude_config_dir", mode="before")
+    @field_validator(
+        "fluent_dir",
+        "static_dir",
+        "chats_dir",
+        "claude_config_dir",
+        "github_cache_dir",
+        mode="before",
+    )
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v

@@ -1,8 +1,23 @@
 import base64
+import json
 from collections.abc import Iterable
 from typing import Any
 
-from unsafie.github.client.base import run_limited
+from unsafie.github import cache
+from unsafie.github.client.base import RAW, run_limited
+
+
+def _envelope(body: bytes) -> bytes:
+    """The API answered with the JSON wrapper instead of the raw blob — unwrap it."""
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return body
+    if not isinstance(data, dict):
+        return body
+    if data.get("encoding") == "base64":
+        return base64.b64decode(data.get("content") or "")
+    return (data.get("content") or "").encode()
 
 
 class GitMixin:
@@ -30,14 +45,27 @@ class GitMixin:
         return await self.request("GET", f"{self.base}/compare/{base}...{head}")
 
     async def tree(self, sha: str, recursive: bool = True) -> dict:
+        key = sha if recursive else f"{sha}.flat"
+        cached = await cache.trees.get_json(key)
+        if cached is not None:
+            return cached
         params = {"recursive": "1"} if recursive else None
-        return await self.request("GET", f"{self.base}/git/trees/{sha}", params=params)
+        data = await self.request("GET", f"{self.base}/git/trees/{sha}", params=params)
+        if isinstance(data, dict) and not data.get("truncated"):
+            await cache.trees.put_json(key, data)
+        return data
 
     async def blob(self, sha: str) -> bytes:
-        data = await self.request("GET", f"{self.base}/git/blobs/{sha}")
-        if data.get("encoding") == "base64":
-            return base64.b64decode(data["content"])
-        return (data.get("content") or "").encode()
+        """A blob by its sha. The sha is the content hash, so the cache never goes stale."""
+        cached = await cache.blobs.get(sha)
+        if cached is not None:
+            return cached
+        body = await self.request("GET", f"{self.base}/git/blobs/{sha}", accept=RAW, raw=True)
+        data = body if isinstance(body, bytes) else b""
+        if data[:1] == b"{" and cache.git_sha(data) != sha:
+            data = _envelope(data)
+        await cache.blobs.put(sha, data)
+        return data
 
     async def blobs(self, shas: Iterable[str]) -> dict[str, bytes]:
         """Many blobs at once: deduplicated and fetched in parallel instead of one by one."""

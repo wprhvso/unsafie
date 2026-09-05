@@ -7,6 +7,7 @@ from typing import Any
 
 import aiohttp
 
+from unsafie.github import metrics
 from unsafie.github.errors import Conflict, GithubError, NotFound
 from unsafie.log import short
 from unsafie.settings import settings
@@ -127,6 +128,8 @@ class GithubHTTP:
             ) as r:
                 body = await r.read()
                 ms = (time.perf_counter() - started) * 1000
+                metrics.bump("requests")
+                metrics.bump("bytes", len(body))
                 logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
                 if r.status == 404 and allow_404:
                     return None
