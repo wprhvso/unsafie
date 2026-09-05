@@ -17,6 +17,9 @@
   },
   "dependencies": {
     "@fluent/bundle": "^0.19.1",
-    "marked": "^15.0.12"
+    "github-markdown-css": "^5.8.1",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.11",
+    "markdown-it": "^14.1.0"
   }
 }
