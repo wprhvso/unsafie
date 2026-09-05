@@ -29,6 +29,20 @@ def method_name(method: TelegramMethod) -> str:
     return name[0].lower() + name[1:]
 
 
+def sent_message_id(response) -> int | None:
+    """The id of what was just sent, whatever shape the call returned.
+
+    The middleware chain hands over the unwrapped result, not the `Response` envelope, and a
+    result is anything a Bot API method can return: a `Message`, a `User` from `getMe`, a list
+    from `sendMediaGroup`, a bare `True`. Only the first two lines of that list carry an id.
+    """
+    result = getattr(response, "result", response)
+    if isinstance(result, list):
+        result = result[0] if result else None
+    value = getattr(result, "message_id", None)
+    return value if isinstance(value, int) else None
+
+
 class ApiTracing(BaseRequestMiddleware):
     async def __call__(
         self,
@@ -53,6 +67,6 @@ class ApiTracing(BaseRequestMiddleware):
             },
         ) as span:
             response = await make_request(bot, method)
-            sent = getattr(response.result, "message_id", None)
+            sent = sent_message_id(response)
             telemetry.set_attrs(span, {attrs.MESSAGE_ID: sent} if sent else None)
             return response
