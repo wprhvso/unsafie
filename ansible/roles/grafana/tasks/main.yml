@@ -1,0 +1,174 @@
+- name: grafana
+  ansible.builtin.include_role:
+    name: grafana.grafana.grafana
+  vars:
+    grafana_ini:
+      paths:
+        data: /var/lib/grafana
+        logs: /var/log/grafana
+        plugins: /var/lib/grafana/plugins
+        provisioning: /etc/grafana/provisioning
+      server:
+        http_addr: 127.0.0.1
+        http_port: 3000
+        domain: "grafana.{{ domain }}"
+        root_url: "https://grafana.{{ domain }}"
+      security:
+        admin_user: admin
+        admin_password: "{{ vault_grafana_admin_password }}"
+      database:
+        type: sqlite3
+      users:
+        allow_sign_up: false
+      auth:
+        disable_login_form: false
+      analytics:
+        reporting_enabled: false
+        check_for_updates: false
+    grafana_datasources:
+      - name: VictoriaMetrics
+        uid: victoriametrics
+        type: prometheus
+        access: proxy
+        url: http://127.0.0.1:8428
+        isDefault: true
+        jsonData:
+          prometheusType: Prometheus
+          prometheusVersion: "2.45.0"
+          timeInterval: 15s
+      - name: VictoriaLogs
+        uid: victorialogs
+        type: victoriametrics-logs-datasource
+        access: proxy
+        url: http://127.0.0.1:9428
+        jsonData:
+          derivedFields:
+            - name: trace_id
+              matcherType: label
+              matcherRegex: trace_id
+              url: "${__value.raw}"
+              urlDisplayLabel: Trace
+              datasourceUid: victoriatraces
+            - name: request_id
+              matcherType: label
+              matcherRegex: request_id
+              url: 'request_id:"${__value.raw}"'
+              urlDisplayLabel: Request logs
+              datasourceUid: victorialogs
+      - name: VictoriaTraces
+        uid: victoriatraces
+        type: jaeger
+        access: proxy
+        url: http://127.0.0.1:10428/select/jaeger
+        jsonData:
+          nodeGraph:
+            enabled: true
+          tracesToLogsV2:
+            datasourceUid: victorialogs
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            filterByTraceID: false
+            filterBySpanID: false
+            customQuery: true
+            query: 'trace_id:"${__span.traceId}"'
+      - name: VictoriaTraces (TraceQL)
+        uid: victoriatraces-tempo
+        type: tempo
+        access: proxy
+        url: http://127.0.0.1:10428/select/tempo
+        jsonData:
+          nodeGraph:
+            enabled: true
+          tracesToLogsV2:
+            datasourceUid: victorialogs
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            filterByTraceID: false
+            filterBySpanID: false
+            customQuery: true
+            query: 'trace_id:"${__span.traceId}"'
+      - name: Alertmanager
+        uid: alertmanager
+        type: alertmanager
+        access: proxy
+        url: http://127.0.0.1:9093
+        jsonData:
+          implementation: prometheus
+          handleGrafanaManagedAlerts: false
+    grafana_dashboards:
+      - dashboard_id: 1860
+        revision_id: 45
+        datasource: VictoriaMetrics
+      - dashboard_id: 9628
+        revision_id: 8
+        datasource: VictoriaMetrics
+      - dashboard_id: 763
+        revision_id: 6
+        datasource: VictoriaMetrics
+      - dashboard_id: 12708
+        revision_id: 1
+        datasource: VictoriaMetrics
+      - dashboard_id: 10229
+        revision_id: 58
+        datasource: VictoriaMetrics
+      - dashboard_id: 22084
+        revision_id: 11
+        datasource: VictoriaMetrics
+      - dashboard_id: 24136
+        revision_id: 3
+        datasource: VictoriaMetrics
+      - dashboard_id: 14950
+        revision_id: 22
+        datasource: VictoriaMetrics
+      - dashboard_id: 24774
+        revision_id: 1
+        datasource: VictoriaLogs
+
+- name: plugins
+  ansible.builtin.command:
+    cmd: grafana cli --homepath /usr/share/grafana --pluginsDir /var/lib/grafana/plugins plugins install {{ item }}
+    creates: "/var/lib/grafana/plugins/{{ item }}"
+  loop:
+    - victoriametrics-logs-datasource
+  notify: restart grafana
+
+- name: plugins owner
+  ansible.builtin.file:
+    path: /var/lib/grafana/plugins
+    owner: grafana
+    group: grafana
+    recurse: true
+
+- name: vhost
+  ansible.builtin.copy:
+    dest: "/etc/nginx/sites-enabled/grafana.{{ domain }}.conf"
+    mode: "0644"
+    content: |
+      server {
+          listen 80;
+          server_name grafana.{{ domain }};
+          location /.well-known/acme-challenge/ { root /var/www/acme; }
+          location / { return 301 https://$host$request_uri; }
+      }
+      server {
+          listen 443 ssl;
+          http2 on;
+          server_name grafana.{{ domain }};
+          ssl_certificate /etc/letsencrypt/live/grafana.{{ domain }}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/grafana.{{ domain }}/privkey.pem;
+          location / {
+              proxy_pass http://127.0.0.1:3000;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto https;
+          }
+          location /api/live/ {
+              proxy_pass http://127.0.0.1:3000;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_set_header Host $host;
+          }
+      }
+  notify: reload nginx

@@ -1,0 +1,17 @@
+- name: layout
+  ansible.builtin.import_tasks: layout.yml
+
+- name: toolchain
+  ansible.builtin.import_tasks: toolchain.yml
+
+- name: build unit
+  ansible.builtin.import_tasks: build.yml
+
+- name: bootstrap
+  ansible.builtin.import_tasks: bootstrap.yml
+
+- name: services
+  ansible.builtin.import_tasks: services.yml
+
+- name: web
+  ansible.builtin.import_tasks: web.yml

@@ -1,0 +1,51 @@
+- name: Fetch the repository
+  ansible.builtin.git:
+    repo: "{{ unsafie_repo }}"
+    dest: "{{ unsafie_src }}"
+    version: "{{ unsafie_version }}"
+    force: true
+  become: true
+  become_user: "{{ unsafie_user }}"
+  notify: restart unsafie
+
+- name: Sync python dependencies
+  ansible.builtin.command:
+    cmd: /usr/local/bin/uv sync --frozen --no-dev
+    chdir: "{{ unsafie_src }}/python"
+  environment:
+    UV_PROJECT_ENVIRONMENT: "{{ unsafie_venv }}"
+    UV_PYTHON_INSTALL_DIR: "{{ unsafie_home }}/.python"
+    HOME: "{{ unsafie_home }}"
+  become: true
+  become_user: "{{ unsafie_user }}"
+  register: unsafie_sync
+  changed_when: "'Installed' in unsafie_sync.stderr or 'Creating' in unsafie_sync.stderr"
+  notify: restart unsafie
+
+- name: Build the frontend
+  when: unsafie_build_frontend
+  become: true
+  become_user: "{{ unsafie_user }}"
+  environment:
+    HOME: "{{ unsafie_home }}"
+  block:
+    - name: Install node dependencies
+      ansible.builtin.command:
+        cmd: npm ci --no-audit --no-fund
+        chdir: "{{ unsafie_src }}/svelte"
+      changed_when: true
+
+    - name: Run the vite build
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: "{{ unsafie_src }}/svelte"
+      changed_when: true
+
+- name: Write the environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ unsafie_config_dir }}/app.env"
+    owner: root
+    group: "{{ unsafie_group }}"
+    mode: "0640"
+  notify: restart unsafie

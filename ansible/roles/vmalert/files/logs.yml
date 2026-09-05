@@ -1,0 +1,40 @@
+groups:
+  - name: nginx
+    type: vlogs
+    interval: 1m
+    rules:
+      - alert: NginxTooMany5xx
+        expr: '{source="nginx_access"} status:>=500 | stats count() as errors | filter errors:>20'
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} nginx 5xx in the last minute"
+      - alert: NginxErrorLog
+        expr: '{source="nginx_error"} level:in(crit,alert,emerg) | stats count() as errors | filter errors:>0'
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $value }} critical nginx errors in the last minute"
+
+  - name: postgres
+    type: vlogs
+    interval: 1m
+    rules:
+      - alert: PostgresErrorLog
+        expr: '{source="postgres"} level:in(FATAL,PANIC) | stats count() as errors | filter errors:>0'
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $value }} postgres fatal errors in the last minute"
+      - alert: PostgresErrorsBurst
+        expr: '{source="postgres"} level:ERROR | stats count() as errors | filter errors:>30'
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} postgres errors in the last minute"
+
+  - name: journald
+    type: vlogs
+    interval: 1m
+    rules:
+      - alert: JournaldCritical
+        expr: '{source="journald"} level:in(emerg,alert,crit) | stats by (unit) count() as n | filter n:>0'
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.unit }}: {{ $value }} critical messages"

@@ -1,0 +1,32 @@
+[Unit]
+Description=DumbVPN release feed
+After=network.target
+ConditionPathExists={{ dumbvpn_etc }}/runtime.env
+
+[Service]
+Type=simple
+EnvironmentFile={{ dumbvpn_etc }}/runtime.env
+ExecStart=/usr/local/bin/dumbvpn-update -addr {{ dumbvpn_update_addr }} -path ${UPDATE_PATH} -dir {{ dumbvpn_home }}/releases
+Restart=always
+RestartSec=5s
+MemoryHigh=128M
+MemoryMax=256M
+TasksMax=256
+
+DynamicUser=yes
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

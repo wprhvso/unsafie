@@ -1,0 +1,187 @@
+- name: repo
+  ansible.builtin.deb822_repository:
+    name: vector
+    types: deb
+    uris: https://apt.vector.dev/
+    suites: stable
+    components: vector-0
+    signed_by: https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public
+  register: vector_repo
+
+- name: apt cache
+  ansible.builtin.apt:
+    update_cache: true
+  when: vector_repo.changed
+
+- name: package
+  ansible.builtin.apt:
+    name: vector
+    state: present
+
+- name: data dir
+  ansible.builtin.file:
+    path: /var/lib/vector
+    state: directory
+    owner: vector
+    group: vector
+    mode: "0750"
+
+- name: config
+  ansible.builtin.copy:
+    dest: /etc/vector/vector.yaml
+    mode: "0644"
+    validate: /usr/bin/vector validate --no-environment --config-yaml %s
+    content: |
+      data_dir: /var/lib/vector
+      timezone: local
+
+      api:
+        enabled: true
+        address: 127.0.0.1:8686
+
+      sources:
+        journald:
+          type: journald
+          exclude_units:
+            - vector.service
+
+        nginx_access:
+          type: file
+          include:
+            - /var/log/nginx/access.log
+
+        nginx_error:
+          type: file
+          include:
+            - /var/log/nginx/error.log
+
+        postgres:
+          type: file
+          include:
+            - /var/log/postgresql/postgresql-*-main.log
+          multiline:
+            start_pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
+            condition_pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
+            mode: halt_before
+            timeout_ms: 1000
+
+        internal:
+          type: internal_metrics
+
+      transforms:
+        journald_shape:
+          type: remap
+          inputs: [journald]
+          source: |
+            .source = "journald"
+            .unit = to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? to_string(._COMM) ?? "unknown"
+            p = to_int(.PRIORITY) ?? 6
+            .level = get(["emerg", "alert", "crit", "error", "warning", "notice", "info", "debug"], [p]) ?? "info"
+            del(.__CURSOR)
+            del(.__MONOTONIC_TIMESTAMP)
+            del(._SOURCE_MONOTONIC_TIMESTAMP)
+            del(._SOURCE_REALTIME_TIMESTAMP)
+            del(.__REALTIME_TIMESTAMP)
+            del(._BOOT_ID)
+            del(._MACHINE_ID)
+            del(._CAP_EFFECTIVE)
+            del(._SYSTEMD_CGROUP)
+            del(._SYSTEMD_SLICE)
+            del(._SYSTEMD_INVOCATION_ID)
+            del(._STREAM_ID)
+            del(._RUNTIME_SCOPE)
+            del(._SELINUX_CONTEXT)
+            del(.SYSLOG_FACILITY)
+            del(.SYSLOG_TIMESTAMP)
+            del(._TRANSPORT)
+            del(.PRIORITY)
+
+        nginx_access_shape:
+          type: remap
+          inputs: [nginx_access]
+          source: |
+            parsed = parse_json!(string!(.message))
+            . = merge!(., parsed)
+            .source = "nginx_access"
+            .timestamp = parse_timestamp!(string!(.time), "%+")
+            del(.time)
+            .status = to_int!(.status)
+            .bytes = to_int!(.bytes)
+            .request_time = to_float!(.request_time)
+            .level = if .status >= 500 { "error" } else if .status >= 400 { "warning" } else { "info" }
+            tp = string(.traceparent) ?? ""
+            if tp != "" {
+              parts = split(tp, "-")
+              if length(parts) == 4 {
+                .trace_id = parts[1]
+                .span_id = parts[2]
+              }
+            }
+            del(.traceparent)
+            .message = join!([string!(.method), string!(.uri), to_string(.status)], " ")
+            del(.file)
+
+        nginx_error_shape:
+          type: remap
+          inputs: [nginx_error]
+          source: |
+            .source = "nginx_error"
+            parsed, err = parse_regex(string!(.message), r'^(?P<ts>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>\w+)\] \d+#\d+: (?P<msg>.*)$')
+            if err == null {
+              .timestamp = parse_timestamp!(string!(parsed.ts), "%Y/%m/%d %H:%M:%S")
+              .level = parsed.level
+              .message = parsed.msg
+            }
+            del(.file)
+
+        postgres_shape:
+          type: remap
+          inputs: [postgres]
+          source: |
+            .source = "postgres"
+            parsed, err = parse_regex(string!(.message), r'(?s)^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \S+ \[(?P<pid>\d+)\] (?:(?P<user>[^@\s]+)@(?P<db>\S+) )?(?P<level>[A-Z]+):\s+(?P<msg>.*)$')
+            if err == null {
+              .timestamp = parse_timestamp!(string!(parsed.ts) + " +0000", "%Y-%m-%d %H:%M:%S%.3f %z")
+              .pid = to_int!(parsed.pid)
+              .level = parsed.level
+              .message = parsed.msg
+              if parsed.user != null { .user = parsed.user }
+              if parsed.db != null { .db = parsed.db }
+            }
+            del(.file)
+
+      sinks:
+        victorialogs:
+          type: http
+          inputs:
+            - journald_shape
+            - nginx_access_shape
+            - nginx_error_shape
+            - postgres_shape
+          uri: http://127.0.0.1:9428/insert/jsonline?_stream_fields=host,source,unit&_msg_field=message&_time_field=timestamp
+          compression: gzip
+          encoding:
+            codec: json
+          framing:
+            method: newline_delimited
+          healthcheck:
+            enabled: false
+          batch:
+            max_events: 500
+            timeout_secs: 2
+          buffer:
+            type: disk
+            max_size: 536870912
+            when_full: block
+
+        metrics:
+          type: prometheus_exporter
+          inputs: [internal]
+          address: 127.0.0.1:9598
+  notify: reload vector
+
+- name: service
+  ansible.builtin.systemd:
+    name: vector
+    state: started
+    enabled: true

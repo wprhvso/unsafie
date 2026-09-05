@@ -1,0 +1,16 @@
+- name: restart vmalert
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+    daemon_reload: true
+  loop:
+    - vmalert-metrics
+    - vmalert-logs
+
+- name: reload vmalert
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: reloaded
+  loop:
+    - vmalert-metrics
+    - vmalert-logs

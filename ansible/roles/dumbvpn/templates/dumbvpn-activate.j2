@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+work="${1:?work directory}"
+root="{{ dumbvpn_home }}"
+etc="{{ dumbvpn_etc }}"
+src="$root/src"
+bindir=/usr/local/bin
+
+case "$work" in
+"$root"/work/*) ;;
+*)
+    echo "refusing to activate $work: not under $root/work" >&2
+    exit 2
+    ;;
+esac
+if [ ! -d "$work/bin" ]; then
+    echo "$work/bin is missing" >&2
+    exit 2
+fi
+
+restart=()
+mark() {
+    local unit="$1"
+    local u
+    for u in "${restart[@]:-}"; do
+        if [ "$u" = "$unit" ]; then
+            return 0
+        fi
+    done
+    restart+=("$unit")
+}
+
+for name in relay update hook; do
+    new="$work/bin/dumbvpn-$name"
+    cur="$bindir/dumbvpn-$name"
+    if [ ! -f "$new" ]; then
+        echo "$new is missing" >&2
+        exit 2
+    fi
+    if [ -f "$cur" ] && cmp -s "$new" "$cur"; then
+        continue
+    fi
+    install -o root -g root -m 0755 "$new" "$cur.new"
+    mv -f "$cur.new" "$cur"
+    echo "installed dumbvpn-$name"
+    mark "dumbvpn-$name"
+done
+
+envval() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$src/.env" | head -n1 | sed -e "s/^[\"']//" -e "s/[\"']\$//"; }
+
+relay_user="$(envval RELAY_USER)"
+relay_pass="$(envval RELAY_PASS)"
+relay_port="$(envval SERVER_PORT)"
+update_token="$(envval UPDATE_TOKEN)"
+update_base="$(envval UPDATE_BASEURL)"
+update_path="$(printf '%s' "$update_base" | sed -E 's#^[a-z]+://[^/]+##; s#/+$##')"
+
+for v in relay_user relay_pass relay_port update_token update_base; do
+    if [ -z "${!v}" ]; then
+        echo ".env does not set what $v needs" >&2
+        exit 2
+    fi
+done
+if [ -z "$update_path" ] || [ "${update_path#/}" = "$update_path" ]; then
+    echo "UPDATE_BASEURL has no path: $update_base" >&2
+    exit 2
+fi
+
+runtime="$etc/runtime.env"
+tmp="$(mktemp "$etc/.runtime.XXXXXX")"
+cat >"$tmp" <<EOF
+RELAY_USER=$relay_user
+RELAY_PASS=$relay_pass
+RELAY_PORT=$relay_port
+UPDATE_TOKEN=$update_token
+UPDATE_PATH=$update_path
+EOF
+chmod 0600 "$tmp"
+chown root:root "$tmp"
+if [ -f "$runtime" ] && cmp -s "$tmp" "$runtime"; then
+    rm -f "$tmp"
+else
+    mv -f "$tmp" "$runtime"
+    echo "runtime environment updated"
+    mark dumbvpn-relay
+    mark dumbvpn-update
+fi
+
+for unit in "${restart[@]:-}"; do
+    [ -n "$unit" ] || continue
+    if ! systemctl list-unit-files "$unit.service" >/dev/null 2>&1; then
+        echo "$unit has no unit file yet; skipping restart"
+        continue
+    fi
+    if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+        echo "$unit not enabled yet; skipping restart"
+        continue
+    fi
+    if systemctl restart "$unit"; then
+        echo "restarted $unit"
+    else
+        echo "could not restart $unit" >&2
+    fi
+done
+
+exit 0

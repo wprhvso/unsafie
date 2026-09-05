@@ -1,0 +1,27 @@
+- hosts: all
+  roles:
+    - { role: hostname, tags: [hostname] }
+    - { role: packages, tags: [packages] }
+    - { role: sysctl, tags: [sysctl] }
+    - { role: journald, tags: [journald] }
+    - { role: motd, tags: [motd] }
+    - { role: ntp, tags: [ntp] }
+    - { role: security, tags: [security] }
+    - { role: ufw, tags: [ufw] }
+    - { role: nginx, tags: [nginx] }
+    - { role: postgres, tags: [postgres] }
+    - { role: redis, tags: [redis] }
+    - { role: node_exporter, tags: [node_exporter] }
+    - { role: postgres_exporter, tags: [postgres_exporter] }
+    - { role: redis_exporter, tags: [redis_exporter] }
+    - { role: nginx_exporter, tags: [nginx_exporter] }
+    - { role: victoriametrics, tags: [victoriametrics] }
+    - { role: victorialogs, tags: [victorialogs] }
+    - { role: victoriatraces, tags: [victoriatraces] }
+    - { role: alertmanager, tags: [alertmanager] }
+    - { role: vmalert, tags: [vmalert] }
+    - { role: vector, tags: [vector] }
+    - { role: monitoring_web, tags: [monitoring_web] }
+    - { role: grafana, tags: [grafana] }
+    - { role: dumbvpn, tags: [dumbvpn] }
+    - { role: unsafie, tags: [unsafie] }

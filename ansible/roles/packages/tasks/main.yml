@@ -1,0 +1,25 @@
+- name: upgrade
+  ansible.builtin.apt:
+    upgrade: dist
+    update_cache: true
+    autoremove: true
+    autoclean: true
+  tags:
+    - never
+    - upgrade
+
+- name: packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - git
+      - htop
+      - jq
+      - tree
+      - unzip
+      - ripgrep
+      - fd-find
+      - bat
+    state: present
+    update_cache: true

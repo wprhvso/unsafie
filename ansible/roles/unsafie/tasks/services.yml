@@ -1,0 +1,15 @@
+- name: Install the systemd unit
+  ansible.builtin.template:
+    src: unsafie.service.j2
+    dest: /etc/systemd/system/unsafie.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart unsafie
+
+- name: Enable and start unsafie
+  ansible.builtin.systemd_service:
+    name: unsafie
+    enabled: true
+    state: started
+    daemon_reload: true

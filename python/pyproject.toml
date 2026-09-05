@@ -1,0 +1,48 @@
+[project]
+name = "unsafie"
+version = "0.1.0"
+description = "unsafie"
+readme = "README.md"
+authors = [{ name = "wprhvso", email = "wprhvso@gmail.com" }]
+requires-python = ">=3.14"
+dependencies = [
+    "aiogram>=3.31.0",
+    "aiohttp>=3.14.0",
+    "alembic>=1.19.1",
+    "asyncssh>=2.19.0",
+    "claude-agent-sdk>=0.2.151",
+    "fastapi>=0.141.1",
+    "fluent.runtime>=0.4.0",
+    "pyjwt[crypto]>=2.10.0",
+    "pynacl>=1.5.0",
+    "llmmd>=0.1.7",
+    "psycopg[binary]>=3.3.5",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy>=2.0.52",
+    "uvicorn>=0.52.4",
+]
+
+[project.scripts]
+unsafie = "unsafie:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "unsafie"
+module-root = ""
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body", "fastapi.Path"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["unsafie"]

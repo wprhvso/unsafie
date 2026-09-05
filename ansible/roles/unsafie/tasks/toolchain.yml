@@ -1,0 +1,46 @@
+- name: Check for uv
+  ansible.builtin.stat:
+    path: /usr/local/bin/uv
+  register: unsafie_uv
+
+- name: Install uv
+  when: not unsafie_uv.stat.exists
+  block:
+    - name: Download the uv installer
+      ansible.builtin.get_url:
+        url: https://astral.sh/uv/install.sh
+        dest: /tmp/uv-install.sh
+        mode: "0755"
+
+    - name: Run the uv installer
+      ansible.builtin.command: /tmp/uv-install.sh
+      environment:
+        UV_INSTALL_DIR: /usr/local/bin
+      changed_when: true
+
+- name: Check the node version
+  ansible.builtin.command: node --version
+  register: unsafie_node
+  changed_when: false
+  failed_when: false
+
+- name: Install node from nodesource
+  when:
+    - unsafie_build_frontend
+    - unsafie_node.rc != 0 or not unsafie_node.stdout.startswith('v' ~ unsafie_node_version ~ '.')
+  block:
+    - name: Download the nodesource setup script
+      ansible.builtin.get_url:
+        url: "https://deb.nodesource.com/setup_{{ unsafie_node_version }}.x"
+        dest: /tmp/nodesource.sh
+        mode: "0755"
+
+    - name: Run the nodesource setup script
+      ansible.builtin.command: /tmp/nodesource.sh
+      changed_when: true
+
+    - name: Install nodejs
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: true

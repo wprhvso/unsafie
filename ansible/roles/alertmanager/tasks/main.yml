@@ -1,0 +1,27 @@
+- name: alertmanager
+  ansible.builtin.include_role:
+    name: prometheus.prometheus.alertmanager
+  vars:
+    alertmanager_web_listen_address: 127.0.0.1:9093
+    alertmanager_web_external_url: "https://alertmanager.{{ domain }}"
+    alertmanager_route:
+      receiver: telegram
+      group_by: [alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    alertmanager_receivers:
+      - name: telegram
+        telegram_configs:
+          - bot_token: "{{ vault_telegram_bot_token }}"
+            chat_id: "{{ vault_telegram_chat_id }}"
+            parse_mode: HTML
+            send_resolved: true
+            message: |
+              {{ '{{ range .Alerts }}' }}<b>{{ '{{ .Labels.severity | toUpper }}' }}</b> {{ '{{ .Labels.alertname }}' }}
+              {{ '{{ .Annotations.summary }}' }}
+              {{ '{{ end }}' }}
+    alertmanager_inhibit_rules:
+      - source_matchers: ['severity="critical"']
+        target_matchers: ['severity="warning"']
+        equal: [alertname]

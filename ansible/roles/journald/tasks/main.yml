@@ -1,0 +1,15 @@
+- name: journald config
+  ansible.builtin.ini_file:
+    path: /etc/systemd/journald.conf
+    section: Journal
+    option: "{{ item.key }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+  loop: "{{ params | dict2items }}"
+  vars:
+    params:
+      SystemMaxUse: 200M
+      SystemMaxFileSize: 50M
+      MaxRetentionSec: 1month
+      Compress: "yes"
+  notify: restart journald

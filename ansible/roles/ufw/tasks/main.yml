@@ -1,0 +1,43 @@
+- name: ufw package
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: ufw sysctl
+  ansible.builtin.lineinfile:
+    path: /etc/ufw/sysctl.conf
+    regexp: "^#?net/ipv4/conf/{{ item }}/log_martians="
+    line: "net/ipv4/conf/{{ item }}/log_martians=1"
+  loop:
+    - all
+    - default
+
+- name: defaults
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+
+- name: ssh rate limit
+  community.general.ufw:
+    rule: limit
+    port: "22"
+    proto: tcp
+
+- name: allow ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "80"
+    - "443"
+    - "{{ dumbvpn_relay_port }}"
+    - "18443"
+
+- name: enable
+  community.general.ufw:
+    state: enabled
+    logging: low

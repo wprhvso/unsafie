@@ -1,0 +1,63 @@
+- name: latest release
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/oliver006/redis_exporter/releases/latest
+  register: release
+
+- name: version
+  ansible.builtin.set_fact:
+    redis_exporter_version: "{{ release.json.tag_name | regex_replace('^v', '') }}"
+
+- name: installed version
+  ansible.builtin.command: /usr/local/bin/redis_exporter --version
+  register: installed
+  changed_when: false
+  failed_when: false
+
+- name: need install
+  ansible.builtin.set_fact:
+    redis_exporter_install: "{{ redis_exporter_version not in (installed.stdout | default('') ~ installed.stderr | default('')) }}"
+
+- name: download
+  ansible.builtin.unarchive:
+    src: "https://github.com/oliver006/redis_exporter/releases/download/v{{ redis_exporter_version }}/redis_exporter-v{{ redis_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: redis_exporter_install
+
+- name: install
+  ansible.builtin.copy:
+    src: "/tmp/redis_exporter-v{{ redis_exporter_version }}.linux-amd64/redis_exporter"
+    dest: /usr/local/bin/redis_exporter
+    mode: "0755"
+    remote_src: true
+  when: redis_exporter_install
+  notify: restart redis_exporter
+
+- name: unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/redis_exporter.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Redis Exporter
+      After=network.target
+
+      [Service]
+      DynamicUser=yes
+      ExecStart=/usr/local/bin/redis_exporter --web.listen-address=127.0.0.1:9121 --redis.addr=redis://127.0.0.1:6379
+      Restart=always
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: restart redis_exporter
+
+- name: service
+  ansible.builtin.systemd:
+    name: redis_exporter
+    state: started
+    enabled: true
+    daemon_reload: true

@@ -1,0 +1,62 @@
+- name: cache dir
+  ansible.builtin.file:
+    path: "/var/cache/victoria/victoria-logs-v{{ victorialogs_version }}"
+    state: directory
+    mode: "0755"
+
+- name: download
+  ansible.builtin.get_url:
+    url: "https://github.com/VictoriaMetrics/VictoriaLogs/releases/download/v{{ victorialogs_version }}/victoria-logs-linux-amd64-v{{ victorialogs_version }}.tar.gz"
+    dest: "/var/cache/victoria/victoria-logs-linux-amd64-v{{ victorialogs_version }}.tar.gz"
+    checksum: "sha256:https://github.com/VictoriaMetrics/VictoriaLogs/releases/download/v{{ victorialogs_version }}/victoria-logs-linux-amd64-v{{ victorialogs_version }}_checksums.txt"
+    mode: "0644"
+
+- name: unpack
+  ansible.builtin.unarchive:
+    src: "/var/cache/victoria/victoria-logs-linux-amd64-v{{ victorialogs_version }}.tar.gz"
+    dest: "/var/cache/victoria/victoria-logs-v{{ victorialogs_version }}"
+    remote_src: true
+    creates: "/var/cache/victoria/victoria-logs-v{{ victorialogs_version }}/victoria-logs-prod"
+
+- name: install
+  ansible.builtin.copy:
+    src: "/var/cache/victoria/victoria-logs-v{{ victorialogs_version }}/victoria-logs-prod"
+    dest: /usr/local/bin/victoria-logs
+    mode: "0755"
+    remote_src: true
+  notify: restart victorialogs
+
+- name: unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/victoria-logs.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=VictoriaLogs
+      After=network.target
+
+      [Service]
+      DynamicUser=yes
+      StateDirectory=victoria-logs
+      ExecStart=/usr/local/bin/victoria-logs \
+        -httpListenAddr=127.0.0.1:9428 \
+        -storageDataPath=/var/lib/victoria-logs \
+        -retentionPeriod=30d \
+        -retention.maxDiskSpaceUsageBytes=5GiB \
+        -vmalert.proxyURL=http://127.0.0.1:8881
+      Restart=always
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: restart victorialogs
+
+- name: service
+  ansible.builtin.systemd:
+    name: victoria-logs
+    state: started
+    enabled: true
+    daemon_reload: true

@@ -1,0 +1,6 @@
+- name: vhost
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-enabled/{{ dumbvpn_domain }}.conf"
+    mode: "0644"
+  notify: reload nginx

@@ -1,0 +1,25 @@
+- name: reload nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  notify: reload nginx service
+
+- name: reload nginx service
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+
+- name: daemon reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart dumbvpn-relay
+  ansible.builtin.command: systemctl try-restart dumbvpn-relay.service
+  changed_when: true
+
+- name: restart dumbvpn-update
+  ansible.builtin.command: systemctl try-restart dumbvpn-update.service
+  changed_when: true
+
+- name: restart dumbvpn-hook
+  ansible.builtin.command: systemctl try-restart dumbvpn-hook.service
+  changed_when: true

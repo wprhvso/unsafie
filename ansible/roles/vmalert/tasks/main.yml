@@ -1,0 +1,108 @@
+- name: cache dir
+  ansible.builtin.file:
+    path: "/var/cache/victoria/vmutils-v{{ victoriametrics_version }}"
+    state: directory
+    mode: "0755"
+
+- name: download
+  ansible.builtin.get_url:
+    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ victoriametrics_version }}/vmutils-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    dest: "/var/cache/victoria/vmutils-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    checksum: "sha256:https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ victoriametrics_version }}/vmutils-linux-amd64-v{{ victoriametrics_version }}_checksums.txt"
+    mode: "0644"
+
+- name: unpack
+  ansible.builtin.unarchive:
+    src: "/var/cache/victoria/vmutils-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    dest: "/var/cache/victoria/vmutils-v{{ victoriametrics_version }}"
+    remote_src: true
+    creates: "/var/cache/victoria/vmutils-v{{ victoriametrics_version }}/vmalert-prod"
+
+- name: install
+  ansible.builtin.copy:
+    src: "/var/cache/victoria/vmutils-v{{ victoriametrics_version }}/{{ item }}-prod"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: "0755"
+    remote_src: true
+  loop:
+    - vmalert
+    - vmalert-tool
+    - vmbackup
+    - vmrestore
+  notify: restart vmalert
+
+- name: rule dirs
+  ansible.builtin.file:
+    path: "/etc/vmalert/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - metrics
+    - logs
+
+- name: rules
+  ansible.builtin.copy:
+    src: "{{ item }}.yml"
+    dest: "/etc/vmalert/{{ item }}/rules.yml"
+    mode: "0644"
+  loop:
+    - metrics
+    - logs
+  notify: reload vmalert
+
+- name: units
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/vmalert-{{ item.name }}.service"
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=vmalert ({{ item.name }})
+      After=network.target
+
+      [Service]
+      DynamicUser=yes
+      ExecStart=/usr/local/bin/vmalert \
+        -httpListenAddr=127.0.0.1:{{ item.port }} \
+        -datasource.url={{ item.datasource }} \
+        -rule.defaultRuleType={{ item.type }} \
+        -rule=/etc/vmalert/{{ item.name }}/*.yml \
+        -notifier.url=http://127.0.0.1:9093 \
+        -remoteWrite.url=http://127.0.0.1:8428 \
+        -remoteRead.url=http://127.0.0.1:8428 \
+        -external.url={{ item.external }} \
+        -external.label=host=vps
+      ExecReload=/bin/kill -HUP $MAINPID
+      Restart=always
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  loop:
+    - {
+        name: metrics,
+        port: 8880,
+        type: prometheus,
+        datasource: "http://127.0.0.1:8428",
+        external: "https://metrics.{{ domain }}/vmalert",
+      }
+    - {
+        name: logs,
+        port: 8881,
+        type: vlogs,
+        datasource: "http://127.0.0.1:9428",
+        external: "https://logs.{{ domain }}/vmalert",
+      }
+  notify: restart vmalert
+
+- name: services
+  ansible.builtin.systemd:
+    name: "vmalert-{{ item }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop:
+    - metrics
+    - logs

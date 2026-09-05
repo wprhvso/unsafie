@@ -1,0 +1,37 @@
+[Unit]
+Description=unsafie
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User={{ unsafie_user }}
+Group={{ unsafie_group }}
+WorkingDirectory={{ unsafie_src }}/python
+EnvironmentFile={{ unsafie_config_dir }}/app.env
+Environment=HOME={{ unsafie_home }}
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{ unsafie_venv }}/bin/python -m unsafie
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+MemoryHigh={{ unsafie_memory_high }}
+MemoryMax={{ unsafie_memory_max }}
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ unsafie_home }}
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=unsafie
+
+[Install]
+WantedBy=multi-user.target

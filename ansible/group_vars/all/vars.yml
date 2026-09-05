@@ -1,0 +1,18 @@
+domain: unsafie.com
+domains:
+  - unsafie.com
+  - grafana.unsafie.com
+  - metrics.unsafie.com
+  - logs.unsafie.com
+  - traces.unsafie.com
+  - alertmanager.unsafie.com
+  - dumb.unsafie.com
+  - github.unsafie.com
+admin_email: admin@unsafie.com
+
+victoriametrics_version: 1.151.0
+victorialogs_version: 1.52.0
+victoriatraces_version: 0.11.0
+
+dumbvpn_domain: dumb.unsafie.com
+dumbvpn_relay_port: 8443

@@ -1,0 +1,63 @@
+- name: cache dir
+  ansible.builtin.file:
+    path: "/var/cache/victoria/victoria-traces-v{{ victoriatraces_version }}"
+    state: directory
+    mode: "0755"
+
+- name: download
+  ansible.builtin.get_url:
+    url: "https://github.com/VictoriaMetrics/VictoriaTraces/releases/download/v{{ victoriatraces_version }}/victoria-traces-linux-amd64-v{{ victoriatraces_version }}.tar.gz"
+    dest: "/var/cache/victoria/victoria-traces-linux-amd64-v{{ victoriatraces_version }}.tar.gz"
+    checksum: "sha256:https://github.com/VictoriaMetrics/VictoriaTraces/releases/download/v{{ victoriatraces_version }}/victoria-traces-linux-amd64-v{{ victoriatraces_version }}_checksums.txt"
+    mode: "0644"
+
+- name: unpack
+  ansible.builtin.unarchive:
+    src: "/var/cache/victoria/victoria-traces-linux-amd64-v{{ victoriatraces_version }}.tar.gz"
+    dest: "/var/cache/victoria/victoria-traces-v{{ victoriatraces_version }}"
+    remote_src: true
+    creates: "/var/cache/victoria/victoria-traces-v{{ victoriatraces_version }}/victoria-traces-prod"
+
+- name: install
+  ansible.builtin.copy:
+    src: "/var/cache/victoria/victoria-traces-v{{ victoriatraces_version }}/victoria-traces-prod"
+    dest: /usr/local/bin/victoria-traces
+    mode: "0755"
+    remote_src: true
+  notify: restart victoriatraces
+
+- name: unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/victoria-traces.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=VictoriaTraces
+      After=network.target
+
+      [Service]
+      DynamicUser=yes
+      StateDirectory=victoria-traces
+      ExecStart=/usr/local/bin/victoria-traces \
+        -httpListenAddr=127.0.0.1:10428 \
+        -otlpGRPCListenAddr=127.0.0.1:4317 \
+        -otlpGRPC.tls=false \
+        -storageDataPath=/var/lib/victoria-traces \
+        -retentionPeriod=14d \
+        -retention.maxDiskSpaceUsageBytes=3GiB
+      Restart=always
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: restart victoriatraces
+
+- name: service
+  ansible.builtin.systemd:
+    name: victoria-traces
+    state: started
+    enabled: true
+    daemon_reload: true

@@ -1,0 +1,115 @@
+- name: cache dir
+  ansible.builtin.file:
+    path: "/var/cache/victoria/victoria-metrics-v{{ victoriametrics_version }}"
+    state: directory
+    mode: "0755"
+
+- name: download
+  ansible.builtin.get_url:
+    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ victoriametrics_version }}/victoria-metrics-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    dest: "/var/cache/victoria/victoria-metrics-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    checksum: "sha256:https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ victoriametrics_version }}/victoria-metrics-linux-amd64-v{{ victoriametrics_version }}_checksums.txt"
+    mode: "0644"
+
+- name: unpack
+  ansible.builtin.unarchive:
+    src: "/var/cache/victoria/victoria-metrics-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    dest: "/var/cache/victoria/victoria-metrics-v{{ victoriametrics_version }}"
+    remote_src: true
+    creates: "/var/cache/victoria/victoria-metrics-v{{ victoriametrics_version }}/victoria-metrics-prod"
+
+- name: install
+  ansible.builtin.copy:
+    src: "/var/cache/victoria/victoria-metrics-v{{ victoriametrics_version }}/victoria-metrics-prod"
+    dest: /usr/local/bin/victoria-metrics
+    mode: "0755"
+    remote_src: true
+  notify: restart victoriametrics
+
+- name: config dir
+  ansible.builtin.file:
+    path: /etc/victoria-metrics
+    state: directory
+    mode: "0755"
+
+- name: scrape config
+  ansible.builtin.copy:
+    dest: /etc/victoria-metrics/scrape.yml
+    mode: "0644"
+    content: |
+      global:
+        scrape_interval: 15s
+        scrape_timeout: 10s
+        external_labels:
+          host: vps
+      scrape_configs:
+        - job_name: victoriametrics
+          static_configs:
+            - targets: ["127.0.0.1:8428"]
+        - job_name: victorialogs
+          static_configs:
+            - targets: ["127.0.0.1:9428"]
+        - job_name: victoriatraces
+          static_configs:
+            - targets: ["127.0.0.1:10428"]
+        - job_name: vmalert
+          static_configs:
+            - targets: ["127.0.0.1:8880", "127.0.0.1:8881"]
+        - job_name: alertmanager
+          static_configs:
+            - targets: ["127.0.0.1:9093"]
+        - job_name: grafana
+          static_configs:
+            - targets: ["127.0.0.1:3000"]
+        - job_name: vector
+          static_configs:
+            - targets: ["127.0.0.1:9598"]
+        - job_name: node
+          static_configs:
+            - targets: ["127.0.0.1:9100"]
+        - job_name: postgres
+          static_configs:
+            - targets: ["127.0.0.1:9187"]
+        - job_name: redis
+          static_configs:
+            - targets: ["127.0.0.1:9121"]
+        - job_name: nginx
+          static_configs:
+            - targets: ["127.0.0.1:9113"]
+  notify: reload victoriametrics
+
+- name: unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/victoria-metrics.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=VictoriaMetrics
+      After=network.target
+
+      [Service]
+      DynamicUser=yes
+      StateDirectory=victoria-metrics
+      ExecStart=/usr/local/bin/victoria-metrics \
+        -httpListenAddr=127.0.0.1:8428 \
+        -storageDataPath=/var/lib/victoria-metrics \
+        -retentionPeriod=90d \
+        -promscrape.config=/etc/victoria-metrics/scrape.yml \
+        -vmalert.proxyURL=http://127.0.0.1:8880
+      ExecReload=/bin/kill -HUP $MAINPID
+      Restart=always
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      NoNewPrivileges=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: restart victoriametrics
+
+- name: service
+  ansible.builtin.systemd:
+    name: victoria-metrics
+    state: started
+    enabled: true
+    daemon_reload: true

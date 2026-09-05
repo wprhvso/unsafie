@@ -1,0 +1,15 @@
+- name: Create the postgres role
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ unsafie_db_user }}"
+    state: present
+
+- name: Create the database
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ unsafie_db_name }}"
+    owner: "{{ unsafie_db_user }}"
+    encoding: UTF-8
+    state: present

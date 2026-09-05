@@ -1,0 +1,10 @@
+- name: restart unsafie
+  ansible.builtin.systemd_service:
+    name: unsafie
+    state: restarted
+    daemon_reload: true
+
+- name: reload nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded

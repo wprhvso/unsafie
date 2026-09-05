@@ -1,0 +1,71 @@
+- name: pgdg repo
+  ansible.builtin.deb822_repository:
+    name: pgdg
+    types: deb
+    uris: https://apt.postgresql.org/pub/repos/apt
+    suites: "{{ ansible_facts['distribution_release'] }}-pgdg"
+    components: main
+    signed_by: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+  register: pgdg
+
+- name: apt cache
+  ansible.builtin.apt:
+    update_cache: true
+  when: pgdg.changed
+
+- name: postgresql
+  ansible.builtin.include_role:
+    name: geerlingguy.postgresql
+  vars:
+    postgresql_version: 18
+    postgresql_packages:
+      - postgresql-18
+      - postgresql-contrib
+    postgresql_python_library: python3-psycopg2
+    postgresql_daemon: postgresql
+    postgresql_bin_path: /usr/lib/postgresql/18/bin
+    postgresql_data_dir: /var/lib/postgresql/18/main
+    postgresql_config_path: /etc/postgresql/18/main
+    postgresql_hba_entries:
+      - { type: local, database: all, user: all, auth_method: trust }
+      - {
+          type: host,
+          database: all,
+          user: all,
+          address: "127.0.0.1/32",
+          auth_method: trust,
+        }
+      - {
+          type: host,
+          database: all,
+          user: all,
+          address: "::1/128",
+          auth_method: trust,
+        }
+    postgresql_global_config_options:
+      - option: unix_socket_directories
+        value: /var/run/postgresql
+      - option: log_directory
+        value: log
+      - option: listen_addresses
+        value: localhost
+      - option: shared_buffers
+        value: 256MB
+      - option: effective_cache_size
+        value: 768MB
+      - option: work_mem
+        value: 8MB
+      - option: maintenance_work_mem
+        value: 64MB
+      - option: random_page_cost
+        value: "1.1"
+      - option: log_min_duration_statement
+        value: 1000
+      - option: log_timezone
+        value: UTC
+      - option: log_line_prefix
+        value: "'%m [%p] %q%u@%d '"
+      - option: log_checkpoints
+        value: "on"
+      - option: log_lock_waits
+        value: "on"

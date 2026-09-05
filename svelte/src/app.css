@@ -1,0 +1,89 @@
+:root {
+  --bg: #fbfbfa;
+  --panel: #fff;
+  --border: #e4e4e0;
+  --text: #16161a;
+  --muted: #6b6b76;
+  --accent: #2f6feb;
+  --ok: #1a7f4b;
+  --warn: #b7791f;
+  --bad: #c1372e;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131316;
+    --panel: #1a1a1f;
+    --border: #2c2c33;
+    --text: #e8e8ea;
+    --muted: #9a9aa4;
+    --accent: #6f9dff;
+    --ok: #4cc98a;
+    --warn: #e2b04a;
+    --bad: #ef6d62;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3 { font-weight: 620; line-height: 1.25; margin: 0 0 .6rem; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; }
+
+code, pre, .mono { font-family: var(--mono); font-size: .86em; }
+pre {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .8rem;
+  overflow-x: auto;
+}
+
+button, .button {
+  font: inherit;
+  padding: .35rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.danger:hover { border-color: var(--bad); color: var(--bad); }
+
+input, select, textarea {
+  font: inherit;
+  padding: .35rem .55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  min-width: 0;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .03em; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.stack { display: flex; flex-direction: column; gap: 1rem; }
+.nowrap { white-space: nowrap; }
+.grow { flex: 1; }

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_id="${GITHUB_APP_ID:?}"
+key="${GITHUB_APP_PRIVATE_KEY_FILE:?}"
+repo="${GITHUB_REPO:?}"
+
+b64() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+now="$(date +%s)"
+header='{"alg":"RS256","typ":"JWT"}'
+payload="$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now - 60))" "$((now + 540))" "$app_id")"
+unsigned="$(printf '%s' "$header" | b64).$(printf '%s' "$payload" | b64)"
+sig="$(printf '%s' "$unsigned" | openssl dgst -sha256 -sign "$key" -binary | b64)"
+jwt="$unsigned.$sig"
+
+install_id="$(curl -sf -H "Authorization: Bearer $jwt" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$repo/installation" | jq -r .id)"
+
+if [ -z "$install_id" ] || [ "$install_id" = null ]; then
+    echo "no installation for $repo" >&2
+    exit 1
+fi
+
+curl -sf -X POST -H "Authorization: Bearer $jwt" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/app/installations/$install_id/access_tokens" | jq -r .token

@@ -1,0 +1,23 @@
+- name: layout
+  ansible.builtin.import_tasks: layout.yml
+  tags: [unsafie, unsafie-layout]
+
+- name: toolchain
+  ansible.builtin.import_tasks: toolchain.yml
+  tags: [unsafie, unsafie-toolchain]
+
+- name: database
+  ansible.builtin.import_tasks: database.yml
+  tags: [unsafie, unsafie-db]
+
+- name: deploy
+  ansible.builtin.import_tasks: deploy.yml
+  tags: [unsafie, unsafie-deploy]
+
+- name: services
+  ansible.builtin.import_tasks: services.yml
+  tags: [unsafie, unsafie-service]
+
+- name: web
+  ansible.builtin.import_tasks: web.yml
+  tags: [unsafie, unsafie-web]

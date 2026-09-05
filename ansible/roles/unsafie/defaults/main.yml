@@ -1,0 +1,28 @@
+unsafie_user: unsafie
+unsafie_group: unsafie
+unsafie_home: /var/lib/unsafie
+unsafie_src: "{{ unsafie_home }}/src"
+unsafie_venv: "{{ unsafie_home }}/venv"
+unsafie_config_dir: /etc/unsafie
+unsafie_repo: https://github.com/wprhvso/unsafie.git
+unsafie_version: main
+
+unsafie_host: 127.0.0.1
+unsafie_port: 8000
+unsafie_log_level: INFO
+unsafie_model: claude-fable-5-1
+
+unsafie_domain: "{{ domain }}"
+unsafie_github_domain: "github.{{ domain }}"
+unsafie_replace_default_vhost: true
+
+unsafie_db_name: unsafie
+unsafie_db_user: unsafie
+
+unsafie_memory_high: 2G
+unsafie_memory_max: 3G
+
+unsafie_default_locale: en
+unsafie_default_timezone: UTC
+unsafie_node_version: "22"
+unsafie_build_frontend: true

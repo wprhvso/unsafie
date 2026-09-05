@@ -1,0 +1,43 @@
+- name: conntrack module
+  community.general.modprobe:
+    name: nf_conntrack
+    state: present
+
+- name: conntrack module on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/nf_conntrack.conf
+    mode: "0644"
+    content: nf_conntrack
+
+- name: sysctl
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-vps.conf
+    reload: true
+  loop: "{{ params | dict2items }}"
+  vars:
+    params:
+      net.ipv4.conf.all.accept_redirects: 0
+      net.ipv4.conf.default.accept_redirects: 0
+      net.ipv4.conf.all.secure_redirects: 0
+      net.ipv4.conf.default.secure_redirects: 0
+      net.ipv4.conf.all.send_redirects: 0
+      net.ipv4.conf.default.send_redirects: 0
+      net.ipv6.conf.all.accept_redirects: 0
+      net.ipv6.conf.default.accept_redirects: 0
+      net.ipv4.conf.all.log_martians: 1
+      net.core.default_qdisc: fq
+      net.ipv4.tcp_congestion_control: bbr
+      net.ipv4.tcp_fin_timeout: 15
+      net.ipv4.tcp_keepalive_time: 300
+      net.ipv4.tcp_keepalive_intvl: 15
+      net.ipv4.tcp_keepalive_probes: 5
+      net.ipv4.tcp_tw_reuse: 1
+      net.ipv4.tcp_slow_start_after_idle: 0
+      net.ipv4.tcp_mtu_probing: 1
+      net.netfilter.nf_conntrack_tcp_timeout_established: 86400
+      vm.swappiness: 10
+      vm.overcommit_memory: 1
+      kernel.kptr_restrict: 2
+      kernel.dmesg_restrict: 1

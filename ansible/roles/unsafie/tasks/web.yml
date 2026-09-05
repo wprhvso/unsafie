@@ -1,0 +1,32 @@
+- name: Remove the placeholder vhost of the main domain
+  ansible.builtin.file:
+    path: "/etc/nginx/sites-enabled/{{ unsafie_domain }}.conf"
+    state: absent
+  when: unsafie_replace_default_vhost
+  notify: reload nginx
+
+- name: Install the vhosts
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/nginx/sites-available/{{ item.name }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: vhost.conf.j2, name: "unsafie-{{ unsafie_domain }}" }
+    - { src: vhost-github.conf.j2, name: "unsafie-{{ unsafie_github_domain }}" }
+  notify: reload nginx
+
+- name: Enable the vhosts
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item }}.conf"
+    state: link
+  loop:
+    - "unsafie-{{ unsafie_domain }}"
+    - "unsafie-{{ unsafie_github_domain }}"
+  notify: reload nginx
+
+- name: Check the nginx configuration
+  ansible.builtin.command: nginx -t
+  changed_when: false

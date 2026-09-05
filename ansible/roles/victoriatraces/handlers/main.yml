@@ -1,0 +1,5 @@
+- name: restart victoriatraces
+  ansible.builtin.systemd:
+    name: victoria-traces
+    state: restarted
+    daemon_reload: true

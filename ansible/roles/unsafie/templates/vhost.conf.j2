@@ -1,0 +1,76 @@
+# managed by ansible
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ unsafie_domain }};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {{ unsafie_domain }};
+
+    ssl_certificate /etc/letsencrypt/live/{{ unsafie_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ unsafie_domain }}/privkey.pem;
+
+    root {{ unsafie_src }}/svelte/build;
+    index index.html;
+
+    client_max_body_size 32m;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+
+    location /_app/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    location /api/admin/events {
+        proxy_pass http://{{ unsafie_host }}:{{ unsafie_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        chunked_transfer_encoding off;
+    }
+
+    location /api/ {
+        proxy_pass http://{{ unsafie_host }}:{{ unsafie_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+
+    location ~ "^/[A-Z]{12}$" {
+        proxy_pass http://{{ unsafie_host }}:{{ unsafie_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /health {
+        proxy_pass http://{{ unsafie_host }}:{{ unsafie_port }};
+        access_log off;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

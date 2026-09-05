@@ -1,0 +1,142 @@
+groups:
+  - name: targets
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.job }} is down"
+
+  - name: host
+    rules:
+      - alert: HostOutOfMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "less than 10% memory available"
+      - alert: HostOutOfDisk
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "less than 10% disk on /"
+      - alert: HostDiskWillFillIn24h
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "disk will fill within 24h"
+      - alert: HostHighCpu
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.85
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "cpu over 85% for 10m"
+      - alert: HostHighLoad
+        expr: node_load5 / count(node_cpu_seconds_total{mode="idle"}) > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "load5 over 2x cores"
+      - alert: HostSwapFull
+        expr: node_memory_SwapTotal_bytes > 0 and (1 - node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes) > 0.8
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "swap over 80%"
+      - alert: HostOomKill
+        expr: increase(node_vmstat_oom_kill[10m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "oom kill happened"
+      - alert: SystemdUnitFailed
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.name }} failed"
+      - alert: HostRebooted
+        expr: time() - node_boot_time_seconds < 600
+        labels: { severity: info }
+        annotations:
+          summary: "host rebooted"
+      - alert: HostClockSkew
+        expr: abs(node_timex_offset_seconds) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "clock skew over 50ms"
+      - alert: HostNetworkErrors
+        expr: rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "network errors on {{ $labels.device }}"
+      - alert: ConntrackNearLimit
+        expr: node_nf_conntrack_entries / node_nf_conntrack_entries_limit > 0.8
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "conntrack over 80%"
+
+  - name: services
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "postgres down"
+      - alert: PostgresTooManyConnections
+        expr: sum(pg_stat_activity_count) / pg_settings_max_connections > 0.8
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "postgres connections over 80%"
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "redis down"
+      - alert: RedisOutOfMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "redis memory over 90%"
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "nginx down"
+
+  - name: observability
+    rules:
+      - alert: VictoriaMetricsLowDisk
+        expr: vm_free_disk_space_bytes < 1073741824
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "victoriametrics has less than 1GB free"
+      - alert: VictoriaLogsLowDisk
+        expr: vl_free_disk_space_bytes < 1073741824
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "victorialogs has less than 1GB free"
+      - alert: VectorComponentErrors
+        expr: sum by (component_id) (rate(vector_component_errors_total[5m])) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "vector errors in {{ $labels.component_id }}"
+      - alert: VmalertRuleErrors
+        expr: sum by (group) (rate(vmalert_alerting_rules_errors_total[5m])) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "vmalert rule errors in {{ $labels.group }}"

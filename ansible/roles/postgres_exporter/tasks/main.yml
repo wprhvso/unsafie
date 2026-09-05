@@ -1,0 +1,6 @@
+- name: postgres_exporter
+  ansible.builtin.include_role:
+    name: prometheus.prometheus.postgres_exporter
+  vars:
+    postgres_exporter_web_listen_address: 127.0.0.1:9187
+    postgres_exporter_name: "postgresql://postgres@127.0.0.1:5432/postgres?sslmode=disable"

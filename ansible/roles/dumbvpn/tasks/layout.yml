@@ -1,0 +1,69 @@
+- name: home dir
+  ansible.builtin.file:
+    path: "{{ dumbvpn_home }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: releases dir
+  ansible.builtin.file:
+    path: "{{ dumbvpn_home }}/releases"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - /var/cache/dumbvpn-toolchain
+    - "{{ dumbvpn_home }}/work"
+    - "{{ dumbvpn_home }}/logs"
+    - "{{ dumbvpn_home }}/cache"
+    - "{{ dumbvpn_etc }}"
+
+- name: build env
+  ansible.builtin.template:
+    src: build.env.j2
+    dest: "{{ dumbvpn_etc }}/build.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: hook env
+  ansible.builtin.template:
+    src: hook.env.j2
+    dest: "{{ dumbvpn_etc }}/hook.env"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart dumbvpn-hook
+
+- name: github app key
+  ansible.builtin.copy:
+    content: "{{ dumbvpn_github_app_private_key }}"
+    dest: "{{ dumbvpn_etc }}/github-app.pem"
+    owner: root
+    group: root
+    mode: "0600"
+  when: dumbvpn_github_app_private_key | length > 0
+  notify: restart dumbvpn-hook
+
+- name: scripts
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - dumbvpn-build
+    - dumbvpn-activate
+    - dumbvpn-trigger
+    - dumbvpn-token
