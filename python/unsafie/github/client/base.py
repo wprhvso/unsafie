@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -19,8 +20,10 @@ ACCEPT = "application/vnd.github+json"
 RAW = "application/vnd.github.raw"
 API_VERSION = "2022-11-28"
 TIMEOUT = aiohttp.ClientTimeout(total=60)
+DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=900, sock_read=120)
 RETRIES = 3
 PER_PAGE = 100
+CHUNK = 1 << 16
 
 _session: aiohttp.ClientSession | None = None
 _session_lock = asyncio.Lock()
@@ -150,6 +153,34 @@ class GithubHTTP:
                 except ValueError:
                     return body.decode(errors="replace")
         raise GithubError("github: retries exhausted")
+
+    async def stream(self, path: str, dest: Path, *, limit: int) -> int | None:
+        """Download a big response straight to a file. None means it is over `limit`."""
+        url = path if path.startswith("http") else f"{settings.github_api_url}{path}"
+        headers = {"Accept": ACCEPT, "X-GitHub-Api-Version": API_VERSION, "User-Agent": "unsafie"}
+        token = await self._auth()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        started = time.perf_counter()
+        http = await session()
+        size = 0
+        async with http.get(url, headers=headers, timeout=DOWNLOAD_TIMEOUT) as r:
+            if r.status >= 400:
+                raise _error(r.status, await r.read(), "GET", url)
+            if int(r.headers.get("content-length") or 0) > limit:
+                return None
+            with dest.open("wb") as out:
+                async for chunk in r.content.iter_chunked(CHUNK):
+                    size += len(chunk)
+                    if size > limit:
+                        return None
+                    out.write(chunk)
+        metrics.bump("requests")
+        metrics.bump("bytes", size)
+        logger.info(
+            "github GET %s -> %s bytes (%.0fms)", url, size, (time.perf_counter() - started) * 1000
+        )
+        return size
 
     def paginate(self, path: str, params: dict | None = None, key: str | None = None) -> Paginated:
         return Paginated(self, path, params, key)

@@ -14,10 +14,12 @@ from unsafie.database.repositories.github import (
     WorktreeRepository,
 )
 from unsafie.database.repositories.user import UserRepository
+from unsafie.github import bulk, cache
 from unsafie.github.app.auth import installation_provider
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.errors import GithubError, NotFound
 from unsafie.github.vfs import Overlay, Tree
+from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +144,9 @@ async def read_many(state: Session, paths: Iterable[str]) -> dict[str, bytes | N
         else:
             wanted[path] = sha
     if wanted:
+        if len(cache.blobs.missing(wanted.values())) >= settings.github_bulk_min_files:
+            worktree = await ensure_worktree(state)
+            await bulk.hydrate(state.client, worktree.base_commit_sha)
         blobs = await state.client.blobs(wanted.values())
         for path, sha in wanted.items():
             out[path] = blobs.get(sha)

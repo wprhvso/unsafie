@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     github_cache_item_bytes: int = 4_194_304
     github_cache_disk_bytes: int = 2_147_483_648
     github_cache_sweep_interval: int = 3600
+    github_bulk_min_files: int = 8
+    github_bulk_max_bytes: int = 104_857_600
+    github_bulk_extract_bytes: int = 268_435_456
+    github_bulk_file_bytes: int = 4_194_304
     webhook_keep_days: int = 7
     webhook_cleanup_interval: int = 3600
 
