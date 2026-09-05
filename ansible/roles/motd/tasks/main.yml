@@ -4,11 +4,20 @@
     mode: "0644"
   loop:
     - 10-help-text
-    - 50-motd-news
     - 80-esm
     - 90-updates-available
     - 91-contract-ua-esm-status
     - 95-hwe-eol
+  failed_when: false
+
+# 50-motd-news is not only run by run-parts from pam_motd: motd-news.service
+# execs it directly (ExecStart=/etc/update-motd.d/50-motd-news --force), so
+# dropping the exec bit makes the unit fail with 203/EXEC on every timer run.
+# Keep it executable, the news are switched off by ENABLED=0 below anyway.
+- name: keep 50-motd-news executable
+  ansible.builtin.file:
+    path: /etc/update-motd.d/50-motd-news
+    mode: "0755"
   failed_when: false
 
 - name: motd-news off
@@ -16,6 +25,24 @@
     path: /etc/default/motd-news
     regexp: ^ENABLED=
     line: ENABLED=0
+
+- name: motd-news timer off
+  ansible.builtin.systemd:
+    name: motd-news.timer
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: motd-news failed state
+  ansible.builtin.command: systemctl is-failed motd-news.service
+  register: motd_news_state
+  changed_when: false
+  failed_when: false
+
+- name: clear motd-news failed state
+  ansible.builtin.command: systemctl reset-failed motd-news.service
+  when: motd_news_state.stdout == "failed"
+  changed_when: true
 
 - name: motd
   ansible.builtin.copy:
