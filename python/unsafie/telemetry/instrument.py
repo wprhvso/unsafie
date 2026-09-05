@@ -43,7 +43,10 @@ def app(fastapi_app) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        FastAPIInstrumentor.instrument_app(fastapi_app, excluded_urls=EXCLUDED_URLS)
+        # Without exclude_spans every request drags three "http send" spans along with it.
+        FastAPIInstrumentor.instrument_app(
+            fastapi_app, excluded_urls=EXCLUDED_URLS, exclude_spans=["receive", "send"]
+        )
         _app_instrumented = True
     except Exception:
         logger.warning("fastapi instrumentation skipped", exc_info=True)
