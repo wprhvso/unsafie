@@ -10,3 +10,4 @@ chats/
 .env
 
 .vault_pass
+.facts_cache
