@@ -11,7 +11,7 @@ unsafie/
 │   ├── database/             модели, репозитории, миграции
 │   ├── api/                  routes/{public,admin}, schemas, services, dependencies, static
 │   ├── telegram/             manager, sender, render, handlers/, 7 команд
-│   ├── github/               app/, webhooks/, client/, ops/, vfs, workspace, subscriptions
+│   ├── github/               app/, webhooks/, client/, ops/, vfs, workspace, cache, bulk
 │   ├── ssh/                  keys, pool, watches, watchdog
 │   ├── scheduler/            cron, when, service, runner
 │   └── agent/                runtime, turns, prompt/, tools/{tg,gh,ssh,http} — 108 инструментов
@@ -42,3 +42,7 @@ GitHub работает через собственное GitHub App: репоз
 поиск, гисты, уведомления и создание репо — user-токеном из OAuth. Уведомления приходят
 вебхуками. Правки копятся в виртуальном worktree и уезжают одним коммитом с автоматическим
 трёхсторонним ребейзом.
+
+Содержимое файлов кэшируется по sha (память + каталог `GITHUB_CACHE_DIR`) — sha неизменяем,
+поэтому инвалидация не нужна. Массовое чтение (поиск, дифф) тянет снапшот репозитория одним
+архивом вместо запроса на каждый файл.

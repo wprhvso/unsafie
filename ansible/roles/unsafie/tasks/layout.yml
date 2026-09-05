@@ -23,6 +23,7 @@
     - { path: "{{ unsafie_home }}" }
     - { path: "{{ unsafie_home }}/chats" }
     - { path: "{{ unsafie_home }}/claude" }
+    - { path: "{{ unsafie_cache_dir }}", mode: "0700" }
     - { path: "{{ unsafie_config_dir }}", owner: root, group: "{{ unsafie_group }}", mode: "0750" }
 
 - name: Install system dependencies

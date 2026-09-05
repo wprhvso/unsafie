@@ -3,6 +3,7 @@ unsafie_group: unsafie
 unsafie_home: /var/lib/unsafie
 unsafie_src: "{{ unsafie_home }}/src"
 unsafie_venv: "{{ unsafie_home }}/venv"
+unsafie_cache_dir: "{{ unsafie_home }}/cache"
 unsafie_config_dir: /etc/unsafie
 unsafie_repo: https://github.com/wprhvso/unsafie.git
 unsafie_version: main

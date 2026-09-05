@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 READ_LIMIT = 400_000
 SEARCH_LIMIT = 400
+SCAN_LIMIT = 3000
 GREP_MATCHES = 200
 READ_BATCH = 200
 
@@ -175,8 +176,8 @@ async def fs_list(ctx: ToolContext, args: dict) -> dict:
     SERVER,
     "fs_search",
     "Search text inside repository files. query — a substring (regex=true for a regular expression). "
-    "pattern — restrict to a glob of paths. Searches the worktree tree; large repositories are "
-    "capped, narrow with pattern. Use gh_code_search for search across all of GitHub.",
+    "pattern — restrict to a glob of paths. Searches the whole worktree, uncommitted changes "
+    "included. Use gh_code_search for search across all of GitHub.",
     schema(["query"], query=str, pattern=str, regex=bool, ignore_case=bool, limit=int, **REPO_ARGS),
 )
 @guarded
@@ -186,9 +187,9 @@ async def fs_search(ctx: ToolContext, args: dict) -> dict:
     state = await session_for(ctx, args)
     tree = await workspace.load_tree(state)
     paths = tree.paths(args.get("pattern"))
-    if len(paths) > SEARCH_LIMIT:
+    if len(paths) > SCAN_LIMIT:
         return error(
-            f"{len(paths)} files match; the limit is {SEARCH_LIMIT}. Narrow it with pattern "
+            f"{len(paths)} files match; the limit is {SCAN_LIMIT}. Narrow it with pattern "
             "(e.g. '**/*.py' or 'src/**')."
         )
     flags = re.IGNORECASE if args.get("ignore_case") else 0

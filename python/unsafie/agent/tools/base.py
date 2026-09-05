@@ -12,6 +12,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.errors import OpsError
+from unsafie.github import metrics
 from unsafie.log import short
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ def guarded(fn: Handler) -> Handler:
     async def wrapper(ctx: ToolContext, args: dict) -> dict:
         started = time.perf_counter()
         name = fn.__name__
+        counters = metrics.start()
         logger.info("%s tool=%s args=%s", ctx.prefix, name, short(args, 500))
         try:
             result = await fn(ctx, args)
@@ -81,8 +83,13 @@ def guarded(fn: Handler) -> Handler:
                     logger.info("%s tool=%s refused: %s", ctx.prefix, name, e)
                     return error(formatter(e))
             raise
+        traffic = metrics.summary(counters)
         logger.info(
-            "%s tool=%s done in %.1fms", ctx.prefix, name, (time.perf_counter() - started) * 1000
+            "%s tool=%s done in %.1fms%s",
+            ctx.prefix,
+            name,
+            (time.perf_counter() - started) * 1000,
+            f" [github: {traffic}]" if traffic else "",
         )
         return result
 
