@@ -6,6 +6,8 @@ from io import BytesIO
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
 
+from unsafie import telemetry
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,12 +16,16 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
         try:
             return await fn()
         except TelegramRetryAfter as e:
+            telemetry.event(
+                "telegram.rate_limited", {"attempt": attempt + 1, "retry_after": e.retry_after}
+            )
             logger.warning("%s rate limited retry_after=%ss", what, e.retry_after)
             await asyncio.sleep(e.retry_after)
         except TelegramNetworkError as e:
             if attempt == attempts - 1:
                 raise
             delay = 2**attempt
+            telemetry.event("telegram.network_error", {"attempt": attempt + 1, "retry_in": delay})
             logger.warning("%s network error=%s retry_in=%ss", what, e, delay)
             await asyncio.sleep(delay)
     return await fn()

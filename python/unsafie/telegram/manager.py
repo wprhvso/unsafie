@@ -4,9 +4,10 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 
-from unsafie import events
+from unsafie import events, telemetry
 from unsafie.telegram.handlers import build_router
 from unsafie.telegram.middleware import UpdateMiddleware
+from unsafie.telegram.tracing import ApiTracing
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class BotManager:
         if bot_id in self._running:
             return
         bot = Bot(token=token, default=DefaultBotProperties(link_preview_is_disabled=True))
+        bot.session.middleware(ApiTracing())
         try:
             me = await bot.get_me()
         except Exception:
@@ -50,10 +52,12 @@ class BotManager:
         dispatcher = Dispatcher()
         dispatcher.update.outer_middleware(UpdateMiddleware(bot_id))
         dispatcher.include_router(build_router())
-        task = asyncio.create_task(
-            dispatcher.start_polling(bot, handle_signals=False, bot_id=bot_id),
-            name=f"bot-{bot_id}",
-        )
+        # Polling outlives whatever asked to start the bot; a trace must not follow it there.
+        with telemetry.detached():
+            task = asyncio.create_task(
+                dispatcher.start_polling(bot, handle_signals=False, bot_id=bot_id),
+                name=f"bot-{bot_id}",
+            )
         task.add_done_callback(lambda t: self._on_done(bot_id, t))
         self._running[bot_id] = RunningBot(bot, dispatcher, task, me.username or "")
         events.publish("bot.started", bot_id=bot_id, username=me.username)

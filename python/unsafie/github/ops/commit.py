@@ -1,5 +1,6 @@
 import logging
 
+from unsafie import telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.github import WorktreeRepository
 from unsafie.github import merge
@@ -7,6 +8,7 @@ from unsafie.github.errors import Conflict, GithubError, NotFound
 from unsafie.github.vfs import Overlay, encode
 from unsafie.github.workspace import Session, author_for, ensure_worktree, load_tree, lock_for, save
 from unsafie.settings import settings
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,15 @@ async def _remote_files(state: Session, base_tree: str, head_tree: str) -> tuple
     return base_map, head_map
 
 
+@telemetry.traced("github.rebase")
 async def _rebase(state: Session, remote_sha: str) -> merge.Result:
+    telemetry.annotate(
+        **{
+            attrs.GH_REPO: state.repo.full,
+            attrs.GH_BRANCH: state.branch,
+            attrs.GH_SHA: remote_sha[:7],
+        }
+    )
     worktree = await ensure_worktree(state)
     remote_commit = await state.client.commit(remote_sha)
     base_map, head_map = await _remote_files(
@@ -73,7 +83,16 @@ async def _rebase(state: Session, remote_sha: str) -> merge.Result:
     return result
 
 
+@telemetry.traced("github.commit")
 async def commit(state: Session, message: str, user_id: int) -> dict:
+    telemetry.annotate(
+        **{
+            attrs.GH_REPO: state.repo.full,
+            attrs.GH_BRANCH: state.branch,
+            attrs.USER_ID: user_id,
+            attrs.GH_FILES: len(state.overlay),
+        }
+    )
     if not state.dirty:
         raise GithubError("nothing to commit: the worktree is clean")
     async with lock_for(state.repo.id, state.branch):
@@ -122,6 +141,13 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
             )
         files = len(entries)
         state.overlay.clear()
+        telemetry.annotate(
+            **{
+                attrs.GH_SHA: created["sha"][:7],
+                attrs.GH_FILES: files,
+                "unsafie.github.rebased": bool(rebased),
+            }
+        )
         logger.info("%s committed %s (%s files)", state.label, created["sha"][:7], files)
         return {
             "sha": created["sha"],
@@ -131,7 +157,11 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
         }
 
 
+@telemetry.traced("github.amend")
 async def amend(state: Session, message: str | None, user_id: int) -> dict:
+    telemetry.annotate(
+        **{attrs.GH_REPO: state.repo.full, attrs.GH_BRANCH: state.branch, attrs.USER_ID: user_id}
+    )
     async with lock_for(state.repo.id, state.branch):
         worktree = await ensure_worktree(state)
         head = await state.client.commit(worktree.base_commit_sha)

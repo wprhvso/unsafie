@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from unsafie import events
+from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.scheduled_task import TaskKind
@@ -12,6 +12,7 @@ from unsafie.scheduler import service
 from unsafie.settings import settings
 from unsafie.telegram import sender
 from unsafie.telegram.manager import manager
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +33,29 @@ class Runner(Loop):
 
     async def tick(self) -> None:
         now = datetime.now(UTC)
-        async with SessionLocal() as session:
-            due = await ScheduleRepository(session).due(now, BATCH)
+        # Looking for due tasks every 20 seconds is not worth a span; firing one is.
+        with telemetry.muted():
+            async with SessionLocal() as session:
+                due = await ScheduleRepository(session).due(now, BATCH)
         for task in due:
-            try:
-                await self._fire(task)
-            except Exception:
-                logger.exception("task=%s failed", task.id)
-                await self._advance(task)
+            with telemetry.span(
+                "scheduler.task",
+                kind=telemetry.CONSUMER,
+                attributes={
+                    attrs.TASK_ID: task.id,
+                    attrs.TASK_KIND: str(task.kind),
+                    attrs.BOT_ID: task.bot_id,
+                    attrs.CHAT_ID: task.chat_id,
+                    attrs.USER_ID: task.user_id,
+                    attrs.PROMPT: telemetry.content(task.text),
+                },
+            ) as span:
+                try:
+                    await self._fire(task)
+                except Exception as e:
+                    telemetry.fail(span, e)
+                    logger.exception("task=%s failed", task.id)
+                    await self._advance(task)
 
     async def _advance(self, task) -> None:
         run_at = await service.advance(task)

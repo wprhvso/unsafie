@@ -4,6 +4,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from unsafie import telemetry
+
 logger = logging.getLogger(__name__)
 
 GetBot = Callable[[int], Any]
@@ -53,7 +55,10 @@ class Loop:
         while True:
             started = time.perf_counter()
             try:
-                await self.tick()
+                # A tick is not an event in itself: a loop opens a trace per item it finds, and
+                # every iteration starts from a clean context so nothing leaks between them.
+                with telemetry.detached():
+                    await self.tick()
             except asyncio.CancelledError:
                 raise
             except Exception:

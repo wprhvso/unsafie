@@ -3,6 +3,7 @@ import logging
 
 from sqlalchemy import select
 
+from unsafie import telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.installation import InstallationAccount
@@ -19,6 +20,7 @@ from unsafie.github.webhooks import deliveries
 from unsafie.github.webhooks import events as fmt
 from unsafie.telegram import sender
 from unsafie.telegram.manager import manager
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -28,21 +30,50 @@ LIFECYCLE = {"installation", "installation_repositories", "github_app_authorizat
 async def handle(delivery_id: str, event: str, payload: dict) -> None:
     if not await deliveries.accept(delivery_id, event, payload):
         return
-    asyncio.create_task(_process(delivery_id, event, payload), name=f"webhook:{delivery_id}")
+    # GitHub gets its 200 now; the delivery is processed afterwards, so it earns a trace of its
+    # own — linked to the request instead of hanging off a span that has already ended.
+    origin = telemetry.links()
+    parent_trace = telemetry.trace_id()
+    with telemetry.detached():
+        asyncio.create_task(
+            _process(delivery_id, event, payload, origin, parent_trace),
+            name=f"webhook:{delivery_id}",
+        )
 
 
-async def _process(delivery_id: str, event: str, payload: dict) -> None:
+async def _process(
+    delivery_id: str,
+    event: str,
+    payload: dict,
+    origin: list | None = None,
+    parent_trace: str | None = None,
+) -> None:
     notified = 0
     error: str | None = None
-    try:
-        if event in LIFECYCLE:
-            await _lifecycle(event, payload)
-        else:
-            notified = await _notify(event, payload)
-    except Exception as e:
-        logger.exception("delivery=%s %s failed", delivery_id, event)
-        error = str(e)
-    await deliveries.done(delivery_id, notified, error)
+    repo = (payload.get("repository") or {}).get("full_name")
+    with telemetry.span(
+        f"gh.webhook {event}",
+        kind=telemetry.CONSUMER,
+        links=origin,
+        attributes={
+            attrs.GH_EVENT: event,
+            attrs.GH_DELIVERY: delivery_id,
+            attrs.GH_REPO: repo,
+            "unsafie.github.action": payload.get("action"),
+            attrs.PARENT_TRACE: parent_trace,
+        },
+    ) as span:
+        try:
+            if event in LIFECYCLE:
+                await _lifecycle(event, payload)
+            else:
+                notified = await _notify(event, payload)
+        except Exception as e:
+            telemetry.fail(span, e)
+            logger.exception("delivery=%s %s failed", delivery_id, event)
+            error = str(e)
+        telemetry.set_attrs(span, {attrs.GH_NOTIFIED: notified})
+        await deliveries.done(delivery_id, notified, error)
 
 
 async def _lifecycle(event: str, payload: dict) -> None:

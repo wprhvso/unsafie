@@ -13,7 +13,7 @@ from aiogram.types import (
 )
 from llmmd import process_markdown
 
-from unsafie import events
+from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.turn import Turn
@@ -21,6 +21,7 @@ from unsafie.database.repositories.response import ResponseRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.settings import settings
 from unsafie.telegram.retry import retry
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -134,21 +135,38 @@ async def send(
     silent: bool = False,
 ) -> Response:
     prefix = f"bot={bot_id} chat={chat_id} turn={turn.id if turn else None}"
-    chunks = chunks_of(markdown)
-    if turn is not None and reply_to is None:
-        reply_to = await reply_target(turn)
-    ids = await _send_chunks(bot, prefix, chat_id, chunks, reply_to, reply_markup, silent)
-    return await _record(
-        bot_id=bot_id,
-        chat_id=chat_id,
-        turn=turn,
-        kind=kind,
-        content=markdown,
-        ids=ids,
-        reply_to=reply_to,
-    )
+    with telemetry.span(
+        "tg.send",
+        kind=telemetry.PRODUCER,
+        attributes={
+            attrs.BOT_ID: bot_id,
+            attrs.CHAT_ID: chat_id,
+            attrs.TURN_ID: str(turn.id) if turn else None,
+            attrs.TG_KIND: str(kind),
+            attrs.TG_SILENT: silent,
+            attrs.PROMPT: telemetry.content(markdown),
+        },
+    ) as span:
+        chunks = chunks_of(markdown)
+        if turn is not None and reply_to is None:
+            reply_to = await reply_target(turn)
+        ids = await _send_chunks(bot, prefix, chat_id, chunks, reply_to, reply_markup, silent)
+        telemetry.set_attrs(
+            span,
+            {attrs.TG_CHUNKS: len(chunks), attrs.TG_MESSAGE_IDS: ids, attrs.MESSAGE_ID: reply_to},
+        )
+        return await _record(
+            bot_id=bot_id,
+            chat_id=chat_id,
+            turn=turn,
+            kind=kind,
+            content=markdown,
+            ids=ids,
+            reply_to=reply_to,
+        )
 
 
+@telemetry.traced("tg.send_file", kind=telemetry.PRODUCER)
 async def send_file(
     bot: Bot,
     *,
@@ -165,6 +183,17 @@ async def send_file(
     silent: bool = False,
 ) -> tuple[Response, str]:
     prefix = f"bot={bot_id} chat={chat_id} turn={turn.id if turn else None}"
+    telemetry.annotate(
+        **{
+            attrs.BOT_ID: bot_id,
+            attrs.CHAT_ID: chat_id,
+            attrs.TURN_ID: str(turn.id) if turn else None,
+            attrs.TG_KIND: str(kind),
+            attrs.FILE_NAME: filename,
+            attrs.FILE_BYTES: len(data),
+            attrs.FILE_MEDIA: media,
+        }
+    )
     if turn is not None and reply_to is None:
         reply_to = await reply_target(turn)
     chunks = chunks_of(caption) if caption else []
@@ -214,6 +243,7 @@ async def send_file(
     content = f"[{media} {filename}, {len(data)} bytes]"
     if caption:
         content += f"\n{caption}"
+    telemetry.annotate(**{attrs.FILE_MEDIA: media, attrs.TG_MESSAGE_IDS: ids})
     response = await _record(
         bot_id=bot_id,
         chat_id=chat_id,
@@ -247,6 +277,7 @@ async def record(
     )
 
 
+@telemetry.traced("tg.edit", kind=telemetry.PRODUCER)
 async def edit(
     bot: Bot,
     *,
@@ -257,6 +288,9 @@ async def edit(
     reply_markup: InlineKeyboardMarkup | None,
 ) -> str:
     prefix = f"bot={bot_id} chat={chat_id} msg={message_id}"
+    telemetry.annotate(
+        **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id}
+    )
     if markdown is None:
         await retry(
             functools.partial(
@@ -307,7 +341,11 @@ async def edit(
     return what
 
 
+@telemetry.traced("tg.delete", kind=telemetry.PRODUCER)
 async def delete(bot: Bot, *, bot_id: int, chat_id: int, message_id: int) -> None:
+    telemetry.annotate(
+        **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id}
+    )
     await retry(
         functools.partial(bot.delete_message, chat_id=chat_id, message_id=message_id),
         f"bot={bot_id} chat={chat_id} msg={message_id} delete",

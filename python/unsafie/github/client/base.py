@@ -5,13 +5,16 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import aiohttp
 
+from unsafie import telemetry
 from unsafie.github import metrics
 from unsafie.github.errors import Conflict, GithubError, NotFound
 from unsafie.log import short
 from unsafie.settings import settings
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +55,16 @@ async def close_session() -> None:
         await _session.close()
         logger.info("github http pool closed")
     _session = None
+
+
+def _operation(url: str) -> str:
+    """A span name has to stay countable: /repos, /search, /graphql — never the full path."""
+    parts = [p for p in urlsplit(url).path.split("/") if p]
+    return "/" + parts[0] if parts else "/"
+
+
+def _host(url: str) -> str | None:
+    return urlsplit(url).hostname
 
 
 async def run_limited(coros: Iterable[Awaitable], limit: int | None = None) -> list:
@@ -125,34 +138,54 @@ class GithubHTTP:
             headers["Authorization"] = f"Bearer {token}"
         started = time.perf_counter()
         http = await session()
-        for attempt in range(1, RETRIES + 1):
-            async with http.request(
-                method, url, headers=headers, params=params, json=json_body
-            ) as r:
-                body = await r.read()
-                ms = (time.perf_counter() - started) * 1000
-                metrics.bump("requests")
-                metrics.bump("bytes", len(body))
-                logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
-                if r.status == 404 and allow_404:
-                    return None
-                if r.status in (403, 429) and _rate_limited(r.headers, body):
-                    delay = _retry_delay(r.headers, attempt)
-                    if attempt < RETRIES and delay <= 60:
-                        logger.warning("github rate limited, sleeping %ss", delay)
-                        await asyncio.sleep(delay)
-                        continue
-                if r.status >= 400:
-                    raise _error(r.status, body, method, url)
-                if raw:
-                    return body
-                if not body:
-                    return None
-                try:
-                    return json.loads(body)
-                except ValueError:
-                    return body.decode(errors="replace")
-        raise GithubError("github: retries exhausted")
+        with telemetry.span(
+            f"github {method} {_operation(url)}",
+            kind=telemetry.CLIENT,
+            attributes={
+                attrs.HTTP_METHOD: method,
+                attrs.HTTP_URL: url,
+                attrs.SERVER_ADDRESS: _host(url),
+            },
+        ) as span:
+            for attempt in range(1, RETRIES + 1):
+                async with http.request(
+                    method, url, headers=headers, params=params, json=json_body
+                ) as r:
+                    body = await r.read()
+                    ms = (time.perf_counter() - started) * 1000
+                    metrics.bump("requests")
+                    metrics.bump("bytes", len(body))
+                    telemetry.set_attrs(
+                        span,
+                        {
+                            attrs.HTTP_STATUS: r.status,
+                            attrs.HTTP_BODY_SIZE: len(body),
+                            attrs.GH_ATTEMPT: attempt if attempt > 1 else None,
+                        },
+                    )
+                    logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
+                    if r.status == 404 and allow_404:
+                        return None
+                    if r.status in (403, 429) and _rate_limited(r.headers, body):
+                        delay = _retry_delay(r.headers, attempt)
+                        if attempt < RETRIES and delay <= 60:
+                            span.add_event(
+                                "github.rate_limited", {"attempt": attempt, "sleep_sec": delay}
+                            )
+                            logger.warning("github rate limited, sleeping %ss", delay)
+                            await asyncio.sleep(delay)
+                            continue
+                    if r.status >= 400:
+                        raise _error(r.status, body, method, url)
+                    if raw:
+                        return body
+                    if not body:
+                        return None
+                    try:
+                        return json.loads(body)
+                    except ValueError:
+                        return body.decode(errors="replace")
+            raise GithubError("github: retries exhausted")
 
     async def stream(self, path: str, dest: Path, *, limit: int) -> int | None:
         """Download a big response straight to a file. None means it is over `limit`."""
@@ -164,17 +197,30 @@ class GithubHTTP:
         started = time.perf_counter()
         http = await session()
         size = 0
-        async with http.get(url, headers=headers, timeout=DOWNLOAD_TIMEOUT) as r:
-            if r.status >= 400:
-                raise _error(r.status, await r.read(), "GET", url)
-            if int(r.headers.get("content-length") or 0) > limit:
-                return None
-            with dest.open("wb") as out:
-                async for chunk in r.content.iter_chunked(CHUNK):
-                    size += len(chunk)
-                    if size > limit:
-                        return None
-                    out.write(chunk)
+        with telemetry.span(
+            "github.download",
+            kind=telemetry.CLIENT,
+            attributes={
+                attrs.HTTP_METHOD: "GET",
+                attrs.HTTP_URL: url,
+                attrs.SERVER_ADDRESS: _host(url),
+            },
+        ) as span:
+            async with http.get(url, headers=headers, timeout=DOWNLOAD_TIMEOUT) as r:
+                telemetry.set_attrs(span, {attrs.HTTP_STATUS: r.status})
+                if r.status >= 400:
+                    raise _error(r.status, await r.read(), "GET", url)
+                if int(r.headers.get("content-length") or 0) > limit:
+                    telemetry.refused(span, f"over the {limit} byte limit")
+                    return None
+                with dest.open("wb") as out:
+                    async for chunk in r.content.iter_chunked(CHUNK):
+                        size += len(chunk)
+                        if size > limit:
+                            telemetry.refused(span, f"over the {limit} byte limit")
+                            return None
+                        out.write(chunk)
+            telemetry.set_attrs(span, {attrs.HTTP_BODY_SIZE: size})
         metrics.bump("requests")
         metrics.bump("bytes", size)
         logger.info(

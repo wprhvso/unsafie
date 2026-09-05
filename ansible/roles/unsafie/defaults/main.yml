@@ -24,5 +24,13 @@ unsafie_memory_max: 3G
 
 unsafie_default_locale: en
 unsafie_default_timezone: UTC
+
+unsafie_service_name: unsafie
+unsafie_environment: prod
+unsafie_otel_enabled: true
+unsafie_otel_endpoint: http://127.0.0.1:4317
+unsafie_otel_protocol: grpc
+unsafie_otel_sample_ratio: 1.0
+unsafie_otel_capture_content: false
 unsafie_node_version: "22"
 unsafie_build_frontend: true
