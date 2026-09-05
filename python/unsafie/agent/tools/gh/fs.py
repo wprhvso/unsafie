@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 READ_LIMIT = 400_000
 SEARCH_LIMIT = 400
 GREP_MATCHES = 200
+READ_BATCH = 200
 
 REPO_ARGS = dict(repo=str, branch=str)
 
@@ -198,21 +199,26 @@ async def fs_search(ctx: ToolContext, args: dict) -> dict:
     limit = max(1, min(int(args.get("limit") or 50), GREP_MATCHES))
     hits: list[str] = []
     scanned = 0
-    for path in paths:
+    for start in range(0, len(paths), READ_BATCH):
         if len(hits) >= limit:
             break
-        data = await workspace.read(state, path)
-        if data is None:
-            continue
-        decoded = decode_text(data)
-        if decoded is None:
-            continue
-        scanned += 1
-        for n, line in enumerate(decoded[0].splitlines(), 1):
-            if needle.search(line):
-                hits.append(f"{path}:{n}: {line.strip()[:200]}")
-                if len(hits) >= limit:
-                    break
+        batch = paths[start : start + READ_BATCH]
+        files = await workspace.read_many(state, batch)
+        for path in batch:
+            data = files.get(path)
+            if data is None:
+                continue
+            decoded = decode_text(data)
+            if decoded is None:
+                continue
+            scanned += 1
+            for n, line in enumerate(decoded[0].splitlines(), 1):
+                if needle.search(line):
+                    hits.append(f"{path}:{n}: {line.strip()[:200]}")
+                    if len(hits) >= limit:
+                        break
+            if len(hits) >= limit:
+                break
     if not hits:
         return text(f"nothing found in {scanned} file(s) of {state.label}")
     return text(f"{len(hits)} hit(s) in {scanned} scanned file(s):\n" + "\n".join(hits))

@@ -61,13 +61,15 @@ async def git_diff(ctx: ToolContext, args: dict) -> dict:
     paths = [args["path"]] if args.get("path") else state.overlay.paths
     if not paths:
         return text("worktree is clean")
+    shas = {path: tree.blob_sha(path) for path in paths}
+    committed = await state.client.blobs(sha for sha in shas.values() if sha)
     out: list[str] = []
     for path in paths:
         entry = state.overlay.entry(path)
         if entry is None:
             continue
-        sha = tree.blob_sha(path)
-        before = await state.client.blob(sha) if sha else b""
+        sha = shas.get(path)
+        before = committed.get(sha, b"") if sha else b""
         after = b"" if entry.deleted else entry.data
         old = decode_text(before)
         new = decode_text(after)

@@ -12,6 +12,7 @@ from unsafie.database import SessionLocal, engine
 from unsafie.database.repositories.delivery import DeliveryRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.upgrade import upgrade
+from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.cleanup import cleanup
 from unsafie.log import setup
 from unsafie.scheduler.runner import runner
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
         await loop.stop()
     await pool.close_all()
     await stop_all()
+    await close_session()
     await engine.dispose()
     logger.info("shutdown complete")
 

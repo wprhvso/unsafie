@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from typing import Any
 
 import aiohttp
@@ -15,10 +15,50 @@ logger = logging.getLogger(__name__)
 
 TokenProvider = Callable[[], Awaitable[str]]
 ACCEPT = "application/vnd.github+json"
+RAW = "application/vnd.github.raw"
 API_VERSION = "2022-11-28"
 TIMEOUT = aiohttp.ClientTimeout(total=60)
 RETRIES = 3
 PER_PAGE = 100
+
+_session: aiohttp.ClientSession | None = None
+_session_lock = asyncio.Lock()
+
+
+async def session() -> aiohttp.ClientSession:
+    """One connection pool for the whole process: no TCP+TLS handshake per request."""
+    global _session
+    if _session is not None and not _session.closed:
+        return _session
+    async with _session_lock:
+        if _session is None or _session.closed:
+            connector = aiohttp.TCPConnector(
+                limit=settings.github_connections,
+                limit_per_host=settings.github_connections,
+                ttl_dns_cache=300,
+            )
+            _session = aiohttp.ClientSession(timeout=TIMEOUT, connector=connector)
+            logger.info("github http pool opened (limit=%s)", settings.github_connections)
+    return _session
+
+
+async def close_session() -> None:
+    global _session
+    if _session is not None and not _session.closed:
+        await _session.close()
+        logger.info("github http pool closed")
+    _session = None
+
+
+async def run_limited(coros: Iterable[Awaitable], limit: int | None = None) -> list:
+    """Run awaitables in parallel, no more than `limit` of them in flight."""
+    sem = asyncio.Semaphore(limit or settings.github_concurrency)
+
+    async def run(coro):
+        async with sem:
+            return await coro
+
+    return await asyncio.gather(*(run(c) for c in coros))
 
 
 class Paginated:
@@ -80,32 +120,32 @@ class GithubHTTP:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         started = time.perf_counter()
+        http = await session()
         for attempt in range(1, RETRIES + 1):
-            async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
-                async with session.request(
-                    method, url, headers=headers, params=params, json=json_body
-                ) as r:
-                    body = await r.read()
-                    ms = (time.perf_counter() - started) * 1000
-                    logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
-                    if r.status == 404 and allow_404:
-                        return None
-                    if r.status in (403, 429) and _rate_limited(r.headers, body):
-                        delay = _retry_delay(r.headers, attempt)
-                        if attempt < RETRIES and delay <= 60:
-                            logger.warning("github rate limited, sleeping %ss", delay)
-                            await asyncio.sleep(delay)
-                            continue
-                    if r.status >= 400:
-                        raise _error(r.status, body, method, url)
-                    if raw:
-                        return body
-                    if not body:
-                        return None
-                    try:
-                        return json.loads(body)
-                    except ValueError:
-                        return body.decode(errors="replace")
+            async with http.request(
+                method, url, headers=headers, params=params, json=json_body
+            ) as r:
+                body = await r.read()
+                ms = (time.perf_counter() - started) * 1000
+                logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
+                if r.status == 404 and allow_404:
+                    return None
+                if r.status in (403, 429) and _rate_limited(r.headers, body):
+                    delay = _retry_delay(r.headers, attempt)
+                    if attempt < RETRIES and delay <= 60:
+                        logger.warning("github rate limited, sleeping %ss", delay)
+                        await asyncio.sleep(delay)
+                        continue
+                if r.status >= 400:
+                    raise _error(r.status, body, method, url)
+                if raw:
+                    return body
+                if not body:
+                    return None
+                try:
+                    return json.loads(body)
+                except ValueError:
+                    return body.decode(errors="replace")
         raise GithubError("github: retries exhausted")
 
     def paginate(self, path: str, params: dict | None = None, key: str | None = None) -> Paginated:

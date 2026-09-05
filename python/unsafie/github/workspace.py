@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from unsafie.database import SessionLocal
@@ -123,6 +124,28 @@ async def read(state: Session, path: str) -> bytes | None:
     if sha is None:
         return None
     return await state.client.blob(sha)
+
+
+async def read_many(state: Session, paths: Iterable[str]) -> dict[str, bytes | None]:
+    """Read a set of files in one go: the overlay first, everything else as one batch."""
+    out: dict[str, bytes | None] = {}
+    wanted: dict[str, str] = {}
+    for path in dict.fromkeys(paths):
+        entry = state.overlay.entry(path)
+        if entry is not None:
+            out[path] = None if entry.deleted else entry.data
+            continue
+        tree = await load_tree(state)
+        sha = tree.blob_sha(path)
+        if sha is None:
+            out[path] = None
+        else:
+            wanted[path] = sha
+    if wanted:
+        blobs = await state.client.blobs(wanted.values())
+        for path, sha in wanted.items():
+            out[path] = blobs.get(sha)
+    return out
 
 
 async def save(state: Session) -> None:

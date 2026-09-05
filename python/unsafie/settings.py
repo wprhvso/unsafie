@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     github_max_file_bytes: int = 1_048_576
     github_max_changes: int = 200
     github_max_rebase_commits: int = 50
+    github_connections: int = 16
+    github_concurrency: int = 8
     webhook_keep_days: int = 7
     webhook_cleanup_interval: int = 3600
 

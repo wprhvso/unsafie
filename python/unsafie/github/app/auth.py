@@ -2,13 +2,13 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 
-import aiohttp
 import jwt
 
 from unsafie.database import SessionLocal
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.repositories.github import GithubAccountRepository, GithubAppRepository
+from unsafie.github.client.base import session as http_session
 from unsafie.github.errors import AppNotInstalled, GithubError, UserAuthRequired
 from unsafie.settings import settings
 
@@ -59,14 +59,14 @@ async def installation_token(installation_id: int) -> str:
         "User-Agent": "unsafie",
     }
     url = f"{settings.github_api_url}/app/installations/{installation_id}/access_tokens"
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-        async with session.post(url, headers=headers) as r:
-            data = await r.json(content_type=None)
-            if r.status >= 400:
-                raise GithubError(
-                    f"could not get an installation token ({r.status}): {data.get('message')}. "
-                    "The App may have been removed from this account."
-                )
+    http = await http_session()
+    async with http.post(url, headers=headers) as r:
+        data = await r.json(content_type=None)
+        if r.status >= 400:
+            raise GithubError(
+                f"could not get an installation token ({r.status}): {data.get('message')}. "
+                "The App may have been removed from this account."
+            )
     token = data["token"]
     _installation_cache[installation_id] = (token, now + INSTALLATION_TTL)
     logger.info("installation=%s token issued", installation_id)
@@ -81,13 +81,13 @@ def installation_provider(installation_id: int):
 
 
 async def _exchange(app: GithubApp, payload: dict) -> dict:
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-        async with session.post(
-            TOKEN_URL,
-            headers={"Accept": "application/json"},
-            data={**payload, "client_id": app.client_id, "client_secret": app.client_secret},
-        ) as r:
-            data = await r.json(content_type=None)
+    http = await http_session()
+    async with http.post(
+        TOKEN_URL,
+        headers={"Accept": "application/json"},
+        data={**payload, "client_id": app.client_id, "client_secret": app.client_secret},
+    ) as r:
+        data = await r.json(content_type=None)
     if not isinstance(data, dict) or data.get("error") or not data.get("access_token"):
         raise GithubError(f"github oauth: {(data or {}).get('error_description') or data}")
     return data

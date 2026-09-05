@@ -1,5 +1,8 @@
 import base64
+from collections.abc import Iterable
 from typing import Any
+
+from unsafie.github.client.base import run_limited
 
 
 class GitMixin:
@@ -35,6 +38,14 @@ class GitMixin:
         if data.get("encoding") == "base64":
             return base64.b64decode(data["content"])
         return (data.get("content") or "").encode()
+
+    async def blobs(self, shas: Iterable[str]) -> dict[str, bytes]:
+        """Many blobs at once: deduplicated and fetched in parallel instead of one by one."""
+        unique = list(dict.fromkeys(sha for sha in shas if sha))
+        if not unique:
+            return {}
+        results = await run_limited([self.blob(sha) for sha in unique])
+        return dict(zip(unique, results, strict=True))
 
     async def create_blob(self, data: bytes) -> str:
         result = await self.request(

@@ -43,14 +43,17 @@ async def _rebase(state: Session, remote_sha: str) -> merge.Result:
     for path in state.overlay.paths:
         entry = state.overlay.entry(path)
         ours[path] = None if entry is None or entry.deleted else entry.data
-    theirs: dict[str, bytes | None] = {}
     touched = set(ours)
+    blobs = await state.client.blobs(
+        [sha for path in touched for sha in (base_map.get(path), head_map.get(path)) if sha]
+    )
+    theirs: dict[str, bytes | None] = {}
     for path in touched:
         if base_map.get(path) != head_map.get(path):
-            theirs[path] = await state.client.blob(head_map[path]) if path in head_map else None
+            theirs[path] = blobs.get(head_map[path]) if path in head_map else None
     base_files: dict[str, bytes | None] = {}
     for path in touched:
-        base_files[path] = await state.client.blob(base_map[path]) if path in base_map else None
+        base_files[path] = blobs.get(base_map[path]) if path in base_map else None
     result = merge.rebase(base_files, ours, theirs)
     state.overlay.clear()
     for path, data in result.merged.items():
