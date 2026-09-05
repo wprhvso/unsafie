@@ -11,6 +11,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.repositories.chat import ChatRepository
 from unsafie.database.repositories.update import UpdateRepository
 from unsafie.log import short
+from unsafie.telegram.dump import dump
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +37,9 @@ class UpdateMiddleware(BaseMiddleware):
         logger.info(
             "bot=%s update=%s type=%s received", self.bot_id, event.update_id, event.event_type
         )
-        logger.debug(
-            "bot=%s update=%s payload=%s",
-            self.bot_id,
-            event.update_id,
-            short(event.model_dump_json(exclude_none=True)),
-        )
-        data[UPDATE_DB_ID_KEY] = await self._store(event)
+        payload = dump(event)
+        logger.debug("bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload))
+        data[UPDATE_DB_ID_KEY] = await self._store(event, payload)
         try:
             return await handler(event, data)
         except Exception:
@@ -61,7 +58,7 @@ class UpdateMiddleware(BaseMiddleware):
                 (time.perf_counter() - started) * 1000,
             )
 
-    async def _store(self, event: Update) -> int | None:
+    async def _store(self, event: Update, payload: Any) -> int | None:
         chat: Chat | None = None
         message_id: int | None = None
         user_id: int | None = None
@@ -91,7 +88,7 @@ class UpdateMiddleware(BaseMiddleware):
                     chat_id=chat.id if chat else None,
                     message_id=message_id,
                     user_id=user_id,
-                    payload=event.model_dump(mode="json", exclude_none=True),
+                    payload=payload,
                 )
         except Exception:
             logger.exception("bot=%s update=%s not persisted", self.bot_id, event.update_id)
