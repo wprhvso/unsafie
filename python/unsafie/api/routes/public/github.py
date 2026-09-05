@@ -5,7 +5,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.github import GithubAppRepository
-from unsafie.database.repositories.oauth_state import OAuthStateRepository
 from unsafie.github.app import install, manifest
 from unsafie.github.errors import GithubError
 from unsafie.github.webhooks import router as webhooks
@@ -48,27 +47,6 @@ async def webhook(
     payload = await request.json()
     await webhooks.handle(x_github_delivery, x_github_event, payload)
     return JSONResponse({"ok": True}, status_code=202)
-
-
-@router.get("/oauth")
-async def oauth(code: str = "", state: str = ""):
-    if not code or not state:
-        return page(
-            "Something went wrong", "GitHub did not return a code. Try /gh in the chat again.", 400
-        )
-    async with SessionLocal() as session:
-        row = await OAuthStateRepository(session).consume(state)
-    if row is None:
-        return page("The link has expired", "Run <code>/gh</code> in the chat again.", 400)
-    try:
-        account = await install.connect_user(row.user_id, code)
-    except GithubError as e:
-        logger.exception("oauth failed for user=%s", row.user_id)
-        return page("Could not connect the account", str(e), 400)
-    return page(
-        f"Connected: {account.login}",
-        "Go back to the chat. If the repositories you need are missing, add them to the app installation.",
-    )
 
 
 @router.get("/app/new", response_class=HTMLResponse)

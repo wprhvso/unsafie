@@ -6,7 +6,6 @@ from unsafie.database.models.credential import AnthropicCredential, CredentialKi
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.models.installation import Installation, InstallationAccount
-from unsafie.database.models.oauth_state import OAuthState
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.scheduled_task import ScheduledTask, TaskKind
@@ -33,7 +32,6 @@ __all__ = [
     "GithubSubscription",
     "Installation",
     "InstallationAccount",
-    "OAuthState",
     "Repo",
     "Response",
     "ResponseKind",

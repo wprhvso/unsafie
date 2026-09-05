@@ -84,10 +84,8 @@ class GithubAccountRepository:
         github_id: int,
         login: str,
         *,
-        token: str | None,
-        token_expires: datetime | None,
-        refresh_token: str | None,
-        refresh_expires: datetime | None,
+        token: str,
+        scopes: str | None = None,
     ) -> GithubAccount:
         row = await self.by_github_id(user_id, github_id)
         if row is None:
@@ -95,29 +93,16 @@ class GithubAccountRepository:
             self.session.add(row)
         row.login = login
         row.token = token
-        row.token_expires = token_expires
-        row.refresh_token = refresh_token
-        row.refresh_expires = refresh_expires
+        row.scopes = scopes
+        row.last_used_at = datetime.now(UTC)
         await self.session.commit()
         logger.info("user=%s github account %s linked", user_id, login)
         return row
 
-    async def set_tokens(
-        self,
-        account_id: int,
-        *,
-        token: str | None,
-        token_expires: datetime | None,
-        refresh_token: str | None,
-        refresh_expires: datetime | None,
-    ) -> None:
+    async def touch(self, account_id: int) -> None:
         row = await self.get(account_id)
         if row is None:
             return
-        row.token = token
-        row.token_expires = token_expires
-        row.refresh_token = refresh_token
-        row.refresh_expires = refresh_expires
         row.last_used_at = datetime.now(UTC)
         await self.session.commit()
 
@@ -253,13 +238,14 @@ class RepoRepository:
 
     async def upsert(
         self,
-        installation_id: int,
+        installation_id: int | None,
         github_id: int,
         owner: str,
         name: str,
         default_branch: str,
         private: bool,
     ) -> Repo:
+        """installation_id=None means the repository is known from a token, not from an installation."""
         row = await self.by_github_id(github_id)
         if row is None:
             row = Repo(
@@ -272,7 +258,8 @@ class RepoRepository:
             )
             self.session.add(row)
         else:
-            row.installation_id = installation_id
+            if installation_id is not None:
+                row.installation_id = installation_id
             row.owner = owner
             row.name = name
             row.default_branch = default_branch

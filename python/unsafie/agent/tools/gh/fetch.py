@@ -4,7 +4,7 @@ from unsafie.agent.tools.base import ToolContext, error, guarded, schema, text
 from unsafie.agent.tools.files import deliver
 from unsafie.agent.tools.gh.context import SERVER, session_for
 from unsafie.agent.tools.registry import register
-from unsafie.github.app.auth import installation_token
+from unsafie.github import pat
 from unsafie.mime import decode_text, human_size, image_problem, image_result, sniff_mime
 
 logger = logging.getLogger(__name__)
@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 MAX = 20 * 1024 * 1024
 
 
-async def _get(state, url: str) -> bytes:
+async def _get(ctx: ToolContext, state, url: str) -> bytes:
     import aiohttp
 
-    token = await installation_token(state.repo.installation_id)
+    token = await pat.token_for(ctx.user_id, state.repo)
     headers = {"Authorization": f"Bearer {token}", "User-Agent": "unsafie"}
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as session:
         async with session.get(url, headers=headers) as r:
@@ -31,7 +31,7 @@ async def _get(state, url: str) -> bytes:
     SERVER,
     "gh_fetch",
     "Download an attachment from a GitHub issue, PR or comment by its URL "
-    "(github.com/user-attachments/…, private-user-images…). Uses the app token, so private "
+    "(github.com/user-attachments/…, private-user-images…). Uses the user's token, so private "
     "attachments work. mode = auto (default: view images, show text) | file (send to the chat).",
     schema(["url"], url=str, mode=str, repo=str),
 )
@@ -40,7 +40,7 @@ async def gh_fetch(ctx: ToolContext, args: dict) -> dict:
     state = await session_for(ctx, args)
     url = args["url"].strip()
     try:
-        data = await _get(state, url)
+        data = await _get(ctx, state, url)
     except ValueError as e:
         return error(str(e))
     name = url.rstrip("/").rsplit("/", 1)[-1] or "attachment"

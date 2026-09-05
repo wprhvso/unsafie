@@ -47,7 +47,9 @@
         <div class="pad stack">
           <p class="muted">
             No GitHub App yet. Creating one takes a single click: GitHub will ask you to confirm a
-            manifest, then hand the credentials back automatically.
+            manifest, then hand the credentials back automatically. Users work through their own
+            personal access tokens; the App only carries what a token cannot — webhook delivery
+            and the Checks API.
           </p>
           <div class="row">
             <a class="button" href={a.create_url}>Create the GitHub App</a>
@@ -97,7 +99,7 @@
   <Panel title="Connected accounts">
     <Loader state={accounts} empty="Nobody has connected a GitHub account.">
       <table>
-        <thead><tr><th>id</th><th>user</th><th>login</th><th>token</th><th>expires</th><th>connected</th></tr></thead>
+        <thead><tr><th>id</th><th>user</th><th>login</th><th>token</th><th>scopes</th><th>connected</th></tr></thead>
         <tbody>
           {#each accounts.data.items as a (a.id)}
             <tr>
@@ -105,7 +107,7 @@
               <td class="mono"><a href="/admin/users/{a.user_id}">{a.user_id}</a></td>
               <td>{a.login}</td>
               <td><Badge tone={a.has_token ? 'ok' : 'warn'}>{a.has_token ? 'yes' : 'none'}</Badge></td>
-              <td class="muted small">{when(a.token_expires)}</td>
+              <td class="muted small mono">{a.scopes ?? 'fine-grained'}</td>
               <td class="muted small">{when(a.created_at)}</td>
             </tr>
           {/each}
@@ -125,7 +127,7 @@
               <td><a href="https://github.com/{r.owner}/{r.name}" target="_blank" rel="noreferrer">{r.owner}/{r.name}</a></td>
               <td class="mono">{r.default_branch}</td>
               <td class="muted">{r.private ? 'private' : 'public'}</td>
-              <td class="mono">{r.installation_id}</td>
+              <td class="mono">{r.installation_id ?? '—'}</td>
             </tr>
           {/each}
         </tbody>

@@ -63,7 +63,13 @@ async def sub_add(ctx: ToolContext, args: dict) -> dict:
             if bound.id == state.repo.id and sub.kind == kind:
                 raise GithubError(f"already subscribed: [{sub.id}] {bound.full} · {kind}")
         created = await repo.add(ctx.bot_id, ctx.chat_id, ctx.user_id, state.repo.id, kind, filters)
-    return text(f"subscribed [{created.id}]: {state.repo.full} · {kind}")
+    line = f"subscribed [{created.id}]: {state.repo.full} · {kind}"
+    if not state.repo.installation_id:
+        line += (
+            "\nNothing will arrive yet: events come over webhooks, so the App has to be installed "
+            "on this repository — repo_install_link."
+        )
+    return text(line)
 
 
 @register(

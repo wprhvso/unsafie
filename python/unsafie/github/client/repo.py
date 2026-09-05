@@ -10,8 +10,14 @@ from unsafie.github.client.settings import SettingsMixin
 class RepoClient(
     GithubHTTP, GitMixin, IssuesMixin, PullsMixin, ActionsMixin, ReleasesMixin, SettingsMixin
 ):
-    def __init__(self, owner: str, name: str, token: TokenProvider | str) -> None:
-        super().__init__(token)
+    def __init__(
+        self,
+        owner: str,
+        name: str,
+        token: TokenProvider | str,
+        fallback: TokenProvider | str | None = None,
+    ) -> None:
+        super().__init__(token, fallback)
         self.owner = owner
         self.name = name
 

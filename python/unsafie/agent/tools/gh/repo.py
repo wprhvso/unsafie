@@ -4,8 +4,8 @@ from unsafie.agent.tools.base import ToolContext, guarded, schema, text
 from unsafie.agent.tools.gh.context import SERVER, session_for, user_client
 from unsafie.agent.tools.registry import register
 from unsafie.database import SessionLocal
-from unsafie.database.repositories.github import RepoRepository, UserRepoRepository
-from unsafie.github import sealed_box, workspace
+from unsafie.database.repositories.github import UserRepoRepository
+from unsafie.github import pat, sealed_box
 from unsafie.github.app import manifest
 from unsafie.github.errors import GithubError, NotFound
 
@@ -43,9 +43,8 @@ async def repo_info(ctx: ToolContext, args: dict) -> dict:
 @register(
     SERVER,
     "repo_create",
-    "Create a repository on the user's account (or in an organization via org=). Uses the user's "
-    "account, not the app. After creation the app must be installed on it — if the app is set to "
-    "'selected repositories', a link to add it is returned.",
+    "Create a repository on the user's account (or in an organization via org=) with their token "
+    "and bind it right away. Event subscriptions need the App installed on it — repo_install_link.",
     schema(["name"], name=str, org=str, description=str, private=bool, auto_init=bool, account=str),
 )
 @guarded
@@ -58,22 +57,24 @@ async def repo_create(ctx: ToolContext, args: dict) -> dict:
         private=args.get("private", True),
         auto_init=args.get("auto_init", True),
     )
-    owner, _, name = (created.get("full_name") or "").partition("/")
-    async with SessionLocal() as session:
-        repos = RepoRepository(session)
-        existing = await repos.by_full_name(owner, name)
-    lines = [f"repository created: {created.get('html_url')}"]
-    if existing is None:
-        lines.append(
-            "The app does not see it yet. Ask the user to add the repository to the app installation: "
-            "GitHub → Settings → Applications → unsafie → Configure. Until then repository tools "
-            "will not work with it."
-        )
-    else:
-        async with SessionLocal() as session:
-            bound = await UserRepoRepository(session).bind(ctx.user_id, existing)
-        lines.append(f"available as `{bound.alias}`")
-    return text("\n".join(lines))
+    repo, alias = await pat.add(ctx.user_id, created["full_name"])
+    return text(
+        f"repository created: {created.get('html_url')}\navailable as `{alias}` ({repo.full})"
+    )
+
+
+@register(
+    SERVER,
+    "repo_add",
+    "Bind a repository the user's token can reach: ref — owner/name, alias — optional short name. "
+    "This is how a repository outside the App installation — someone else's private repo where the "
+    "user is a collaborator — becomes available.",
+    schema(["ref"], ref=str, alias=str),
+)
+@guarded
+async def repo_add(ctx: ToolContext, args: dict) -> dict:
+    repo, alias = await pat.add(ctx.user_id, args["ref"], args.get("alias"))
+    return text(f"{repo.full} ({repo.default_branch}) bound as `{alias}`")
 
 
 @register(
@@ -216,8 +217,8 @@ async def repo_protection(ctx: ToolContext, args: dict) -> dict:
 @register(
     SERVER,
     "repo_install_link",
-    "A link for the user to manage which repositories the app can access, or to install it on a new "
-    "account or organization.",
+    "A link to install the App on an account or repository. The App is only needed for event "
+    "subscriptions (webhooks) and the Checks API — reading and writing already run on the token.",
     schema([], organization=str),
 )
 @guarded
@@ -225,14 +226,10 @@ async def repo_install_link(ctx: ToolContext, args: dict) -> dict:
     from unsafie.github.app.auth import load_app
 
     app = await load_app()
-    bound = await workspace.repos_of(ctx.user_id)
     lines = [f"Install or configure: {manifest.install_url(app.slug)}"]
-    if bound:
-        async with SessionLocal() as session:
-            from unsafie.database.repositories.github import InstallationRepository
+    async with SessionLocal() as session:
+        from unsafie.database.repositories.github import InstallationRepository
 
-            for installation in await InstallationRepository(session).for_user(ctx.user_id):
-                lines.append(
-                    f"{installation.account_login}: {manifest.manage_url(installation.id)}"
-                )
+        for installation in await InstallationRepository(session).for_user(ctx.user_id):
+            lines.append(f"{installation.account_login}: {manifest.manage_url(installation.id)}")
     return text("\n".join(lines))

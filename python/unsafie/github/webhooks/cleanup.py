@@ -3,7 +3,6 @@ import logging
 from unsafie import telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.delivery import DeliveryRepository
-from unsafie.database.repositories.oauth_state import OAuthStateRepository
 from unsafie.loop import Loop
 from unsafie.settings import settings
 
@@ -19,13 +18,12 @@ class CleanupLoop(Loop):
         return float(settings.webhook_cleanup_interval)
 
     async def tick(self) -> None:
-        # Housekeeping, hourly, always the same two deletes: logged, not traced.
+        # Housekeeping, hourly, always the same delete: logged, not traced.
         with telemetry.muted():
             async with SessionLocal() as session:
                 deliveries = await DeliveryRepository(session).purge(settings.webhook_keep_days)
-                states = await OAuthStateRepository(session).purge()
-        if deliveries or states:
-            logger.info("cleanup removed deliveries=%s oauth_states=%s", deliveries, states)
+        if deliveries:
+            logger.info("cleanup removed deliveries=%s", deliveries)
 
 
 cleanup = CleanupLoop()

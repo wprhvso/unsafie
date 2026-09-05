@@ -73,7 +73,7 @@ async def forget_installation(installation_id: int):
         if not await InstallationRepository(session).delete(installation_id):
             raise HTTPException(404, "no such installation")
     auth.forget_installation(installation_id)
-    return Ok(detail="installation and its repositories removed from the database")
+    return Ok(detail="installation forgotten; its repositories stay, they are served by tokens")
 
 
 @router.get("/repos", response_model=Page[RepoRead])

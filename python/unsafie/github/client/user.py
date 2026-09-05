@@ -11,6 +11,19 @@ class UserClient(GithubHTTP):
     async def me(self) -> dict:
         return await self.request("GET", "/user")
 
+    async def repos(self, limit: int = 200) -> list[dict]:
+        """Everything the token can reach: own, organization and collaborator repositories."""
+        return await self.paginate(
+            "/user/repos",
+            {"affiliation": "owner,collaborator,organization_member", "sort": "pushed"},
+        ).all(limit)
+
+    async def repo(self, owner: str, name: str) -> dict:
+        return await self.request("GET", f"/repos/{owner}/{name}")
+
+    async def orgs(self) -> list[dict]:
+        return await self.paginate("/user/orgs").all(100)
+
     async def search_issues(
         self, query: str, sort: str | None = None, limit: int = 30
     ) -> list[dict]:
@@ -57,7 +70,3 @@ class UserClient(GithubHTTP):
         path = f"/orgs/{org}/repos" if org else "/user/repos"
         body = {"name": name, **{k: v for k, v in fields.items() if v is not None}}
         return await self.request("POST", path, json_body=body)
-
-    async def installations(self) -> list[dict]:
-        data = await self.request("GET", "/user/installations", params={"per_page": 100})
-        return data.get("installations", [])
