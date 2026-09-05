@@ -68,15 +68,24 @@ def endpoint() -> str:
 
 
 def exporter():
-    """gRPC by default; OTLP/HTTP is the escape hatch when grpcio is not an option."""
+    """gRPC by default. OTLP/HTTP works too, but its exporter pulls in `requests` and a
+    transitive tail of its own, so it is not a dependency: install
+    `opentelemetry-exporter-otlp-proto-http` if a deployment ever needs it."""
     url = endpoint()
     if settings.otel_protocol.startswith("http"):
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        try:
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        except ImportError as e:
+            raise RuntimeError(
+                "OTEL_PROTOCOL=http needs the opentelemetry-exporter-otlp-proto-http package"
+            ) from e
 
         return OTLPSpanExporter(endpoint=url, timeout=settings.otel_export_timeout)
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as Grpc
 
-    return Grpc(endpoint=url, insecure=url.startswith("http://"), timeout=settings.otel_export_timeout)
+    return Grpc(
+        endpoint=url, insecure=url.startswith("http://"), timeout=settings.otel_export_timeout
+    )
 
 
 def setup() -> None:

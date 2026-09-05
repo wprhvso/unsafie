@@ -109,7 +109,9 @@ class Recorder:
         self.count += 1
         log_sdk_message(m, f"{self.prefix} sdk#{self.count}")
         if isinstance(m, SystemMessage) and m.subtype == "init":
-            self._interval("gen_ai.session.init", {"gen_ai.conversation.id": m.data.get("session_id")})
+            self._interval(
+                "gen_ai.session.init", {"gen_ai.conversation.id": m.data.get("session_id")}
+            )
         elif isinstance(m, AssistantMessage):
             self._completion(m)
         elif isinstance(m, ResultMessage):

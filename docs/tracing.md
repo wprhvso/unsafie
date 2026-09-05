@@ -66,7 +66,7 @@ tg.update                       CONSUMER   апдейт от телеграма 
 | --- | --- | --- |
 | `OTEL_ENABLED` | `1` | `0` — провайдер не ставится, все `span()` становятся no-op |
 | `OTEL_ENDPOINT` | `http://127.0.0.1:4317` | OTLP-эндпоинт (алиас `OTEL_EXPORTER_OTLP_ENDPOINT`) |
-| `OTEL_PROTOCOL` | `grpc` | `grpc` или `http/protobuf`; для HTTP путь `/insert/opentelemetry/v1/traces` добавляется сам |
+| `OTEL_PROTOCOL` | `grpc` | `grpc` или `http/protobuf` (второй требует `opentelemetry-exporter-otlp-proto-http`, путь `/insert/opentelemetry/v1/traces` добавляется сам) |
 | `OTEL_SAMPLE_RATIO` | `1.0` | доля трейсов; решение родителя не пересматривается |
 | `OTEL_CAPTURE_CONTENT` | `0` | писать ли тексты промптов/ответов/аргументов |
 | `OTEL_MAX_ATTR_LEN` | `4096` | обрезка длинных атрибутов |

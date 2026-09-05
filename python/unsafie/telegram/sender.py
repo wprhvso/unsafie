@@ -152,7 +152,8 @@ async def send(
             reply_to = await reply_target(turn)
         ids = await _send_chunks(bot, prefix, chat_id, chunks, reply_to, reply_markup, silent)
         telemetry.set_attrs(
-            span, {attrs.TG_CHUNKS: len(chunks), attrs.TG_MESSAGE_IDS: ids, attrs.MESSAGE_ID: reply_to}
+            span,
+            {attrs.TG_CHUNKS: len(chunks), attrs.TG_MESSAGE_IDS: ids, attrs.MESSAGE_ID: reply_to},
         )
         return await _record(
             bot_id=bot_id,

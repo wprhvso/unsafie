@@ -40,7 +40,9 @@ async def lifespan(app: FastAPI):
         if stale_turns:
             logger.warning("%s turn(s) were running at shutdown, marked failed", stale_turns)
         if stale_deliveries:
-            logger.warning("%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries)
+            logger.warning(
+                "%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries
+            )
         await start_all()
         # The loops outlive this span: they must not inherit it as a parent for the next month.
         with telemetry.detached():

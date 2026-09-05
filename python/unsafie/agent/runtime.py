@@ -374,9 +374,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                     if outcome.status != "ok":
                         queue.clear(turn.id)
                         note = (
-                            outcome.status
-                            if outcome.error is None
-                            else short(outcome.error, 1000)
+                            outcome.status if outcome.error is None else short(outcome.error, 1000)
                         )
                         logger.info("%s finished with %s", prefix, outcome.status)
                         await notify(bot, turn, _failure_text(locale, outcome))

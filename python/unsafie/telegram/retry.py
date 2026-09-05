@@ -25,9 +25,7 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
             if attempt == attempts - 1:
                 raise
             delay = 2**attempt
-            telemetry.event(
-                "telegram.network_error", {"attempt": attempt + 1, "retry_in": delay}
-            )
+            telemetry.event("telegram.network_error", {"attempt": attempt + 1, "retry_in": delay})
             logger.warning("%s network error=%s retry_in=%ss", what, e, delay)
             await asyncio.sleep(delay)
     return await fn()

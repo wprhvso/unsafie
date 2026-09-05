@@ -4,8 +4,8 @@ from uuid import UUID
 from claude_agent_sdk import HookMatcher
 
 from unsafie.agent import queue
-from unsafie.agent.trace import Recorder
 from unsafie.agent.tools.registry import reply_tools
+from unsafie.agent.trace import Recorder
 from unsafie.log import short
 
 logger = logging.getLogger(__name__)
