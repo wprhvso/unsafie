@@ -2,7 +2,7 @@ commands-unknown = Неизвестная команда: { $command }
 commands-start =
     Привет. Пиши как есть — каждое сообщение без реплая начинает новый разговор с чистым контекстом, а ответ на любое сообщение (моё или своё) продолжает тот разговор, к которому оно относится. Реакция на мой ответ — ссылка на него в вебе.
 
-    /budget — баланс и лимит на сообщение
+    /budget — баланс и лимит на ход
     /effort — усилие на размышления
     /gh — токен GitHub и репозитории
     /model — модель Claude
@@ -12,12 +12,12 @@ commands-start =
     /tz — таймзона
 commands-budget-status =
     Баланс: { $balance }
-    Лимит на одно сообщение: { $limit }
-    (в сотых долях цента, { $units } = $1)
+    Лимит на ход: { $limit }
+commands-budget-amount = { NUMBER($amount, minimumFractionDigits: 4, maximumFractionDigits: 4) }$
 commands-budget-unlimited = без лимита
 commands-budget-usage =
     /budget — показать баланс и лимит
-    /budget N — лимит на одно сообщение (в сотых долях цента, { $units } = $1)
+    /budget N — лимит на ход (в сотых долях цента, { $units } = $1)
     /budget -1 — без лимита (по умолчанию)
     /budget 0 — экономия по-максимуму
 commands-model-status =

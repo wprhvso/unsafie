@@ -2,7 +2,7 @@ commands-unknown = Unknown command: { $command }
 commands-start =
     Hi. Just write — every message without a reply starts a new conversation with a clean context, and a reply to any message (mine or yours) continues the conversation it belongs to. React to my reply to get a web link to it.
 
-    /budget — balance and per-message limit
+    /budget — balance and per-turn limit
     /effort — thinking effort
     /gh — GitHub token and repositories
     /model — Claude model
@@ -12,12 +12,12 @@ commands-start =
     /tz — timezone
 commands-budget-status =
     Balance: { $balance }
-    Per-message limit: { $limit }
-    (in hundredths of a cent, { $units } = $1)
+    Per-turn limit: { $limit }
+commands-budget-amount = ${ NUMBER($amount, minimumFractionDigits: 4, maximumFractionDigits: 4) }
 commands-budget-unlimited = unlimited
 commands-budget-usage =
     /budget — show balance and limit
-    /budget N — per-message limit (in hundredths of a cent, { $units } = $1)
+    /budget N — per-turn limit (in hundredths of a cent, { $units } = $1)
     /budget -1 — no limit (default)
     /budget 0 — maximum savings
 commands-model-status =

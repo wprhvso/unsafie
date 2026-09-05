@@ -1,9 +1,14 @@
 import math
+from decimal import Decimal
 
 from unsafie.database.models.config import Config
 from unsafie.database.models.credential import CredentialKind
 
 UNITS_PER_USD = 10_000
+
+
+def units_to_usd(units: int) -> Decimal:
+    return Decimal(units) / UNITS_PER_USD
 
 
 def ratio_for(config: Config, kind: str) -> float:
