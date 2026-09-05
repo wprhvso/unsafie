@@ -1,6 +1,7 @@
 from aiogram import Router
 
 from unsafie.telegram.handlers.commands.budget import build_budget_router
+from unsafie.telegram.handlers.commands.effort import build_effort_router
 from unsafie.telegram.handlers.commands.gh import build_gh_router
 from unsafie.telegram.handlers.commands.model import build_model_router
 from unsafie.telegram.handlers.commands.ssh import build_ssh_router
@@ -14,6 +15,7 @@ def build_commands_router() -> Router:
     for build in (
         build_start_router,
         build_budget_router,
+        build_effort_router,
         build_gh_router,
         build_model_router,
         build_ssh_router,

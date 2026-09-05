@@ -3,6 +3,7 @@ commands-start =
     Привет. Пиши как есть — каждое сообщение без реплая начинает новый разговор с чистым контекстом, а ответ на любое сообщение (моё или своё) продолжает тот разговор, к которому оно относится. Реакция на мой ответ — ссылка на него в вебе.
 
     /budget — баланс и лимит на сообщение
+    /effort — усилие на размышления
     /gh — аккаунты GitHub
     /model — модель Claude
     /ssh — серверы по SSH
@@ -28,4 +29,14 @@ commands-model-status =
 commands-model-set = Модель: { $model }
 commands-model-reset = Снова модель по умолчанию: { $model }
 commands-model-usage = Имя модели — буквы, цифры, точки и дефисы, например /model claude-opus-5
+commands-effort-status =
+    Усилие: { $effort }
+    По умолчанию: { $default }
+    Уровни: { $levels }
+
+    /effort LEVEL — сменить (можно 1—5)
+    /effort default — вернуть по умолчанию
+commands-effort-set = Усилие: { $effort }
+commands-effort-reset = Снова усилие по умолчанию: { $effort }
+commands-effort-usage = Уровень: { $levels } или 1—5, например /effort high
 commands-budget-zero = Лимит 0. Бот теперь работает бесплатно: молча, вдумчиво и абсолютно ничего не делая. Самый дешёвый ассистент на рынке.

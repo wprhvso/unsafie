@@ -3,6 +3,7 @@ commands-start =
     Hi. Just write — every message without a reply starts a new conversation with a clean context, and a reply to any message (mine or yours) continues the conversation it belongs to. React to my reply to get a web link to it.
 
     /budget — balance and per-message limit
+    /effort — thinking effort
     /gh — GitHub accounts
     /model — Claude model
     /ssh — servers over SSH
@@ -28,4 +29,14 @@ commands-model-status =
 commands-model-set = Model: { $model }
 commands-model-reset = Back to default model: { $model }
 commands-model-usage = Model name — letters, digits, dots and dashes, e.g. /model claude-opus-5
+commands-effort-status =
+    Effort: { $effort }
+    Default: { $default }
+    Levels: { $levels }
+
+    /effort LEVEL — switch (1—5 works too)
+    /effort default — back to default
+commands-effort-set = Effort: { $effort }
+commands-effort-reset = Back to default effort: { $effort }
+commands-effort-usage = Level: { $levels } or 1—5, e.g. /effort high
 commands-budget-zero = Limit 0. The bot now works for free: silently, thoughtfully and doing absolutely nothing. The cheapest assistant on the market.

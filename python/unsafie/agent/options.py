@@ -13,7 +13,8 @@ from unsafie.settings import settings
 logger = logging.getLogger(__name__)
 
 BUFFER_SIZE = 16 * 1024 * 1024
-EFFORT = "low"
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+DEFAULT_EFFORT = "low"
 
 
 def chat_cwd(bot_id: int, chat_id: int) -> Path:
@@ -32,6 +33,7 @@ def build_options(
     fork: bool,
     session_id: str | None,
     model: str,
+    effort: str,
     budget_usd: float,
     context: str,
     servers: list[str],
@@ -43,12 +45,13 @@ def build_options(
     mcp, allowed = build_servers(ctx, servers)
     system_prompt = SYSTEM_PROMPT + (f"\n{context}\n" if context else "")
     logger.debug(
-        "%s options resume=%s fork=%s session=%s model=%s budget=%.6f servers=%s",
+        "%s options resume=%s fork=%s session=%s model=%s effort=%s budget=%.6f servers=%s",
         ctx.prefix,
         resume,
         fork,
         session_id,
         model,
+        effort,
         budget_usd,
         servers,
     )
@@ -68,7 +71,7 @@ def build_options(
         session_id=session_id if resume is None else None,
         max_budget_usd=budget_usd,
         max_buffer_size=BUFFER_SIZE,
-        effort=EFFORT,
+        effort=effort,
         env=env,
         stderr=stderr,
     )

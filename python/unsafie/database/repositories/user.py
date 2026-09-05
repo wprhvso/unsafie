@@ -67,6 +67,12 @@ class UserRepository:
         await self.session.commit()
         return user
 
+    async def set_effort(self, user_id: int, effort: str | None) -> User:
+        user = await self.get_or_create(user_id)
+        user.effort = effort
+        await self.session.commit()
+        return user
+
     async def transactions(self, user_id: int, limit: int = 50) -> list[Transaction]:
         rows = await self.session.scalars(
             select(Transaction)

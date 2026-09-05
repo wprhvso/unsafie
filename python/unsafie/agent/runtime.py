@@ -20,7 +20,7 @@ from claude_agent_sdk import (
 
 from unsafie import events
 from unsafie.agent import billing, credentials, queue, turns
-from unsafie.agent.options import build_options
+from unsafie.agent.options import DEFAULT_EFFORT, build_options
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.tools import ToolContext, available_servers
 from unsafie.agent.trace import log_sdk_message
@@ -81,19 +81,21 @@ async def _execute(
             user = await UserRepository(session).get_or_create(ctx.user_id)
             budget = billing.budget_usd(user.balance, user.budget, ratio)
             model = user.model or settings.claude_model
+            effort = user.effort or DEFAULT_EFFORT
             if budget <= 0:
                 logger.warning("%s aborted: empty balance", prefix)
                 return Outcome("empty_balance")
             servers = await available_servers(session, ctx)
             context = await build_context(session, ctx, servers)
         logger.info(
-            "%s attempt=%s credential=%s(%s) model=%s ratio=%s budget=%.6f "
+            "%s attempt=%s credential=%s(%s) model=%s effort=%s ratio=%s budget=%.6f "
             "resume=%s fork=%s servers=%s",
             prefix,
             attempt,
             cred.id,
             cred.kind,
             model,
+            effort,
             ratio,
             budget,
             resume,
@@ -107,6 +109,7 @@ async def _execute(
             fork=fork,
             session_id=session_id,
             model=model,
+            effort=effort,
             budget_usd=budget,
             context=context,
             servers=servers,

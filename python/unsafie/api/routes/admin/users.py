@@ -22,6 +22,7 @@ async def read(session, user) -> UserRead:
                 "locale",
                 "timezone",
                 "model",
+                "effort",
                 "git_name",
                 "git_email",
             )
