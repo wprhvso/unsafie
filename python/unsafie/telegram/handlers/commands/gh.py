@@ -97,7 +97,9 @@ def build_gh_router() -> Router:
                     await answer(message, bot_id, t("github-usage", locale))
                     return
                 repo, alias = await pat.add(user_id, parts[1], parts[2] if len(parts) > 2 else None)
-                await answer(message, bot_id, t("github-added", locale, repo=repo.full, alias=alias))
+                await answer(
+                    message, bot_id, t("github-added", locale, repo=repo.full, alias=alias)
+                )
                 return
             if action in ("app", "install", "repos"):
                 app = await auth.load_app()

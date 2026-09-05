@@ -58,7 +58,9 @@ async def repo_create(ctx: ToolContext, args: dict) -> dict:
         auto_init=args.get("auto_init", True),
     )
     repo, alias = await pat.add(ctx.user_id, created["full_name"])
-    return text(f"repository created: {created.get('html_url')}\navailable as `{alias}` ({repo.full})")
+    return text(
+        f"repository created: {created.get('html_url')}\navailable as `{alias}` ({repo.full})"
+    )
 
 
 @register(
