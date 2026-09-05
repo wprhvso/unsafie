@@ -25,6 +25,22 @@ const ICON_CHECK =
 
 const COPIED_MS = 1600;
 
+const FENCE = /^ {0,3}(?:`{3,}|~{3,})[ \t]*([^\s`{}]+)/gm;
+
+/**
+ * The common bundle of highlight.js knows the forty usual languages and is ten
+ * times lighter than the full one; everything else — nix, dockerfile, elixir
+ * and so on — is worth its megabyte only when the answer really mentions it.
+ */
+async function highlighter(source) {
+  const { default: common } = await import('highlight.js/lib/common');
+  const declared = new Set();
+  for (const [, name] of source.matchAll(FENCE)) declared.add(name.toLowerCase());
+  if ([...declared].every((name) => common.getLanguage(name))) return common;
+  const { default: full } = await import('highlight.js');
+  return full;
+}
+
 async function copyText(text) {
   if (navigator.clipboard && window.isSecureContext) {
     await navigator.clipboard.writeText(text);
@@ -79,10 +95,10 @@ function addCopyButtons(root, label) {
 
 /** Markdown into a detached container, ready to be moved into the page. */
 export async function render(source, { copyLabel = 'Copy' } = {}) {
-  const [{ default: MarkdownIt }, { default: hljs }, { default: renderMath }] = await Promise.all([
+  const [{ default: MarkdownIt }, { default: renderMath }, hljs] = await Promise.all([
     import('markdown-it'),
-    import('highlight.js'),
-    import('katex/contrib/auto-render')
+    import('katex/contrib/auto-render'),
+    highlighter(source)
   ]);
 
   const md = new MarkdownIt({
