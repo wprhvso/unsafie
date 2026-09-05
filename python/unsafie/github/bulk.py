@@ -15,11 +15,13 @@ import tempfile
 import time
 from pathlib import Path
 
+from unsafie import telemetry
 from unsafie.github import cache, metrics
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.vfs import SKIP_DIRS
 from unsafie.mime import human_size
 from unsafie.settings import settings
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -62,22 +64,28 @@ def _extract(archive: Path) -> tuple[int, int]:
 
 async def _snapshot(client: RepoClient, commit_sha: str) -> int:
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="unsafie-snapshot-") as directory:
-        archive = Path(directory) / "repo.tar.gz"
-        size = await client.stream(
-            f"{client.base}/tarball/{commit_sha}",
-            archive,
-            limit=settings.github_bulk_max_bytes,
-        )
-        if size is None:
-            logger.info(
-                "github snapshot %s is over %s, falling back to single blobs",
-                client.full,
-                human_size(settings.github_bulk_max_bytes),
+    with telemetry.span(
+        "github.snapshot",
+        attributes={attrs.GH_REPO: client.full, attrs.GH_SHA: commit_sha[:7]},
+    ) as span:
+        with tempfile.TemporaryDirectory(prefix="unsafie-snapshot-") as directory:
+            archive = Path(directory) / "repo.tar.gz"
+            size = await client.stream(
+                f"{client.base}/tarball/{commit_sha}",
+                archive,
+                limit=settings.github_bulk_max_bytes,
             )
-            _refuse((client.full, commit_sha))
-            return 0
-        files, total = await asyncio.to_thread(_extract, archive)
+            if size is None:
+                telemetry.refused(span, "archive over the size limit")
+                logger.info(
+                    "github snapshot %s is over %s, falling back to single blobs",
+                    client.full,
+                    human_size(settings.github_bulk_max_bytes),
+                )
+                _refuse((client.full, commit_sha))
+                return 0
+            files, total = await asyncio.to_thread(_extract, archive)
+        telemetry.set_attrs(span, {attrs.GH_FILES: files, attrs.GH_BYTES: total})
     metrics.bump("bulk", files)
     logger.info(
         "github snapshot %s@%s: %s file(s), %s from a %s archive in %.1fs",

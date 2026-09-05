@@ -7,12 +7,14 @@ from dataclasses import dataclass, field
 
 import asyncssh
 
+from unsafie import telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.repositories.ssh import SshRepository
 from unsafie.settings import settings
 from unsafie.ssh import keys
 from unsafie.ssh.errors import HostKeyChanged, NoKey, SshError
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +55,23 @@ class Pool:
             for (u, h), held in self._held.items()
         ]
 
+    @telemetry.traced("ssh.connect", kind=telemetry.CLIENT)
     async def connect(self, user_id: int, host: SshHost) -> asyncssh.SSHClientConnection:
+        telemetry.annotate(
+            **{
+                attrs.SSH_ALIAS: host.alias,
+                attrs.SERVER_ADDRESS: host.host,
+                attrs.SERVER_PORT: host.port,
+                attrs.USER_ID: user_id,
+            }
+        )
         key = (user_id, host.id)
         async with self._lock(key):
             held = self._held.get(key)
             if held is not None:
                 if held.alive and held.idle < settings.ssh_idle_timeout:
                     held.touch()
+                    telemetry.annotate(**{attrs.SSH_REUSED: True})
                     return held.connection
                 await self._drop(key)
             pair = await keys.get(user_id)
@@ -161,32 +173,55 @@ def _clip(value: str) -> tuple[str, bool]:
 
 
 async def run(user_id: int, host: SshHost, command: str, timeout: float | None = None) -> Result:
-    connection = await pool.connect(user_id, host)
-    limit = min(float(timeout or settings.ssh_command_timeout), settings.ssh_max_command_timeout)
-    started = time.perf_counter()
-    try:
-        completed = await asyncio.wait_for(connection.run(command, check=False), timeout=limit)
-    except TimeoutError:
-        raise SshError(
-            f"{host.alias}: command timed out after {limit:.0f}s: {command[:200]}"
-        ) from None
-    except asyncssh.Error as e:
-        await pool.disconnect(user_id, host.id)
-        raise SshError(f"{host.alias}: {e}") from None
-    stdout, cut1 = _clip(str(completed.stdout or ""))
-    stderr, cut2 = _clip(str(completed.stderr or ""))
-    logger.info(
-        "user=%s ssh %s exit=%s in %.0fms: %s",
-        user_id,
-        host.alias,
-        completed.exit_status,
-        (time.perf_counter() - started) * 1000,
-        command[:200],
-    )
-    return Result(int(completed.exit_status or 0), stdout, stderr, cut1 or cut2)
+    with telemetry.span(
+        "ssh.exec",
+        kind=telemetry.CLIENT,
+        attributes={
+            attrs.SSH_ALIAS: host.alias,
+            attrs.SERVER_ADDRESS: host.host,
+            attrs.USER_ID: user_id,
+            # The same 200 characters the log line carries: enough to recognise the command.
+            attrs.SSH_COMMAND: telemetry.clip(command, 200),
+        },
+    ) as span:
+        connection = await pool.connect(user_id, host)
+        limit = min(
+            float(timeout or settings.ssh_command_timeout), settings.ssh_max_command_timeout
+        )
+        started = time.perf_counter()
+        try:
+            completed = await asyncio.wait_for(connection.run(command, check=False), timeout=limit)
+        except TimeoutError:
+            raise SshError(
+                f"{host.alias}: command timed out after {limit:.0f}s: {command[:200]}"
+            ) from None
+        except asyncssh.Error as e:
+            await pool.disconnect(user_id, host.id)
+            raise SshError(f"{host.alias}: {e}") from None
+        stdout, cut1 = _clip(str(completed.stdout or ""))
+        stderr, cut2 = _clip(str(completed.stderr or ""))
+        telemetry.set_attrs(
+            span,
+            {
+                attrs.SSH_EXIT: int(completed.exit_status or 0),
+                attrs.SSH_TRUNCATED: cut1 or cut2,
+                attrs.SSH_BYTES: len(stdout) + len(stderr),
+            },
+        )
+        logger.info(
+            "user=%s ssh %s exit=%s in %.0fms: %s",
+            user_id,
+            host.alias,
+            completed.exit_status,
+            (time.perf_counter() - started) * 1000,
+            command[:200],
+        )
+        return Result(int(completed.exit_status or 0), stdout, stderr, cut1 or cut2)
 
 
+@telemetry.traced("ssh.read", kind=telemetry.CLIENT)
 async def read_file(user_id: int, host: SshHost, path: str) -> bytes:
+    telemetry.annotate(**{attrs.SSH_ALIAS: host.alias, attrs.SSH_PATH: path})
     connection = await pool.connect(user_id, host)
     try:
         async with connection.start_sftp_client() as sftp:
@@ -205,7 +240,11 @@ async def read_file(user_id: int, host: SshHost, path: str) -> bytes:
         raise SshError(f"{host.alias}: sftp error: {e}") from None
 
 
+@telemetry.traced("ssh.write", kind=telemetry.CLIENT)
 async def write_file(user_id: int, host: SshHost, path: str, data: bytes) -> int:
+    telemetry.annotate(
+        **{attrs.SSH_ALIAS: host.alias, attrs.SSH_PATH: path, attrs.SSH_BYTES: len(data)}
+    )
     if len(data) > settings.ssh_max_file_bytes:
         raise SshError(f"file is {len(data)} bytes, limit is {settings.ssh_max_file_bytes}")
     connection = await pool.connect(user_id, host)
@@ -222,7 +261,9 @@ async def write_file(user_id: int, host: SshHost, path: str, data: bytes) -> int
     return len(data)
 
 
+@telemetry.traced("ssh.list", kind=telemetry.CLIENT)
 async def list_dir(user_id: int, host: SshHost, path: str) -> list[str]:
+    telemetry.annotate(**{attrs.SSH_ALIAS: host.alias, attrs.SSH_PATH: path})
     connection = await pool.connect(user_id, host)
     try:
         async with connection.start_sftp_client() as sftp:

@@ -8,6 +8,7 @@ unsafie/
 ├── fluent/{en,ru}/           тексты: server/ для бэка, web/ для фронта
 ├── python/unsafie/           бэкенд (FastAPI + aiogram + claude-agent-sdk)
 │   ├── app.py settings.py log.py loop.py events.py fluent.py mime.py slugs.py errors.py
+│   ├── telemetry/            трассировка: провайдер, спаны, контекст, trace_id в логах
 │   ├── database/             модели, репозитории, миграции
 │   ├── api/                  routes/{public,admin}, schemas, services, dependencies, static
 │   ├── telegram/             manager, sender, render, handlers/, 7 команд
@@ -46,3 +47,7 @@ GitHub работает через собственное GitHub App: репоз
 Содержимое файлов кэшируется по sha (память + каталог `GITHUB_CACHE_DIR`) — sha неизменяем,
 поэтому инвалидация не нужна. Массовое чтение (поиск, дифф) тянет снапшот репозитория одним
 архивом вместо запроса на каждый файл.
+
+Всё, что происходит, попадает в один трейс на событие: от апдейта телеграма до ответа
+пользователю, включая время внутри `claude`. Отправляется по OTLP в VictoriaTraces, смотрится
+в Grafana, из логов есть переход по `trace_id` — подробности в [docs/tracing.md](docs/tracing.md).

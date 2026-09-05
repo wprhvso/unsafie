@@ -8,6 +8,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 from unsafie.agent.hooks import build_hooks
 from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.agent.tools import ToolContext, build_servers
+from unsafie.agent.trace import Recorder
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ def build_options(
     servers: list[str],
     env: dict[str, str],
     stderr: Callable[[str], None],
+    recorder: Recorder | None = None,
 ) -> ClaudeAgentOptions:
     cwd = chat_cwd(ctx.bot_id, ctx.chat_id)
     cwd.mkdir(parents=True, exist_ok=True)
@@ -64,7 +66,7 @@ def build_options(
         permission_mode="acceptEdits",
         strict_mcp_config=True,
         setting_sources=[],
-        hooks=build_hooks(ctx.prefix, ctx.turn_id),
+        hooks=build_hooks(ctx.prefix, ctx.turn_id, recorder),
         cwd=cwd,
         resume=resume,
         fork_session=fork,

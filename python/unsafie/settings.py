@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +29,34 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_truncate: int = 2000
     sql_echo: bool = False
+
+    service_name: str = Field(
+        default="unsafie", validation_alias=AliasChoices("SERVICE_NAME", "OTEL_SERVICE_NAME")
+    )
+    service_version: str = Field(
+        default="", validation_alias=AliasChoices("SERVICE_VERSION", "UNSAFIE_VERSION")
+    )
+    environment: str = Field(
+        default="dev", validation_alias=AliasChoices("ENVIRONMENT", "DEPLOYMENT_ENVIRONMENT")
+    )
+
+    otel_enabled: bool = True
+    otel_endpoint: str = Field(
+        default="http://127.0.0.1:4317",
+        validation_alias=AliasChoices("OTEL_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT"),
+    )
+    otel_protocol: str = Field(
+        default="grpc",
+        validation_alias=AliasChoices("OTEL_PROTOCOL", "OTEL_EXPORTER_OTLP_PROTOCOL"),
+    )
+    otel_traces_path: str = "/insert/opentelemetry/v1/traces"
+    otel_sample_ratio: float = 1.0
+    otel_capture_content: bool = False
+    otel_max_attr_len: int = 4096
+    otel_export_timeout: int = 10
+    otel_queue_size: int = 4096
+    otel_batch_size: int = 512
+    otel_schedule_delay: int = 2000
 
     claude_model: str = "claude-opus-5"
     chats_dir: Path = Path("chats")

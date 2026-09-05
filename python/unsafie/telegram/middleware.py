@@ -6,12 +6,13 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import Chat, Update
 
-from unsafie import events
+from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.chat import ChatRepository
 from unsafie.database.repositories.update import UpdateRepository
 from unsafie.log import short
 from unsafie.telegram.dump import dump
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -34,29 +35,44 @@ class UpdateMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         started = time.perf_counter()
-        logger.info(
-            "bot=%s update=%s type=%s received", self.bot_id, event.update_id, event.event_type
-        )
-        payload = dump(event)
-        logger.debug("bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload))
-        data[UPDATE_DB_ID_KEY] = await self._store(event, payload)
-        try:
-            return await handler(event, data)
-        except Exception:
-            logger.exception(
-                "bot=%s update=%s failed after %.1fms",
-                self.bot_id,
-                event.update_id,
-                (time.perf_counter() - started) * 1000,
-            )
-            raise
-        finally:
+        # The root of everything that follows: storing the update, routing it into a turn, the
+        # agent run and every message it sends back all hang off this span.
+        with telemetry.span(
+            "tg.update",
+            kind=telemetry.CONSUMER,
+            attributes={
+                "messaging.system": "telegram",
+                "messaging.operation.name": "process",
+                attrs.BOT_ID: self.bot_id,
+                attrs.UPDATE_ID: event.update_id,
+                attrs.TG_UPDATE_TYPE: event.event_type,
+            },
+        ):
             logger.info(
-                "bot=%s update=%s handled in %.1fms",
-                self.bot_id,
-                event.update_id,
-                (time.perf_counter() - started) * 1000,
+                "bot=%s update=%s type=%s received", self.bot_id, event.update_id, event.event_type
             )
+            payload = dump(event)
+            logger.debug(
+                "bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload)
+            )
+            data[UPDATE_DB_ID_KEY] = await self._store(event, payload)
+            try:
+                return await handler(event, data)
+            except Exception:
+                logger.exception(
+                    "bot=%s update=%s failed after %.1fms",
+                    self.bot_id,
+                    event.update_id,
+                    (time.perf_counter() - started) * 1000,
+                )
+                raise
+            finally:
+                logger.info(
+                    "bot=%s update=%s handled in %.1fms",
+                    self.bot_id,
+                    event.update_id,
+                    (time.perf_counter() - started) * 1000,
+                )
 
     async def _store(self, event: Update, payload: Any) -> int | None:
         chat: Chat | None = None
@@ -76,6 +92,14 @@ class UpdateMiddleware(BaseMiddleware):
             message = event.callback_query.message
             chat = message.chat if message is not None else None
             user_id = event.callback_query.from_user.id
+        telemetry.annotate(
+            **{
+                attrs.CHAT_ID: chat.id if chat else None,
+                attrs.USER_ID: user_id,
+                attrs.MESSAGE_ID: message_id,
+                attrs.PROMPT: telemetry.content(payload),
+            }
+        )
         try:
             async with SessionLocal() as session:
                 if chat is not None:

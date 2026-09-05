@@ -5,8 +5,9 @@ import sys
 from typing import Any
 
 from unsafie.settings import settings
+from unsafie.telemetry.logs import TraceIds
 
-FORMAT = "%(asctime)s.%(msecs)03d %(levelname)-8s %(name)s [%(taskName)s] %(message)s"
+FORMAT = "%(asctime)s.%(msecs)03d %(levelname)-8s %(name)s [%(taskName)s]%(otel)s %(message)s"
 DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 THIRD_PARTY: dict[str, str] = {
@@ -19,6 +20,7 @@ THIRD_PARTY: dict[str, str] = {
     "asyncio": "WARNING",
     "asyncssh": "WARNING",
     "watchfiles": "WARNING",
+    "opentelemetry": "WARNING",
     "uvicorn": "INFO",
     "uvicorn.error": "INFO",
     "uvicorn.access": "WARNING",
@@ -47,10 +49,12 @@ def config() -> dict[str, Any]:
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {"default": {"format": FORMAT, "datefmt": DATEFMT}},
+        "filters": {"trace": {"()": TraceIds}},
         "handlers": {
             "stderr": {
                 "class": "logging.StreamHandler",
                 "formatter": "default",
+                "filters": ["trace"],
                 "stream": sys.stderr,
             }
         },

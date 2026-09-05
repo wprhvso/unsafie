@@ -5,11 +5,13 @@ from urllib.parse import urlparse
 
 import aiohttp
 
+from unsafie import telemetry
 from unsafie.agent.tools.base import ToolContext, error, schema, text
 from unsafie.agent.tools.files import deliver
 from unsafie.agent.tools.registry import register
 from unsafie.mime import decode_text, human_size, sniff_mime
 from unsafie.settings import settings
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -84,26 +86,44 @@ async def _request(args: dict) -> tuple[int, dict, bytes, str, float]:
     )
     limit = settings.http_max_body
     started = time.perf_counter()
-    async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=timeout), headers={"User-Agent": "unsafie"}
-    ) as session:
-        async with session.request(
-            method,
-            url,
-            headers=headers,
-            allow_redirects=args.get("follow_redirects", True),
-            **kwargs,
-        ) as r:
-            buf = bytearray()
-            async for chunk in r.content.iter_chunked(64 * 1024):
-                buf.extend(chunk)
-                if len(buf) > limit:
-                    raise ValueError(
-                        f"response exceeds {human_size(limit)}; use http_download or a Range header"
-                    )
-            ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
-            resp_headers = {k: v for k, v in r.headers.items() if k.lower() in SHOW_HEADERS}
-            return r.status, resp_headers, bytes(buf), ctype, (time.perf_counter() - started) * 1000
+    with telemetry.span(
+        f"http {method}",
+        kind=telemetry.CLIENT,
+        attributes={
+            attrs.HTTP_METHOD: method,
+            attrs.HTTP_URL: url,
+            attrs.SERVER_ADDRESS: urlparse(url).hostname,
+        },
+    ) as span:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=timeout), headers={"User-Agent": "unsafie"}
+        ) as session:
+            async with session.request(
+                method,
+                url,
+                headers=headers,
+                allow_redirects=args.get("follow_redirects", True),
+                **kwargs,
+            ) as r:
+                buf = bytearray()
+                async for chunk in r.content.iter_chunked(64 * 1024):
+                    buf.extend(chunk)
+                    if len(buf) > limit:
+                        raise ValueError(
+                            f"response exceeds {human_size(limit)}; use http_download or a Range header"
+                        )
+                ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+                resp_headers = {k: v for k, v in r.headers.items() if k.lower() in SHOW_HEADERS}
+                telemetry.set_attrs(
+                    span, {attrs.HTTP_STATUS: r.status, attrs.HTTP_BODY_SIZE: len(buf)}
+                )
+                return (
+                    r.status,
+                    resp_headers,
+                    bytes(buf),
+                    ctype,
+                    (time.perf_counter() - started) * 1000,
+                )
 
 
 @register(

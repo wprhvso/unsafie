@@ -6,6 +6,7 @@
     force: true
   become: true
   become_user: "{{ unsafie_user }}"
+  register: unsafie_checkout
   notify: restart unsafie
 
 - name: Sync python dependencies

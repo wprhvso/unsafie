@@ -83,6 +83,13 @@
               p = to_int(.PRIORITY) ?? 6
             }
             .level = get(["emerg", "alert", "crit", "error", "warning", "notice", "info", "debug"], [p]) ?? "info"
+            # Applications print "trace=<32 hex> span=<16 hex>"; lifting it into fields is what
+            # makes the jump from a log line to the trace (and back) work in Grafana.
+            ids, err = parse_regex(to_string(.message) ?? "", r' trace=(?P<trace_id>[0-9a-f]{32}) span=(?P<span_id>[0-9a-f]{16})')
+            if err == null {
+              .trace_id = ids.trace_id
+              .span_id = ids.span_id
+            }
             del(.__CURSOR)
             del(.__MONOTONIC_TIMESTAMP)
             del(._SOURCE_MONOTONIC_TIMESTAMP)

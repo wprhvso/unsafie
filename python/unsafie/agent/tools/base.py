@@ -3,17 +3,19 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from aiogram import Bot
 
+from unsafie import telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.errors import OpsError
 from unsafie.github import metrics
 from unsafie.log import short
+from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,9 @@ class ToolContext:
     user_id: int
     turn_id: UUID
     locale: str = "en"
+    # Where a tool call belongs in the trace. The SDK invokes these handlers from its own tasks,
+    # which copied their context long before the running attempt existed.
+    trace: telemetry.Anchor = field(default_factory=telemetry.Anchor)
 
     @property
     def prefix(self) -> str:
@@ -69,28 +74,58 @@ def handle_errors(exc_type: type[Exception], formatter: Callable[[Exception], st
 
 
 def guarded(fn: Handler) -> Handler:
+    """Logs, refusals and the span: every one of the 108 tools passes through here."""
+
     @functools.wraps(fn)
     async def wrapper(ctx: ToolContext, args: dict) -> dict:
         started = time.perf_counter()
         name = fn.__name__
         counters = metrics.start()
-        logger.info("%s tool=%s args=%s", ctx.prefix, name, short(args, 500))
-        try:
-            result = await fn(ctx, args)
-        except Exception as e:
-            for exc_type, formatter in _HANDLED:
-                if isinstance(e, exc_type):
-                    logger.info("%s tool=%s refused: %s", ctx.prefix, name, e)
-                    return error(formatter(e))
-            raise
-        traffic = metrics.summary(counters)
-        logger.info(
-            "%s tool=%s done in %.1fms%s",
-            ctx.prefix,
-            name,
-            (time.perf_counter() - started) * 1000,
-            f" [github: {traffic}]" if traffic else "",
-        )
-        return result
+        with telemetry.span(
+            f"tool.{name}",
+            parent=ctx.trace.context,
+            attributes={
+                attrs.GEN_AI_OPERATION: "execute_tool",
+                attrs.GEN_AI_TOOL_NAME: name,
+                attrs.TOOL: name,
+                attrs.TOOL_SOURCE: "unsafie",
+                attrs.BOT_ID: ctx.bot_id,
+                attrs.CHAT_ID: ctx.chat_id,
+                attrs.USER_ID: ctx.user_id,
+                attrs.TURN_ID: str(ctx.turn_id),
+                attrs.TOOL_ARGS: telemetry.content(args),
+            },
+        ) as span:
+            logger.info("%s tool=%s args=%s", ctx.prefix, name, short(args, 500))
+            try:
+                result = await fn(ctx, args)
+            except Exception as e:
+                for exc_type, formatter in _HANDLED:
+                    if isinstance(e, exc_type):
+                        # An answer for the model, not an incident: the span stays green.
+                        telemetry.refused(span, e)
+                        logger.info("%s tool=%s refused: %s", ctx.prefix, name, e)
+                        return error(formatter(e))
+                raise
+            traffic = metrics.summary(counters)
+            telemetry.set_attrs(
+                span,
+                {
+                    attrs.GH_REQUESTS: counters.get("requests"),
+                    attrs.GH_HITS: counters.get("hits"),
+                    attrs.GH_BULK: counters.get("bulk"),
+                    attrs.GH_BYTES: counters.get("bytes"),
+                    attrs.TOOL_ERROR: True if result.get("is_error") else None,
+                    attrs.TOOL_RESULT: telemetry.content(result.get("content")),
+                },
+            )
+            logger.info(
+                "%s tool=%s done in %.1fms%s",
+                ctx.prefix,
+                name,
+                (time.perf_counter() - started) * 1000,
+                f" [github: {traffic}]" if traffic else "",
+            )
+            return result
 
     return wrapper

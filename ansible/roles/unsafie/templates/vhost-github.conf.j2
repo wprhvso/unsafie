@@ -32,6 +32,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # The id nginx already writes into the access log; the app puts it on the span.
+        proxy_set_header X-Request-ID $request_id;
         proxy_read_timeout 60s;
     }
 
