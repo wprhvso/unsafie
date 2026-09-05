@@ -4,22 +4,17 @@ from unsafie.settings import settings
 
 NAME = "unsafie"
 
+# Writing is the token's job. The App only gets what a personal access token cannot do:
+# the Checks API, and the reads GitHub requires before it will deliver the events below.
 PERMISSIONS = {
-    "administration": "write",
-    "contents": "write",
-    "pull_requests": "write",
-    "issues": "write",
-    "actions": "write",
-    "checks": "write",
-    "workflows": "write",
-    "secrets": "write",
-    "actions_variables": "write",
-    "environments": "write",
-    "deployments": "write",
-    "pages": "write",
-    "packages": "read",
     "metadata": "read",
+    "contents": "read",
+    "issues": "read",
+    "pull_requests": "read",
+    "actions": "read",
+    "deployments": "read",
     "members": "read",
+    "checks": "write",
 }
 
 EVENTS = [
@@ -53,18 +48,12 @@ def redirect_url() -> str:
     return f"{settings.github_origin}/gh/app/created"
 
 
-def oauth_url() -> str:
-    return f"{settings.github_origin}/gh/oauth"
-
-
 def build(name: str = NAME) -> dict:
     return {
         "name": name,
         "url": settings.public_origin,
         "hook_attributes": {"url": webhook_url(), "active": True},
         "redirect_url": redirect_url(),
-        "callback_urls": [oauth_url()],
-        "request_oauth_on_install": True,
         "setup_on_update": True,
         "public": False,
         "default_events": EVENTS,

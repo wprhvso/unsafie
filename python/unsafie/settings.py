@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     admin_session_days: int = 30
 
     github_api_url: str = "https://api.github.com"
+    github_repo_sync_limit: int = 200
+    github_prompt_repos: int = 60
     github_max_file_bytes: int = 1_048_576
     github_max_changes: int = 200
     github_max_rebase_commits: int = 50

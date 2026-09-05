@@ -1,21 +1,22 @@
+"""Creating the App and keeping track of where it is installed.
+
+Installations matter for webhooks and checks only — repository work runs on personal tokens.
+"""
+
 import logging
 import secrets
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database import SessionLocal
-from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.repositories.github import (
-    GithubAccountRepository,
     GithubAppRepository,
     InstallationRepository,
     RepoRepository,
     UserRepoRepository,
 )
-from unsafie.database.repositories.user import UserRepository
 from unsafie.github.app import auth
 from unsafie.github.client.base import GithubHTTP
-from unsafie.github.client.user import UserClient
 from unsafie.github.errors import GithubError
 
 logger = logging.getLogger(__name__)
@@ -86,44 +87,3 @@ async def bind_user(session: AsyncSession, user_id: int, repos: list) -> list[st
         bound = await UserRepoRepository(session).bind(user_id, repo)
         aliases.append(bound.alias)
     return aliases
-
-
-async def link_account(account: GithubAccount) -> list[int]:
-    client = UserClient(auth.user_provider(account), account.login)
-    installations = await client.installations()
-    ids: list[int] = []
-    async with SessionLocal() as session:
-        for item in installations:
-            installation_id = await sync_installation(session, item)
-            await InstallationRepository(session).link_account(installation_id, account.id)
-            ids.append(installation_id)
-    for installation_id in ids:
-        try:
-            repos = await fetch_installation_repos(installation_id)
-        except GithubError as e:
-            logger.warning("installation=%s repo sync failed: %s", installation_id, e)
-            continue
-        async with SessionLocal() as session:
-            saved = await sync_repos(session, installation_id, repos)
-            await bind_user(session, account.user_id, saved)
-    logger.info("account=%s (%s) linked installations=%s", account.id, account.login, ids)
-    return ids
-
-
-async def connect_user(user_id: int, code: str) -> GithubAccount:
-    data = await auth.exchange_code(code)
-    token = data["access_token"]
-    me = await UserClient(token).me()
-    async with SessionLocal() as session:
-        await UserRepository(session).get_or_create(user_id)
-        account = await GithubAccountRepository(session).upsert(
-            user_id,
-            int(me["id"]),
-            me["login"],
-            token=token,
-            token_expires=auth._expires(data, "expires_in"),
-            refresh_token=data.get("refresh_token"),
-            refresh_expires=auth._expires(data, "refresh_token_expires_in"),
-        )
-    await link_account(account)
-    return account

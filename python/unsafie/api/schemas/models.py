@@ -155,8 +155,9 @@ class GithubAccountRead(Base):
     github_id: int
     login: str
     has_token: bool = False
-    token_expires: datetime | None = None
+    scopes: str | None = None
     created_at: datetime
+    last_used_at: datetime | None = None
 
 
 class InstallationRead(Base):
@@ -170,7 +171,7 @@ class InstallationRead(Base):
 
 class RepoRead(Base):
     id: int
-    installation_id: int
+    installation_id: int | None = None
     owner: str
     name: str
     default_branch: str

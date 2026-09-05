@@ -3,14 +3,13 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.agent.tools.base import ToolContext
-from unsafie.database import SessionLocal
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.repositories.github import GithubAccountRepository, InstallationRepository
-from unsafie.github import workspace
-from unsafie.github.app import auth
+from unsafie.github import pat, workspace
 from unsafie.github.client.user import UserClient
 from unsafie.github.errors import UserAuthRequired
 from unsafie.github.workspace import Session
+from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +21,7 @@ async def session_for(ctx: ToolContext, args: dict) -> Session:
 
 
 async def accounts_of(user_id: int) -> list[GithubAccount]:
-    async with SessionLocal() as session:
-        return await GithubAccountRepository(session).for_user(user_id)
+    return await pat.accounts_of(user_id)
 
 
 async def account_for(user_id: int, login: str | None) -> GithubAccount:
@@ -40,26 +38,21 @@ async def account_for(user_id: int, login: str | None) -> GithubAccount:
 
 
 async def user_client(user_id: int, login: str | None = None) -> UserClient:
-    account = await account_for(user_id, login)
-    return UserClient(auth.user_provider(account), account.login)
+    return await pat.user_client(user_id, login)
 
 
 async def each_user_client(user_id: int):
-    """Yield (client, error) for every connected account; a dead account does not kill the rest."""
+    """Yield (client, error) for every connected account; a tokenless one does not kill the rest."""
     for account in await accounts_of(user_id):
-        try:
-            await auth.user_token(account)
-        except UserAuthRequired as e:
-            yield None, (account.login, str(e))
+        if not account.token:
+            yield None, (account.login, str(UserAuthRequired(account.login)))
             continue
-        yield UserClient(auth.user_provider(account), account.login), None
+        yield pat.client(account), None
 
 
 async def gh_available(session: AsyncSession, ctx: ToolContext) -> bool:
-    if not await auth.app_configured():
-        return False
     accounts = await GithubAccountRepository(session).for_user(ctx.user_id)
-    return bool(accounts)
+    return any(a.token for a in accounts)
 
 
 async def gh_context(session: AsyncSession, ctx: ToolContext) -> str:
@@ -67,21 +60,20 @@ async def gh_context(session: AsyncSession, ctx: ToolContext) -> str:
     accounts = await GithubAccountRepository(session).for_user(ctx.user_id)
     if not bound:
         return (
-            "GitHub: accounts connected ("
+            "GitHub: token connected ("
             + ", ".join(a.login for a in accounts)
-            + "), but no repositories are available — the app is not installed on any."
+            + "), but no repositories are bound yet — /gh sync or /gh add owner/name."
         )
-    installations = {i.id: i for i in await InstallationRepository(session).for_user(ctx.user_id)}
-    by_account: dict[str, list[str]] = {}
-    for binding, repo in bound:
-        owner = installations.get(repo.installation_id)
-        key = owner.account_login if owner else repo.owner
-        line = f"{repo.full} ({repo.default_branch}) as `{binding.alias}`"
-        by_account.setdefault(key, []).append(line)
+    installations = {i.id for i in await InstallationRepository(session).for_user(ctx.user_id)}
+    limit = settings.github_prompt_repos
     parts = ["GitHub repositories:"]
-    for account, lines in by_account.items():
-        parts.append(f"  {account}: " + "; ".join(lines))
+    for binding, repo in bound[:limit]:
+        events = " [events]" if repo.installation_id in installations else ""
+        parts.append(f"  {repo.full} ({repo.default_branch}) as `{binding.alias}`{events}")
+    if len(bound) > limit:
+        parts.append(f"  … and {len(bound) - limit} more, see gh_accounts")
     parts.append(
-        "  Repository tools take repo= as an alias or owner/name; the default is the only repo."
+        "  Repository tools take repo= as an alias or owner/name; the default is the only repo. "
+        "[events] means the App is installed there, so webhook subscriptions work."
     )
     return "\n".join(parts)

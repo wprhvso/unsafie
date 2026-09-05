@@ -4,7 +4,7 @@ commands-start =
 
     /budget — balance and per-message limit
     /effort — thinking effort
-    /gh — GitHub accounts
+    /gh — GitHub token and repositories
     /model — Claude model
     /ssh — servers over SSH
     /subs — repository event subscriptions

@@ -8,14 +8,12 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.worktree import Worktree
 from unsafie.database.repositories.github import (
-    InstallationRepository,
     RepoRepository,
     UserRepoRepository,
     WorktreeRepository,
 )
 from unsafie.database.repositories.user import UserRepository
-from unsafie.github import bulk, cache
-from unsafie.github.app.auth import installation_provider
+from unsafie.github import bulk, cache, pat
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.errors import GithubError, NotFound
 from unsafie.github.vfs import Overlay, Tree
@@ -45,8 +43,9 @@ class Session:
         return f"{self.repo.full}@{self.branch}"
 
 
-def client_for(repo: Repo) -> RepoClient:
-    return RepoClient(repo.owner, repo.name, installation_provider(repo.installation_id))
+def client_for(repo: Repo, user_id: int) -> RepoClient:
+    """The user's token does the work; the installation token stands by for what it cannot reach."""
+    return RepoClient(repo.owner, repo.name, pat.provider(user_id), pat.app_provider(repo))
 
 
 def lock_for(repo_id: int, branch: str) -> asyncio.Lock:
@@ -60,13 +59,16 @@ async def resolve(user_id: int, ref: str | None) -> tuple[UserRepo, Repo]:
             found = await repos.resolve(user_id, ref)
             if found is None:
                 known = [b.alias for b, _ in await repos.for_user(user_id)]
-                hint = ", ".join(known) if known else "none yet — connect an account with /gh"
-                raise NotFound(f"no repository '{ref}'. Available: {hint}")
+                hint = ", ".join(known) if known else "none yet — the user must run /gh <token>"
+                raise NotFound(
+                    f"no repository '{ref}'. Available: {hint}. "
+                    "A repository the token can see is added with /gh add owner/name."
+                )
             return found
         bound = await repos.for_user(user_id)
         if not bound:
             raise NotFound(
-                "no repositories connected. The user must run /gh and install the app on their repositories."
+                "no repositories connected. The user must run /gh <token> with a personal access token."
             )
         if len(bound) > 1:
             names = ", ".join(b.alias for b, _ in bound)
@@ -83,7 +85,7 @@ async def default_branch(repo: Repo, client: RepoClient) -> str:
 
 async def open_session(user_id: int, ref: str | None, branch: str | None) -> Session:
     binding, repo = await resolve(user_id, ref)
-    client = client_for(repo)
+    client = client_for(repo, user_id)
     name = branch or await default_branch(repo, client)
     async with SessionLocal() as session:
         worktree = await WorktreeRepository(session).get(repo.id, name)
@@ -162,12 +164,14 @@ async def save(state: Session) -> None:
 async def author_for(user_id: int, repo: Repo) -> dict | None:
     async with SessionLocal() as session:
         user = await UserRepository(session).get(user_id)
-        installation = await InstallationRepository(session).get(repo.installation_id)
     if user and user.git_name and user.git_email:
         return {"name": user.git_name, "email": user.git_email}
-    if installation and installation.account_login:
-        login = installation.account_login
-        return {"name": login, "email": f"{login}@users.noreply.github.com"}
+    account = await pat.account_of(user_id)
+    if account:
+        return {
+            "name": account.login,
+            "email": f"{account.login}@users.noreply.github.com",
+        }
     return None
 
 

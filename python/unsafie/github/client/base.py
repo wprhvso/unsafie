@@ -11,7 +11,7 @@ import aiohttp
 
 from unsafie import telemetry
 from unsafie.github import metrics
-from unsafie.github.errors import Conflict, GithubError, NotFound
+from unsafie.github.errors import Conflict, GithubError, NotFound, UserAuthRequired
 from unsafie.log import short
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
@@ -110,15 +110,31 @@ class Paginated:
 
 
 class GithubHTTP:
-    def __init__(self, token: TokenProvider | str | None = None) -> None:
+    def __init__(
+        self,
+        token: TokenProvider | str | None = None,
+        fallback: TokenProvider | str | None = None,
+    ) -> None:
         self._token = token
+        self._fallback = fallback
 
-    async def _auth(self) -> str | None:
-        if self._token is None:
+    @staticmethod
+    async def _resolve(token: TokenProvider | str | None) -> str | None:
+        if token is None:
             return None
-        if isinstance(self._token, str):
-            return self._token
-        return await self._token()
+        if isinstance(token, str):
+            return token or None
+        return await token()
+
+    async def _auth(self) -> tuple[str | None, bool]:
+        """The token to start with and whether the fallback one is still worth trying."""
+        if self._fallback is None:
+            return await self._resolve(self._token), False
+        try:
+            token = await self._resolve(self._token)
+        except UserAuthRequired:
+            return await self._resolve(self._fallback), False
+        return token, True
 
     async def request(
         self,
@@ -133,7 +149,7 @@ class GithubHTTP:
     ) -> Any:
         url = path if path.startswith("http") else f"{settings.github_api_url}{path}"
         headers = {"Accept": accept, "X-GitHub-Api-Version": API_VERSION, "User-Agent": "unsafie"}
-        token = await self._auth()
+        token, may_fall_back = await self._auth()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         started = time.perf_counter()
@@ -164,6 +180,14 @@ class GithubHTTP:
                         },
                     )
                     logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
+                    if r.status in (401, 403, 404) and may_fall_back:
+                        # The user's token does not reach this repository — try the installation.
+                        may_fall_back = False
+                        if spare := await self._resolve(self._fallback):
+                            headers["Authorization"] = f"Bearer {spare}"
+                            span.add_event("github.fallback", {"status": r.status})
+                            logger.info("github %s -> %s, retrying as the app", url, r.status)
+                            continue
                     if r.status == 404 and allow_404:
                         return None
                     if r.status in (403, 429) and _rate_limited(r.headers, body):
@@ -191,7 +215,7 @@ class GithubHTTP:
         """Download a big response straight to a file. None means it is over `limit`."""
         url = path if path.startswith("http") else f"{settings.github_api_url}{path}"
         headers = {"Accept": ACCEPT, "X-GitHub-Api-Version": API_VERSION, "User-Agent": "unsafie"}
-        token = await self._auth()
+        token, _ = await self._auth()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         started = time.perf_counter()
@@ -281,7 +305,7 @@ def _error(status: int, body: bytes, method: str, url: str) -> GithubError:
     if status in (401, 403):
         return GithubError(
             f"github denied access ({status}) {where}: {message}. "
-            "The App may lack permission on this repository, or it is not installed there."
+            "The user's token may lack the scope or the access for this repository."
         )
     return GithubError(f"github error {status} {where}: {message}")
 
