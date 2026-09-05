@@ -75,7 +75,13 @@
           source: |
             .source = "journald"
             .unit = to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? to_string(._COMM) ?? "unknown"
-            p = to_int(.PRIORITY) ?? 6
+            # journald entries may come without PRIORITY (e.g. ansible modules
+            # writing via the native protocol). to_int(null) is 0, not an error,
+            # so `?? 6` would not fire and such lines became "emerg".
+            p = 6
+            if exists(.PRIORITY) {
+              p = to_int(.PRIORITY) ?? 6
+            }
             .level = get(["emerg", "alert", "crit", "error", "warning", "notice", "info", "debug"], [p]) ?? "info"
             del(.__CURSOR)
             del(.__MONOTONIC_TIMESTAMP)
