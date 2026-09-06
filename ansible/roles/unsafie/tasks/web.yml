@@ -5,6 +5,14 @@
   when: unsafie_replace_default_vhost
   notify: reload nginx
 
+- name: Create the snippet directory of the main domain
+  ansible.builtin.file:
+    path: "/etc/nginx/snippets/{{ unsafie_domain }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Install the vhosts
   ansible.builtin.template:
     src: "{{ item.src }}"

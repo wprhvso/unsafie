@@ -24,4 +24,3 @@
     - { role: monitoring_web, tags: [monitoring_web] }
     - { role: grafana, tags: [grafana] }
     - { role: unsafie, tags: [unsafie] }
-    - { role: cloudflared, tags: [cloudflared] }

@@ -10,6 +10,10 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
 
+    # Other roles hang their own locations off the main domain: the dumbvpn
+    # artifact store is one of them, and it has no business being a subdomain.
+    include /etc/nginx/snippets/{{ unsafie_domain }}/*.conf;
+
     location /_app/ {
         expires 1y;
         add_header Cache-Control "public, immutable";

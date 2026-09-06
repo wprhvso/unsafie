@@ -26,24 +26,15 @@
     port: "22"
     proto: tcp
 
-- name: allow ports
+- name: allow
   community.general.ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
-  loop:
-    - "{{ dumbvpn_relay_port }}"
-    - "18443"
-
-- name: drop http ports
-  community.general.ufw:
-    rule: allow
-    port: "{{ item }}"
-    proto: tcp
-    delete: true
   loop:
     - "80"
     - "443"
+    - "8443"
 
 - name: enable
   community.general.ufw:
