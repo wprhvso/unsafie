@@ -26,6 +26,7 @@ func main() {
 	target := flag.String("url", "https://tls.peet.ws/api/all", "a service that reports what it sees")
 	h3 := flag.Bool("h3", false, "let the wire negotiate HTTP/3 first")
 	timeout := flag.Duration("timeout", 20*time.Second, "how long to wait")
+	stream := flag.Int("stream", 0, "POST this many bytes as a body of unknown length")
 	flag.Parse()
 
 	parsed, err := url.Parse(*target)
@@ -53,9 +54,19 @@ func main() {
 	client := wire.Client()
 	client.Timeout = *timeout
 
-	req, err := http.NewRequest(http.MethodGet, *target, nil)
+	method, body := http.MethodGet, io.Reader(nil)
+	if *stream > 0 {
+		method = http.MethodPost
+		body = &trickle{left: *stream, gap: 20 * time.Millisecond}
+	}
+
+	req, err := http.NewRequest(method, *target, body)
 	if err != nil {
 		log.Fatalf("request: %v", err)
+	}
+	if *stream > 0 {
+		req.ContentLength = -1
+		req.Header.Set("content-type", "application/octet-stream")
 	}
 	req.Header.Set("sec-fetch-dest", "document")
 	req.Header.Set("sec-fetch-mode", "navigate")
@@ -69,6 +80,27 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	fmt.Printf("over: %s, status %d\n\n%s\n", wire.Protocol(), resp.StatusCode, body)
+	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	fmt.Printf("over: %s, status %d\n\n%s\n", wire.Protocol(), resp.StatusCode, answer)
+}
+
+// trickle is a request body that never says how long it is and arrives in
+// pieces, which is the shape the tunnel's uplink has and the one an HTTP/2
+// client is most likely to get wrong.
+type trickle struct {
+	left int
+	gap  time.Duration
+}
+
+func (t *trickle) Read(p []byte) (int, error) {
+	if t.left <= 0 {
+		return 0, io.EOF
+	}
+	time.Sleep(t.gap)
+	n := min(len(p), t.left, 4096)
+	for i := range n {
+		p[i] = byte('a' + i%26)
+	}
+	t.left -= n
+	return n, nil
 }
