@@ -8,7 +8,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/miekg/dns"
 
 	"unsafie/internal/edge"
 	"unsafie/internal/logging"
@@ -25,6 +28,7 @@ func main() {
 	target := flag.String("target", "example.com:80", "what to reach through the tunnel")
 	request := flag.String("request", "", "raw bytes to send once the stream is open")
 	udp := flag.Bool("udp", false, "open a datagram stream instead of a byte stream")
+	dnsName := flag.String("dns", "", "resolve a name over a datagram stream")
 	maxRead := flag.Int64("max", 2048, "how many bytes to read back")
 	wait := flag.Duration("wait", 8*time.Second, "how long to wait for an answer")
 	flag.Parse()
@@ -63,6 +67,31 @@ func main() {
 		log.Fatalf("open stream to %s: %v", *target, err)
 	}
 	defer conn.Close()
+
+	if *dnsName != "" {
+		query := new(dns.Msg)
+		query.SetQuestion(dns.Fqdn(*dnsName), dns.TypeA)
+		query.RecursionDesired = true
+		raw, err := query.Pack()
+		if err != nil {
+			log.Fatalf("pack query: %v", err)
+		}
+		if _, err := conn.Write(raw); err != nil {
+			log.Fatalf("write query: %v", err)
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(*wait))
+		buf := make([]byte, 1500)
+		n, err := conn.Read(buf)
+		if err != nil {
+			log.Fatalf("read answer: %v", err)
+		}
+		answer := new(dns.Msg)
+		if err := answer.Unpack(buf[:n]); err != nil {
+			log.Fatalf("unpack answer: %v", err)
+		}
+		fmt.Printf("dns answer %d byte(s): %s\n", n, strings.ReplaceAll(answer.String(), "\n", " | "))
+		return
+	}
 
 	payload := *request
 	if payload == "" && !*udp {
