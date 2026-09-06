@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-case " ${RENEWED_DOMAINS:-} " in
-    *" {{ dumbvpn_domain }} "*) systemctl try-restart dumbvpn-relay.service ;;
-esac

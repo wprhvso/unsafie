@@ -27,6 +27,7 @@ pub const Config = struct {
     connect_ms: i64 = 10_000,
     dns_ms: i64 = 5_000,
     keepalive_ms: u32 = 15_000,
+    slot: u8 = 0,
 };
 
 pub const Stats = struct {
@@ -551,6 +552,10 @@ pub const Edge = struct {
             .last = now,
         };
         self.minter.mint(&s.id);
+        if (self.cfg.slot != 0) {
+            var tries: usize = 0;
+            while (s.id[0] != self.cfg.slot and tries < 512) : (tries += 1) self.minter.mint(&s.id);
+        }
 
         self.sessions.put(s.id[0..], s) catch {
             self.freeSession(s);
