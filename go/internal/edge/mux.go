@@ -251,7 +251,9 @@ func (m *Mux) OpenStrict(ctx context.Context, target usp.Addr, udp bool) (net.Co
 	return conn, nil
 }
 
-func (m *Mux) sendData(id uint16, p []byte, udp bool) (int, error) {
+// A stream that has not sent much yet is a request, not an upload, and its
+// frames leave the buffer at once instead of waiting out the coalescing tick.
+func (m *Mux) sendData(id uint16, p []byte, udp, urgent bool) (int, error) {
 	n, err := m.reserve(int64(len(p)), udp)
 	if err != nil {
 		return 0, err
@@ -259,6 +261,9 @@ func (m *Mux) sendData(id uint16, p []byte, udp bool) (int, error) {
 	f := usp.Frame{Type: usp.TypeData, Stream: id, Payload: p[:n]}
 	if udp {
 		f.Flags |= usp.FlagUDP
+	}
+	if urgent {
+		f.Flags |= usp.FlagUrgent
 	}
 	if err := m.write(&f); err != nil {
 		m.session.add(n)
@@ -322,7 +327,7 @@ func (m *Mux) write(f *usp.Frame) error {
 			err := m.writer.WriteFrame(f)
 			if err == nil {
 				m.dirty.Store(true)
-				if f.Type.Control() || m.writer.Buffered() >= flushThreshold {
+				if f.Type.Control() || f.Flags.Has(usp.FlagUrgent) || m.writer.Buffered() >= flushThreshold {
 					err = m.writer.Flush()
 					m.dirty.Store(false)
 				}

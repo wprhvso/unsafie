@@ -172,6 +172,12 @@ func (s *stream) replenish(n int) {
 	s.mux.sendWindow(0, uint32(credit))
 }
 
+// BulkAfter is how much one stream may send before it stops counting as a
+// request and starts counting as an upload.
+const BulkAfter = 256 << 10
+
+func (s *stream) interactive() bool { return s.stats.out.Load() <= BulkAfter }
+
 func (s *stream) awaitCredit() error {
 	timer, timeout := s.writeTimer()
 	if timer != nil {
@@ -213,7 +219,7 @@ func (s *stream) Write(p []byte) (int, error) {
 			}
 			continue
 		}
-		sent, err := s.mux.sendData(s.id, p[written:written+int(want)], false)
+		sent, err := s.mux.sendData(s.id, p[written:written+int(want)], false, s.interactive())
 		s.tx.add(want - int64(sent))
 		written += sent
 		s.stats.out.Add(int64(sent))
@@ -244,7 +250,7 @@ func (s *stream) writeDatagram(p []byte) (int, error) {
 			}
 			continue
 		}
-		sent, err := s.mux.sendData(s.id, p, true)
+		sent, err := s.mux.sendData(s.id, p, true, true)
 		if err != nil {
 			s.tx.add(int64(len(p)))
 			return 0, err

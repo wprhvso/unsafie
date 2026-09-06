@@ -28,6 +28,17 @@ pub const Config = struct {
     dns_ms: i64 = 5_000,
     keepalive_ms: u32 = 15_000,
     slot: u8 = 0,
+
+    // How much a stream may push down before it stops being treated as
+    // interactive. A page is a few hundred kilobytes of many small streams; a
+    // download is one stream of everything else. Nobody has to declare which
+    // they are.
+    bulk_after: u64 = 256 * 1024,
+
+    // How much bulk may go into one chunk. This is the jitter an interactive
+    // frame can inherit from a download in front of it: one frame's worth, and
+    // no more.
+    drain_bulk: usize = 32 * 1024,
 };
 
 pub const Stats = struct {
@@ -58,6 +69,7 @@ const Role = enum { none, up, down };
 
 const read_chunk: usize = 32 * 1024;
 const out_high_water: usize = 1024 * 1024;
+const chunk_prefix: usize = 8;
 const egress_high_water: usize = 512 * 1024;
 
 pub const Conn = struct {
@@ -96,10 +108,15 @@ pub const Stream = struct {
     want_write: bool = false,
     paused: bool = false,
     credited: u64 = 0,
+    pushed: u64 = 0,
     fin_client: bool = false,
     opened: bool = false,
     dead_next: ?*Stream = null,
 };
+
+// Which queue a frame joins. Session level frames always jump the queue: they
+// carry no data and have no order to keep with anything that does.
+const Class = enum { urgent, bulk };
 
 pub const Session = struct {
     id: [ids.id_len]u8 = undefined,
@@ -113,7 +130,8 @@ pub const Session = struct {
     down_off: u64 = 0,
 
     replay: Ring,
-    out: Buffer,
+    urgent: Buffer,
+    bulk: Buffer,
     wire: Buffer,
 
     head: [usp.header_size]u8 = undefined,
@@ -131,6 +149,10 @@ pub const Session = struct {
     last: i64 = 0,
     dead: bool = false,
     dead_next: ?*Session = null,
+
+    fn pending(self: *const Session) usize {
+        return self.urgent.size() + self.bulk.size();
+    }
 };
 
 pub const Edge = struct {
@@ -329,7 +351,7 @@ pub const Edge = struct {
         while (true) {
             if (conn.role == .up) {
                 if (conn.session) |s| {
-                    if (s.out.size() > out_high_water) break;
+                    if (s.pending() > out_high_water) break;
                 }
             }
             const dst = conn.in.tail(read_chunk) catch {
@@ -502,7 +524,8 @@ pub const Edge = struct {
             .edge = self,
             .streams = std.AutoHashMap(u16, *Stream).init(self.allocator),
             .replay = try Ring.init(self.allocator, self.cfg.replay_bytes),
-            .out = Buffer.init(self.allocator),
+            .urgent = Buffer.init(self.allocator),
+            .bulk = Buffer.init(self.allocator),
             .wire = Buffer.init(self.allocator),
             .payload = Buffer.init(self.allocator),
             .send_credit = @intCast(self.cfg.session_window),
@@ -645,11 +668,16 @@ pub const Edge = struct {
 
         _ = conn.out.append(http.chunked_stream_head) catch {};
 
+        // Replayed bytes are already numbered, so they go straight to the wire
+        // ahead of anything still waiting to be given an offset.
         const behind: usize = @intCast(s.replay.pending(from));
         if (behind > 0) {
             const slot = self.scratch[0..@min(behind, self.scratch.len)];
             if (s.replay.since(s.down_off - behind, slot)) |n| {
-                s.out.append(slot[0..n]) catch {};
+                var head: [24]u8 = undefined;
+                s.wire.append(http.writeChunkHeader(&head, n)) catch {};
+                s.wire.append(slot[0..n]) catch {};
+                s.wire.append("\r\n") catch {};
                 self.stats.replayed += n;
             }
         }
@@ -917,7 +945,9 @@ pub const Edge = struct {
     fn pumpEgressRead(self: *Edge, st: *Stream) void {
         const s = st.session;
         while (true) {
-            if (s.out.size() > out_high_water) {
+            const class = self.classOf(st);
+            const backlog = if (class == .bulk) s.bulk.size() else s.pending();
+            if (backlog > out_high_water) {
                 st.paused = true;
                 self.rearm(&st.reg, linux.EPOLL.RDHUP);
                 return;
@@ -936,15 +966,16 @@ pub const Edge = struct {
                 return;
             };
             if (n == 0) {
-                self.emit(s, .eof, usp.flag_fin, st.id, &.{});
+                self.emitClass(s, class, .eof, usp.flag_fin, st.id, &.{});
                 self.closeStream(st, .none, false);
                 return;
             }
 
             st.send_credit -= @intCast(n);
             s.send_credit -= @intCast(n);
+            st.pushed += n;
             const flags: u8 = if (st.udp) usp.flag_udp else 0;
-            self.emit(s, .data, flags, st.id, slot[0..n]);
+            self.emitClass(s, class, .data, flags, st.id, slot[0..n]);
             if (n < slot.len) return;
         }
     }
@@ -1047,6 +1078,7 @@ pub const Edge = struct {
         const s = st.session;
         const id = st.id;
         const opened = st.opened;
+        const class = self.classOf(st);
         self.dropStream(st);
 
         if (!tell) return;
@@ -1055,7 +1087,7 @@ pub const Edge = struct {
             return;
         }
         const body = [_]u8{@intFromEnum(reason)};
-        self.emit(s, .reset, usp.flag_urgent, id, &body);
+        self.emitClass(s, class, .reset, usp.flag_urgent, id, &body);
     }
 
     fn resumeReading(self: *Edge, s: *Session) void {
@@ -1070,6 +1102,18 @@ pub const Edge = struct {
     }
 
     fn emit(self: *Edge, s: *Session, kind: usp.Type, flags: u8, stream: u16, payload: []const u8) void {
+        self.emitClass(s, .urgent, kind, flags, stream, payload);
+    }
+
+    // Frames are queued, not numbered, here: the offset a frame gets is decided
+    // when it is drained, so putting one queue in front of another never leaves
+    // a hole in the stream the client is counting.
+    //
+    // Routing is by stream rather than by frame. A stream's own EOF must not
+    // overtake its own data, so once a stream is bulk everything it sends is,
+    // and the frames it left in the urgent queue are older ones that drain
+    // first anyway.
+    fn emitClass(self: *Edge, s: *Session, class: Class, kind: usp.Type, flags: u8, stream: u16, payload: []const u8) void {
         if (s.dead) return;
 
         var head: [usp.header_size]u8 = undefined;
@@ -1081,16 +1125,13 @@ pub const Edge = struct {
         };
         header.encode(&head);
 
-        s.replay.append(&head);
-        if (payload.len > 0) s.replay.append(payload);
-        s.down_off += usp.header_size + payload.len;
-
-        s.out.append(&head) catch {
+        const queue = if (class == .urgent) &s.urgent else &s.bulk;
+        queue.append(&head) catch {
             self.killSession(s);
             return;
         };
         if (payload.len > 0) {
-            s.out.append(payload) catch {
+            queue.append(payload) catch {
                 self.killSession(s);
                 return;
             };
@@ -1098,18 +1139,46 @@ pub const Edge = struct {
         self.flushDown(s);
     }
 
+    fn classOf(self: *Edge, st: *const Stream) Class {
+        return if (st.pushed > self.cfg.bulk_after) .bulk else .urgent;
+    }
+
+    // encodeChunk turns whatever is queued into one chunk, urgent first. The
+    // size is written into space reserved before the body so the frames are
+    // copied exactly once; a chunk size with leading zeroes is still hex.
+    fn encodeChunk(self: *Edge, s: *Session) void {
+        if (s.pending() == 0) return;
+
+        const at = s.wire.len;
+        _ = s.wire.tail(chunk_prefix) catch return;
+        const start = s.wire.len;
+
+        if (s.urgent.size() > 0) {
+            s.wire.append(s.urgent.readable()) catch return;
+            s.urgent.consume(s.urgent.size());
+        }
+        if (s.bulk.size() > 0) {
+            const take = @min(s.bulk.size(), self.cfg.drain_bulk);
+            s.wire.append(s.bulk.readable()[0..take]) catch return;
+            s.bulk.consume(take);
+        }
+
+        const n = s.wire.len - start;
+        if (n == 0) {
+            s.wire.len = at;
+            return;
+        }
+        _ = std.fmt.bufPrint(s.wire.data[at .. at + chunk_prefix], "{x:0>6}\r\n", .{n}) catch {};
+        s.replay.append(s.wire.data[start .. start + n]);
+        s.down_off += n;
+        s.wire.append("\r\n") catch return;
+    }
+
     fn flushDown(self: *Edge, s: *Session) void {
         const conn = s.down orelse return;
         if (conn.dying) return;
 
-        if (s.wire.size() == 0 and s.out.size() > 0) {
-            var head: [24]u8 = undefined;
-            const prefix = http.writeChunkHeader(&head, s.out.size());
-            s.wire.append(prefix) catch return;
-            s.wire.append(s.out.readable()) catch return;
-            s.wire.append("\r\n") catch return;
-            s.out.consume(s.out.size());
-        }
+        if (s.wire.size() == 0) self.encodeChunk(s);
 
         while (s.wire.size() > 0) {
             const chunk = s.wire.readable();
@@ -1127,14 +1196,7 @@ pub const Edge = struct {
                 self.rearm(&conn.reg, linux.EPOLL.IN | linux.EPOLL.OUT | linux.EPOLL.RDHUP);
                 return;
             }
-            if (s.out.size() > 0) {
-                var head: [24]u8 = undefined;
-                const prefix = http.writeChunkHeader(&head, s.out.size());
-                s.wire.append(prefix) catch return;
-                s.wire.append(s.out.readable()) catch return;
-                s.wire.append("\r\n") catch return;
-                s.out.consume(s.out.size());
-            }
+            self.encodeChunk(s);
         }
 
         self.rearm(&conn.reg, linux.EPOLL.IN | linux.EPOLL.RDHUP);
@@ -1239,15 +1301,9 @@ pub const Edge = struct {
         if (s.dead) return;
         s.dead = true;
 
-        const body = [_]u8{@intFromEnum(usp.Reason.session_gone)};
-        if (s.down) |conn| {
-            _ = conn;
-            var head: [usp.header_size]u8 = undefined;
-            const header = usp.Header{ .kind = .goaway, .flags = usp.flag_urgent, .stream = 0, .length = 1 };
-            header.encode(&head);
-            s.out.append(&head) catch {};
-            s.out.append(&body) catch {};
-            self.flushDown(s);
+        if (s.down != null) {
+            const body = [_]u8{@intFromEnum(usp.Reason.session_gone)};
+            self.emit(s, .goaway, usp.flag_urgent, 0, &body);
         }
 
         _ = self.sessions.remove(s.id[0..]);
@@ -1277,7 +1333,8 @@ pub const Edge = struct {
         }
         s.streams.deinit();
         s.replay.deinit();
-        s.out.deinit();
+        s.urgent.deinit();
+        s.bulk.deinit();
         s.wire.deinit();
         s.payload.deinit();
         self.allocator.destroy(s);
