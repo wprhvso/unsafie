@@ -1140,6 +1140,7 @@ pub const Edge = struct {
     }
 
     fn classOf(self: *Edge, st: *const Stream) Class {
+        if (self.cfg.bulk_after == 0) return .bulk;
         return if (st.pushed > self.cfg.bulk_after) .bulk else .urgent;
     }
 

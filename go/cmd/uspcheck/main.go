@@ -31,6 +31,7 @@ func main() {
 	dnsName := flag.String("dns", "", "resolve a name over a datagram stream")
 	maxRead := flag.Int64("max", 2048, "how many bytes to read back")
 	wait := flag.Duration("wait", 8*time.Second, "how long to wait for an answer")
+	noise := flag.Int("noise", 0, "pull this many bytes on another stream first, to fill the tunnel")
 	state := flag.String("state", "", "keep the session in this directory between runs")
 	suspend := flag.Bool("suspend", false, "leave the session behind instead of closing it")
 	flag.Parse()
@@ -71,6 +72,11 @@ func main() {
 		log.Fatalf("ping: %v", err)
 	}
 	fmt.Printf("ping %s\n", rtt.Round(time.Microsecond))
+
+	if *noise > 0 {
+		go drain(ctx, session, *noise)
+		time.Sleep(400 * time.Millisecond)
+	}
 
 	addr, err := usp.ParseAddr(*target)
 	if err != nil {
@@ -121,9 +127,19 @@ func main() {
 
 	_ = conn.SetReadDeadline(time.Now().Add(*wait))
 	started := time.Now()
-	body, err := io.ReadAll(io.LimitReader(conn, *maxRead))
+
+	first := make([]byte, 1)
+	n, err := conn.Read(first)
+	ttfb := time.Since(started)
+	if n == 0 && err != nil {
+		log.Fatalf("read: %v", err)
+	}
+
+	rest, err := io.ReadAll(io.LimitReader(conn, *maxRead-1))
+	body := append(first[:n], rest...)
 	spent := time.Since(started)
-	fmt.Printf("read %d byte(s) in %s (%.1f Mbit/s)\n", len(body), spent.Round(time.Millisecond),
+	fmt.Printf("read %d byte(s) in %s, first byte after %s (%.1f Mbit/s)\n",
+		len(body), spent.Round(time.Millisecond), ttfb.Round(time.Microsecond),
 		float64(len(body)*8)/spent.Seconds()/1e6)
 	if len(body) > 0 {
 		fmt.Printf("%s\n", firstLines(body, 6))

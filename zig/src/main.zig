@@ -15,6 +15,9 @@ const usage =
     \\  --streams n             per session stream ceiling    (default 4096)
     \\  --sessions n            live session ceiling          (default 8192)
     \\  --replay bytes          resume window per session     (default 4194304)
+    \\  --bulk-after bytes      a stream stops being interactive after this much
+    \\                          (0 makes everything bulk, which is no priority)
+    \\  --drain-bulk bytes      how much bulk may go into one chunk
     \\  --slot letter           first character of every id this process mints,
     \\                          so nginx can route both legs of a session to it
     \\  --verbose               log every session transition
@@ -73,6 +76,10 @@ pub fn main() !void {
             cfg.max_streams = try std.fmt.parseInt(u32, args.next() orelse return error.MissingValue, 10);
         } else if (std.mem.eql(u8, arg, "--sessions")) {
             cfg.max_sessions = try std.fmt.parseInt(u32, args.next() orelse return error.MissingValue, 10);
+        } else if (std.mem.eql(u8, arg, "--bulk-after")) {
+            cfg.bulk_after = try std.fmt.parseInt(u64, args.next() orelse return error.MissingValue, 10);
+        } else if (std.mem.eql(u8, arg, "--drain-bulk")) {
+            cfg.drain_bulk = try std.fmt.parseInt(usize, args.next() orelse return error.MissingValue, 10);
         } else if (std.mem.eql(u8, arg, "--slot")) {
             const text = args.next() orelse return error.MissingValue;
             if (text.len != 1) return error.BadUsage;
