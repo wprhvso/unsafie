@@ -1,7 +1,7 @@
 .{
     .name = .unsafie_edge,
     .version = "0.1.0",
-    .fingerprint = 0x9d3c1f6ab27e4501,
+    .fingerprint = 0x2d6a4c4ab42f0db5,
     .minimum_zig_version = "0.15.0",
     .dependencies = .{},
     .paths = .{

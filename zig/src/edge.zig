@@ -210,11 +210,11 @@ pub const Edge = struct {
                 switch (reg.kind) {
                     .listener => self.acceptAll(),
                     .conn => {
-                        const conn: *Conn = @fieldParentPtr("reg", reg);
+                        const conn: *Conn = @alignCast(@fieldParentPtr("reg", reg));
                         self.onConn(conn, ev.events);
                     },
                     .egress => {
-                        const stream: *Stream = @fieldParentPtr("reg", reg);
+                        const stream: *Stream = @alignCast(@fieldParentPtr("reg", reg));
                         self.onEgress(stream, ev.events);
                     },
                     .dns => self.onDns(),
@@ -683,12 +683,12 @@ pub const Edge = struct {
             },
             .window => {
                 if (payload.len < 4) return error.BadFrame;
-                const credit: i64 = std.mem.readInt(u32, payload[0..4], .big);
+                const grant: i64 = std.mem.readInt(u32, payload[0..4], .big);
                 if (header.stream == 0) {
-                    s.send_credit += credit;
+                    s.send_credit += grant;
                     self.resumeReading(s);
                 } else if (s.streams.get(header.stream)) |st| {
-                    st.send_credit += credit;
+                    st.send_credit += grant;
                     if (st.paused) {
                         st.paused = false;
                         self.rearm(&st.reg, linux.EPOLL.IN | linux.EPOLL.RDHUP);
@@ -978,6 +978,7 @@ pub const Edge = struct {
     }
 
     fn onEof(self: *Edge, s: *Session, id: u16) void {
+        _ = self;
         const st = s.streams.get(id) orelse return;
         st.fin_client = true;
         if (st.state == .open and st.to_egress.size() == 0) {
