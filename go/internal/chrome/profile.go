@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	utls "github.com/refraction-networking/utls"
+
+	"unsafie/internal/h2chrome"
 )
 
 // One build of one browser, pinned.
@@ -25,13 +27,7 @@ type Profile struct {
 	Hello           utls.ClientHelloID
 	ALPN            []string
 
-	HeaderTableSize   uint32
-	EnablePush        uint32
-	InitialWindowSize uint32
-	MaxHeaderListSize uint32
-	MaxFrameSize      uint32
-	ConnectionWindow  uint32
-	MaxConcurrent     uint32
+	H2 h2chrome.Profile
 
 	QUICMaxIdleMS       uint32
 	QUICMaxDatagramSize uint16
@@ -40,9 +36,9 @@ type Profile struct {
 	QUICMaxStreams      int64
 }
 
-// Chrome131 is what this build claims to be. The HTTP/2 numbers are Chrome's
-// own SETTINGS, in the order Chrome sends them; the QUIC numbers are the
-// transport parameters Chrome offers on a fresh connection.
+// Chrome131 is what this build claims to be. The HTTP/2 half is Chrome's own
+// SETTINGS in Chrome's own order; the QUIC numbers are the transport parameters
+// Chrome offers on a fresh connection.
 var Chrome131 = Profile{
 	Name:            "Chrome",
 	Version:         "131.0.6778.86",
@@ -55,13 +51,7 @@ var Chrome131 = Profile{
 	Hello:          utls.HelloChrome_120,
 	ALPN:           []string{"h2", "http/1.1"},
 
-	HeaderTableSize:   65536,
-	EnablePush:        0,
-	InitialWindowSize: 6291456,
-	MaxHeaderListSize: 262144,
-	MaxFrameSize:      16384,
-	ConnectionWindow:  15663105,
-	MaxConcurrent:     1000,
+	H2: h2chrome.Chrome131,
 
 	QUICMaxIdleMS:       30000,
 	QUICMaxDatagramSize: 1350,
@@ -88,30 +78,7 @@ func (p Profile) Fingerprint() string {
 	b.WriteString(p.Hello.Client)
 	b.WriteByte('-')
 	b.WriteString(p.Hello.Version)
-	b.WriteString(" h2=1:")
-	b.WriteString(utoa(p.HeaderTableSize))
-	b.WriteString(";2:")
-	b.WriteString(utoa(p.EnablePush))
-	b.WriteString(";4:")
-	b.WriteString(utoa(p.InitialWindowSize))
-	b.WriteString(";6:")
-	b.WriteString(utoa(p.MaxHeaderListSize))
-	b.WriteByte('|')
-	b.WriteString(utoa(p.ConnectionWindow))
-	b.WriteString("|0|m,a,s,p")
+	b.WriteString(" h2=")
+	b.WriteString(p.H2.Fingerprint())
 	return b.String()
-}
-
-func utoa(v uint32) string {
-	if v == 0 {
-		return "0"
-	}
-	var buf [10]byte
-	i := len(buf)
-	for v > 0 {
-		i--
-		buf[i] = byte('0' + v%10)
-		v /= 10
-	}
-	return string(buf[i:])
 }
