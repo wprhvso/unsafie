@@ -31,6 +31,8 @@ func main() {
 	dnsName := flag.String("dns", "", "resolve a name over a datagram stream")
 	maxRead := flag.Int64("max", 2048, "how many bytes to read back")
 	wait := flag.Duration("wait", 8*time.Second, "how long to wait for an answer")
+	state := flag.String("state", "", "keep the session in this directory between runs")
+	suspend := flag.Bool("suspend", false, "leave the session behind instead of closing it")
 	flag.Parse()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -40,21 +42,29 @@ func main() {
 		Base:   *base,
 		Bearer: *bearer,
 		Label:  "uspcheck",
+		Edge:   "uspcheck",
+		State:  edge.NewStore(*state, 90*time.Second),
 		Client: &http.Client{Timeout: 0},
 	})
 	if err != nil {
 		log.Fatalf("open session: %v", err)
 	}
-	defer session.Close()
+	defer func() {
+		if *suspend {
+			session.Suspend()
+			return
+		}
+		session.Close()
+	}()
 
 	opened := time.Now()
 	if err := session.Ready(ctx); err != nil {
 		log.Fatalf("hello: %v", err)
 	}
 	hello := session.Hello()
-	fmt.Printf("session %s region=%q country=%q streams=%d replay=%dKiB features=%#x greeted in %s\n",
+	fmt.Printf("session %s region=%q country=%q streams=%d replay=%dKiB features=%#x resumed=%v greeted in %s\n",
 		session.ID(), hello.Region, hello.Country, hello.MaxStreams, hello.ReplayBytes/1024,
-		hello.Features, time.Since(opened).Round(time.Microsecond))
+		hello.Features, hello.Resumed, time.Since(opened).Round(time.Microsecond))
 
 	rtt, err := session.Mux().Ping(ctx)
 	if err != nil {
