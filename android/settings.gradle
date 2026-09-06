@@ -1,0 +1,38 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+def cacheUrl = providers.gradleProperty("gradleCacheUrl").orNull
+def cacheUser = providers.gradleProperty("gradleCacheUsername").orNull
+def cachePassword = providers.gradleProperty("gradleCachePassword").orNull
+
+buildCache {
+    local {
+        enabled = true
+    }
+    if (cacheUrl && cacheUser && cachePassword) {
+        remote(HttpBuildCache) {
+            url = cacheUrl
+            push = true
+            credentials {
+                username = cacheUser
+                password = cachePassword
+            }
+        }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "unsafie-android"
+include ':core'
+include ':app'
