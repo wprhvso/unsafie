@@ -23,6 +23,5 @@
     - { role: vector, tags: [vector] }
     - { role: monitoring_web, tags: [monitoring_web] }
     - { role: grafana, tags: [grafana] }
-    - { role: dumbvpn, tags: [dumbvpn] }
     - { role: unsafie, tags: [unsafie] }
     - { role: cloudflared, tags: [cloudflared] }
