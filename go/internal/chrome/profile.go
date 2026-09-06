@@ -48,7 +48,7 @@ var Chrome131 = Profile{
 	UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
 		"Chrome/131.0.0.0 Safari/537.36",
 	AcceptLanguage: "en-US,en;q=0.9",
-	Hello:          utls.HelloChrome_120,
+	Hello:          utls.HelloChrome_131,
 	ALPN:           []string{"h2", "http/1.1"},
 
 	H2: h2chrome.Chrome131,

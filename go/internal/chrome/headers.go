@@ -30,7 +30,6 @@ func (d *decorator) RoundTrip(req *http.Request) (*http.Response, error) {
 	set("sec-ch-ua", d.profile.SecCHUA())
 	set("sec-ch-ua-mobile", "?0")
 	set("sec-ch-ua-platform", d.profile.SecCHUAPlatform())
-	set("upgrade-insecure-requests", "1")
 	set("user-agent", d.profile.UserAgent)
 	set("accept", "*/*")
 	set("origin", d.origin)

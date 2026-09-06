@@ -66,6 +66,7 @@ var Chrome131 = Profile{
 		"sec-ch-ua-mobile",
 		"user-agent",
 		"sec-ch-ua-platform",
+		"upgrade-insecure-requests",
 		"accept",
 		"origin",
 		"sec-fetch-site",
