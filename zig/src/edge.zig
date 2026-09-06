@@ -73,6 +73,7 @@ pub const Conn = struct {
     hello_need: usize = 0,
     close_after: bool = false,
     dying: bool = false,
+    dead_next: ?*Conn = null,
     last: i64 = 0,
 };
 
@@ -97,6 +98,7 @@ pub const Stream = struct {
     credited: u64 = 0,
     fin_client: bool = false,
     opened: bool = false,
+    dead_next: ?*Stream = null,
 };
 
 pub const Session = struct {
@@ -126,6 +128,7 @@ pub const Session = struct {
     created: i64 = 0,
     last: i64 = 0,
     dead: bool = false,
+    dead_next: ?*Session = null,
 };
 
 pub const Edge = struct {
@@ -141,6 +144,9 @@ pub const Edge = struct {
     stats: Stats = .{},
     scratch: []u8,
     running: bool = true,
+    dead_conns: ?*Conn = null,
+    dead_streams: ?*Stream = null,
+    dead_sessions: ?*Session = null,
 
     pub fn init(allocator: std.mem.Allocator, cfg: Config) !*Edge {
         const self = try allocator.create(Edge);
@@ -169,6 +175,7 @@ pub const Edge = struct {
     }
 
     pub fn deinit(self: *Edge) void {
+        self.reap();
         var it = self.sessions.iterator();
         while (it.next()) |entry| self.freeSession(entry.value_ptr.*);
         self.sessions.deinit();
@@ -226,6 +233,7 @@ pub const Edge = struct {
                 next_tick = now + 250;
                 self.tick(now);
             }
+            self.reap();
         }
     }
 
@@ -276,9 +284,26 @@ pub const Edge = struct {
         self.disarm(&conn.reg);
         if (conn.reg.fd >= 0) posix.close(conn.reg.fd);
         conn.reg.fd = -1;
-        conn.in.deinit();
-        conn.out.deinit();
-        self.allocator.destroy(conn);
+        conn.dead_next = self.dead_conns;
+        self.dead_conns = conn;
+    }
+
+    fn reap(self: *Edge) void {
+        while (self.dead_streams) |st| {
+            self.dead_streams = st.dead_next;
+            st.to_egress.deinit();
+            self.allocator.destroy(st);
+        }
+        while (self.dead_conns) |conn| {
+            self.dead_conns = conn.dead_next;
+            conn.in.deinit();
+            conn.out.deinit();
+            self.allocator.destroy(conn);
+        }
+        while (self.dead_sessions) |s| {
+            self.dead_sessions = s.dead_next;
+            self.freeSession(s);
+        }
     }
 
     fn onConn(self: *Edge, conn: *Conn, events: u32) void {
@@ -1001,9 +1026,9 @@ pub const Edge = struct {
             self.disarm(&st.reg);
             posix.close(st.reg.fd);
         }
-        st.to_egress.deinit();
         st.state = .closed;
-        self.allocator.destroy(st);
+        st.dead_next = self.dead_streams;
+        self.dead_streams = st;
     }
 
     fn closeStream(self: *Edge, st: *Stream, reason: usp.Reason, tell: bool) void {
@@ -1223,7 +1248,8 @@ pub const Edge = struct {
             conn.session = null;
             self.closeConn(conn);
         }
-        self.freeSession(s);
+        s.dead_next = self.dead_sessions;
+        self.dead_sessions = s;
     }
 
     fn freeSession(self: *Edge, s: *Session) void {
