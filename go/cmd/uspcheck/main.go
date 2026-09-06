@@ -47,9 +47,14 @@ func main() {
 	}
 	defer session.Close()
 
+	opened := time.Now()
+	if err := session.Ready(ctx); err != nil {
+		log.Fatalf("hello: %v", err)
+	}
 	hello := session.Hello()
-	fmt.Printf("session %s region=%q country=%q streams=%d replay=%dKiB features=%#x\n",
-		session.ID(), hello.Region, hello.Country, hello.MaxStreams, hello.ReplayBytes/1024, hello.Features)
+	fmt.Printf("session %s region=%q country=%q streams=%d replay=%dKiB features=%#x greeted in %s\n",
+		session.ID(), hello.Region, hello.Country, hello.MaxStreams, hello.ReplayBytes/1024,
+		hello.Features, time.Since(opened).Round(time.Microsecond))
 
 	rtt, err := session.Mux().Ping(ctx)
 	if err != nil {
