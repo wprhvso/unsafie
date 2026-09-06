@@ -2,7 +2,6 @@ package chrome
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -13,9 +12,9 @@ import (
 	"time"
 
 	utls "github.com/refraction-networking/utls"
-	"golang.org/x/net/http2"
 
 	"unsafie/internal/backoff"
+	"unsafie/internal/h2chrome"
 	"unsafie/internal/logging"
 	"unsafie/internal/netx"
 )
@@ -308,21 +307,15 @@ func (nopRT) RoundTrip(*http.Request) (*http.Response, error) { return nil, errN
 var errNoop = errors.New("chrome: header decoration only")
 
 func (w *Wire) newH2() http.RoundTripper {
-	return &http2.Transport{
-		DialTLSContext:             w.dialTLS,
-		MaxHeaderListSize:          w.profile.MaxHeaderListSize,
-		MaxReadFrameSize:           w.profile.MaxFrameSize,
-		MaxDecoderHeaderTableSize:  w.profile.HeaderTableSize,
-		MaxEncoderHeaderTableSize:  w.profile.HeaderTableSize,
-		StrictMaxConcurrentStreams: true,
-		ReadIdleTimeout:            15 * time.Second,
-		PingTimeout:                8 * time.Second,
-		WriteByteTimeout:           30 * time.Second,
-		DisableCompression:         true,
+	return &h2chrome.Transport{
+		DialTLS:     w.dialTLS,
+		Profile:     w.profile.H2,
+		Addr:        net.JoinHostPort(w.opts.Host, w.opts.Port),
+		IdleTimeout: 90 * time.Second,
 	}
 }
 
-func (w *Wire) dialTLS(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+func (w *Wire) dialTLS(ctx context.Context, network, addr string) (net.Conn, error) {
 	dial := w.opts.Dial
 	if dial == nil {
 		var d net.Dialer
