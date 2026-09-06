@@ -198,7 +198,7 @@ func (w *Writer) WriteFrame(f *Frame) error {
 		}
 	}
 	if pad > 0 {
-		binary.BigEndian.PutUint16(w.pad[:], uint16(pad))
+		binary.BigEndian.PutUint16(w.pad[pad:], uint16(pad))
 		if err := w.emit(w.pad[:pad+2]); err != nil {
 			return err
 		}

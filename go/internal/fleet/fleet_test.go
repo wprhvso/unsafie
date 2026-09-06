@@ -122,8 +122,8 @@ func TestTableIsBoundedAndKeyedByService(t *testing.T) {
 }
 
 func TestServiceKeyGroupsWhatFailsTogether(t *testing.T) {
-	if a, b := service.Key("s3.eu-central-1.amazonaws.com"), service.Key("s3.us-east-1.amazonaws.com"); a != b {
-		t.Fatalf("two regions of one service became %q and %q", a, b)
+	if a, b := service.Key("edge.cdn.example.co.uk"), service.Key("origin.cdn.example.co.uk"); a != b || a != "example.co.uk" {
+		t.Fatalf("two hosts of one service became %q and %q", a, b)
 	}
 	if got := service.Key("93.184.216.34"); got != "93.184.216.0/24" {
 		t.Fatalf("literal address became %q", got)
