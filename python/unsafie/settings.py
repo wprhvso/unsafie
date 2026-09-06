@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     db_name: str = "unsafie"
     db_user: str = "unsafie"
     db_password: str = ""
+    db_pool_size: int = 3
+    db_max_overflow: int = 2
 
     log_level: str = "INFO"
     log_truncate: int = 2000
@@ -120,6 +122,48 @@ class Settings(BaseSettings):
 
     events_buffer: int = 1000
     events_queue: int = 256
+
+    role: str = "all"
+    release_sha: str = Field(default="dev", validation_alias="UNSAFIE_RELEASE")
+    default_lane: str = "stable"
+    graceful_shutdown_timeout: int = 15
+    drain_deadline: int = 120
+
+    node_id: str = "local"
+    node_priority: int = 0
+    node_mesh_ip: str = "127.0.0.1"
+    node_domain: str = "localhost"
+    cluster_peers: str = ""
+    gossip_port: int = 7373
+    gossip_interval: float = 1.0
+    election_dead_after: float = 8.0
+    election_lease: float = 15.0
+    election_min_term_interval: float = 60.0
+    election_psi_busy: float = 50.0
+
+    arbiter_repo: str = ""
+    arbiter_path: str = "cluster/leader.json"
+    arbiter_token: str = ""
+    leader_bot_token: str = ""
+    leader_promote_cmd: str = ""
+    leader_dns_cmd: str = ""
+
+    worker_concurrency: int = 1
+    job_lease: int = 90
+    job_heartbeat: int = 30
+    job_max_attempts: int = 3
+    job_poll_interval: float = 1.0
+
+    webhook_base_url: str = ""
+    webhook_secret: str = ""
+
+    backup_enabled: bool = False
+    backup_pgp_public: str = ""
+    backup_s3_prefix: str = ""
+
+    @property
+    def peers(self) -> list[str]:
+        return [p.strip() for p in self.cluster_peers.split(",") if p.strip()]
 
     @field_validator(
         "fluent_dir",

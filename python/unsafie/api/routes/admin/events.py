@@ -64,7 +64,9 @@ async def _stream(
     try:
         yield f": connected, latest={bus.bus.latest_id()}\n\n"
         while True:
-            if await request.is_disconnected():
+            if await request.is_disconnected() or bus.shutting_down.is_set():
+                if bus.shutting_down.is_set():
+                    yield "event: bye\ndata: {}\n\n"
                 return
             try:
                 yield await asyncio.wait_for(queue.get(), timeout=HEARTBEAT)

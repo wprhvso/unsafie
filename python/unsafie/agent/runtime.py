@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import text
 from claude_agent_sdk import (
     CLIConnectionError,
     CLIJSONDecodeError,
@@ -29,6 +30,7 @@ from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.repositories.config import ConfigRepository
 from unsafie.database.repositories.credential import CredentialRepository
+from unsafie.database.repositories.hold import HoldRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
@@ -201,6 +203,9 @@ async def _execute(
                 if error is not None:
                     telemetry.fail(query_span, RuntimeError(short(error, 300)))
 
+            async with SessionLocal() as session:
+                await CredentialRepository(session).release(cred.id)
+
             if error is None and result is not None:
                 charge = billing.charge_units(result.total_cost_usd, ratio)
                 async with SessionLocal() as session:
@@ -339,6 +344,28 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
     resume, fork, session_id = plan.resume, plan.fork, plan.session_id
     status = TurnStatus.FAILED
     note: str | None = None
+    async with SessionLocal() as session:
+        user = await UserRepository(session).get(turn.user_id)
+        hold_units = 0
+        if user is not None:
+            hold_units = user.balance if user.budget < 0 else min(user.balance, user.budget)
+        if hold_units > 0:
+            acquired = await HoldRepository(session).acquire(
+                turn.id, turn.user_id, hold_units, 3600
+            )
+        else:
+            acquired = False
+        await session.execute(
+            text("UPDATE turns SET release_sha=:r, node=:n, lane=:l WHERE id=:id").bindparams(
+                r=settings.release_sha, n=settings.node_id, l=settings.default_lane, id=turn.id
+            )
+        )
+        await session.commit()
+    if not acquired:
+        await notify(bot, turn, _failure_text(locale, Outcome("empty_balance")))
+        async with SessionLocal() as session:
+            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "no_funds")
+        return
     events.publish(
         "turn.started",
         turn_id=str(turn.id),
@@ -398,6 +425,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         finally:
             turns.abandon(turn.id)
             async with SessionLocal() as session:
+                await HoldRepository(session).release(turn.id)
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)
             telemetry.set_attrs(

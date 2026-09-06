@@ -2,9 +2,9 @@ import logging
 
 from aiogram import Router
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, Update
 
-from unsafie.agent.runtime import handle_callback
+from unsafie.agent.jobs import enqueue_update
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ def build_callbacks_router() -> Router:
     router = Router()
 
     @router.callback_query()
-    async def callback_handler(query: CallbackQuery, bot_id: int, update_db_id: int | None) -> None:
+    async def callback_handler(query: CallbackQuery, bot_id: int, event_update: Update) -> None:
         message = query.message if isinstance(query.message, Message) else None
         logger.info(
             "bot=%s chat=%s callback=%s from=%s data=%r msg=%s",
@@ -30,6 +30,6 @@ def build_callbacks_router() -> Router:
             logger.warning("bot=%s callback=%s answer failed: %s", bot_id, query.id, e)
         if message is None or query.data is None:
             return
-        await handle_callback(query, message, bot_id, update_db_id)
+        await enqueue_update(bot_id, event_update)
 
     return router

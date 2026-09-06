@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.transaction import Transaction
@@ -33,15 +33,15 @@ class UserRepository:
         return list(rows), int(total)
 
     async def apply(self, user_id: int, amount: int, kind: str) -> User:
-        user = await self.get_or_create(user_id)
-        before = user.balance
-        user.balance += amount
+        await self.get_or_create(user_id)
+        balance = await self.session.scalar(
+            text("UPDATE users SET balance = balance + :a WHERE id = :id RETURNING balance")
+            .bindparams(a=amount, id=user_id)
+        )
         self.session.add(Transaction(user_id=user_id, amount=amount, kind=kind))
         await self.session.commit()
-        logger.info(
-            "user=%s %s amount=%s balance=%s -> %s", user_id, kind, amount, before, user.balance
-        )
-        return user
+        logger.info("user=%s %s amount=%s balance=%s", user_id, kind, amount, balance)
+        return await self.get(user_id)
 
     async def deposit(self, user_id: int, amount: int) -> User:
         return await self.apply(user_id, amount, "deposit")

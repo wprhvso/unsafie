@@ -84,6 +84,17 @@ class BotManager:
         for bot_id in list(self._running):
             await self.stop(bot_id)
 
+    async def feed(self, data: dict) -> bool:
+        from aiogram.types import Update
+
+        item = next(iter(self._running.items()), None)
+        if item is None:
+            return False
+        bot_id, running = item
+        update = Update.model_validate(data)
+        await running.dispatcher.feed_update(running.bot, update, bot_id=bot_id)
+        return True
+
     def _on_done(self, bot_id: int, task: asyncio.Task) -> None:
         if task.cancelled():
             return

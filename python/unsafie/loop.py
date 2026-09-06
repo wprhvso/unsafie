@@ -50,8 +50,15 @@ class Loop:
     async def on_stop(self) -> None:
         return None
 
+    async def on_start(self) -> None:
+        return None
+
     async def _run(self) -> None:
         await asyncio.sleep(self.startup_delay)
+        try:
+            await self.on_start()
+        except Exception:
+            logger.exception("%s on_start failed", self.name)
         while True:
             started = time.perf_counter()
             try:

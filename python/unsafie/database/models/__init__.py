@@ -1,8 +1,12 @@
 from unsafie.database.models.bot import Bot
 from unsafie.database.models.chat import Chat
+from unsafie.database.models.cluster import ClusterState, Node
 from unsafie.database.models.commit_log import CommitLog
 from unsafie.database.models.config import Config
 from unsafie.database.models.credential import AnthropicCredential, CredentialKind
+from unsafie.database.models.hold import Hold
+from unsafie.database.models.job import Job, JobKind, JobState
+from unsafie.database.models.metric import MetricSample
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.models.installation import Installation, InstallationAccount
@@ -24,9 +28,16 @@ __all__ = [
     "AnthropicCredential",
     "Bot",
     "Chat",
+    "ClusterState",
     "CommitLog",
     "Config",
     "CredentialKind",
+    "Hold",
+    "Job",
+    "JobKind",
+    "JobState",
+    "MetricSample",
+    "Node",
     "GithubAccount",
     "GithubApp",
     "GithubSubscription",

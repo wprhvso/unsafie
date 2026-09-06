@@ -5,8 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
-from unsafie import telemetry
+from unsafie import events, telemetry
+from unsafie.agent.executor import executor
+from unsafie.agent.maintenance import reaper
 from unsafie.api import static
+from unsafie.cluster.loop import election_loop
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
 from unsafie.database import SessionLocal, engine
@@ -43,16 +46,26 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 "%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries
             )
-        await start_all()
+        role = settings.role
+        loops = []
+        if role in ("web", "all"):
+            await start_all()
+            loops += [cleanup, sweeper]
+        if role in ("worker", "all"):
+            loops.append(executor)
+        if role in ("cron", "all"):
+            loops += [runner, watchdog, election_loop, reaper]
         # The loops outlive this span: they must not inherit it as a parent for the next month.
         with telemetry.detached():
-            for loop in (cleanup, runner, watchdog, sweeper):
+            for loop in loops:
                 loop.start()
-        logger.info("lifespan ready")
+        app.state.loops = loops
+        logger.info("lifespan ready role=%s loops=%s", role, [loop.name for loop in loops])
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
         logger.info("lifespan shutdown")
-        for loop in (sweeper, watchdog, runner, cleanup):
+        events.shutting_down.set()
+        for loop in reversed(app.state.loops):
             await loop.stop()
         await pool.close_all()
         await stop_all()

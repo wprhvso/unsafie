@@ -11,10 +11,11 @@ def main() -> None:
     setup()
     telemetry.setup()
     logging.getLogger(__name__).info(
-        "starting uvicorn host=%s port=%s reload=%s model=%s",
+        "starting uvicorn host=%s port=%s role=%s release=%s model=%s",
         settings.host,
         settings.port,
-        settings.reload,
+        settings.role,
+        settings.release_sha,
         settings.claude_model,
     )
     uvicorn.run(
@@ -24,4 +25,5 @@ def main() -> None:
         reload=settings.reload,
         log_config=None,
         access_log=False,
+        timeout_graceful_shutdown=settings.graceful_shutdown_timeout,
     )

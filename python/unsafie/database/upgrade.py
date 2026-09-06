@@ -42,6 +42,17 @@ def _upgrade() -> None:
     logger.info("alembic upgrade done in %.1fms", (time.perf_counter() - started) * 1000)
 
 
+MIGRATE_LOCK = 8712361
+
+
 async def upgrade() -> None:
     await ensure_database()
-    await asyncio.to_thread(_upgrade)
+    from unsafie.database import SessionLocal
+
+    async with SessionLocal() as session:
+        await session.execute(text("SELECT pg_advisory_lock(:k)").bindparams(k=MIGRATE_LOCK))
+        try:
+            await asyncio.to_thread(_upgrade)
+        finally:
+            await session.execute(text("SELECT pg_advisory_unlock(:k)").bindparams(k=MIGRATE_LOCK))
+            await session.commit()

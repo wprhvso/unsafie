@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.credential import AnthropicCredential, CredentialKind
@@ -62,30 +62,36 @@ class CredentialRepository:
         return True
 
     async def pick(self, exclude: set[int]) -> AnthropicCredential | None:
-        now = datetime.now(UTC)
-        stmt = (
-            select(AnthropicCredential)
-            .where(
-                AnthropicCredential.enabled.is_(True),
-                or_(
-                    AnthropicCredential.cooldown_until.is_(None),
-                    AnthropicCredential.cooldown_until <= now,
-                ),
-            )
-            .order_by(
-                case((AnthropicCredential.kind == CredentialKind.OAUTH, 0), else_=1),
-                AnthropicCredential.last_used_at.asc().nulls_first(),
-                AnthropicCredential.id,
-            )
+        exclude_list = list(exclude) or [0]
+        row = await self.session.execute(
+            text(
+                """
+                UPDATE anthropic_credentials SET in_flight = in_flight + 1,
+                    uses = uses + 1, last_used_at = now()
+                WHERE id = (
+                    SELECT id FROM anthropic_credentials
+                    WHERE enabled AND (cooldown_until IS NULL OR cooldown_until <= now())
+                      AND in_flight < max_concurrent AND id <> ALL(:exclude)
+                    ORDER BY (kind = 'oauth') DESC, in_flight, last_used_at NULLS FIRST, id
+                    FOR UPDATE SKIP LOCKED LIMIT 1)
+                RETURNING id
+                """
+            ).bindparams(exclude=exclude_list)
         )
-        if exclude:
-            stmt = stmt.where(AnthropicCredential.id.not_in(exclude))
-        row = await self.session.scalar(stmt.limit(1))
-        if row is not None:
-            row.last_used_at = now
-            row.uses += 1
-            await self.session.commit()
-        return row
+        cred_id = row.scalar()
+        await self.session.commit()
+        if cred_id is None:
+            return None
+        return await self.get(int(cred_id))
+
+    async def release(self, credential_id: int) -> None:
+        await self.session.execute(
+            text(
+                "UPDATE anthropic_credentials SET in_flight = greatest(in_flight - 1, 0) "
+                "WHERE id = :id"
+            ).bindparams(id=credential_id)
+        )
+        await self.session.commit()
 
     async def next_cooldown(self) -> datetime | None:
         return await self.session.scalar(

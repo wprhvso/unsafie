@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 GAP = "gap"
 
+shutting_down = asyncio.Event()
+
 
 @dataclass(frozen=True)
 class Event:
