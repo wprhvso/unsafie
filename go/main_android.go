@@ -12,6 +12,14 @@ package main
 static inline void log_info(const char* msg) {
     __android_log_write(ANDROID_LOG_INFO, "UnsafieCore", msg);
 }
+
+static inline const char* jni_string(JNIEnv* env, jstring s) {
+    return (*env)->GetStringUTFChars(env, s, 0);
+}
+
+static inline void jni_release(JNIEnv* env, jstring s, const char* c) {
+    (*env)->ReleaseStringUTFChars(env, s, c);
+}
 */
 import "C"
 
@@ -58,6 +66,16 @@ func (androidPlatform) Init() {
 func init() {
 	logging.SetDefault(logging.NewLine(androidLog))
 	plat = androidPlatform{}
+}
+
+//export Java_com_unsafie_vpn_MyVpnService_setStateDir
+func Java_com_unsafie_vpn_MyVpnService_setStateDir(env *C.JNIEnv, clazz C.jclass, dir C.jstring) {
+	text := C.jni_string(env, dir)
+	if text == nil {
+		return
+	}
+	defer C.jni_release(env, dir, text)
+	SetStateDir(C.GoString(text))
 }
 
 //export Java_com_unsafie_vpn_MyVpnService_startGoCore

@@ -207,6 +207,14 @@ func (f *Fleet) Reset() int {
 	return n
 }
 
+// Suspend leaves the exits holding their sessions so the next run can pick them
+// up instead of paying for new ones.
+func (f *Fleet) Suspend() {
+	for _, n := range f.nodes {
+		n.e.Suspend()
+	}
+}
+
 func (f *Fleet) sample(fn func(*rand.Rand) float64) float64 {
 	f.rngMu.Lock()
 	defer f.rngMu.Unlock()

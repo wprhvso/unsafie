@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"unsafie/internal/chrome"
@@ -75,6 +76,20 @@ func resetEdgeSessions() int {
 	return e.reset()
 }
 
+// stateDir is where sessions are left for the next run. Android hands it over
+// through JNI because an app has no business writing anywhere else; everyone
+// else gets the build-time default.
+var stateOverride atomic.Pointer[string]
+
+func SetStateDir(dir string) { stateOverride.Store(&dir) }
+
+func stateDir() string {
+	if dir := stateOverride.Load(); dir != nil {
+		return *dir
+	}
+	return buildStateDir
+}
+
 func padder() usp.Padder {
 	var seed [8]byte
 	_, _ = rand.Read(seed[:])
@@ -125,6 +140,7 @@ func buildFleet() *fleet.Fleet {
 	}
 
 	pad := padder()
+	store := edge.NewStore(stateDir(), 90*time.Second)
 	edges := make([]*edge.Edge, 0, len(edgeGroup.Endpoints()))
 	for _, ep := range edgeGroup.Endpoints() {
 		edges = append(edges, edge.New(edge.Config{
@@ -137,6 +153,7 @@ func buildFleet() *fleet.Fleet {
 			Parallel: 3,
 			Replay:   4 << 20,
 			Padder:   pad,
+			State:    store,
 			NewWire:  newWire,
 			Report:   report,
 		}))

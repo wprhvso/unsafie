@@ -22,6 +22,7 @@ type Wire interface {
 	Client() *http.Client
 	Protocol() string
 	Degrade(err error)
+	Rebind()
 	Close()
 }
 
@@ -45,6 +46,7 @@ type Config struct {
 	Parallel int
 	Replay   int
 	Padder   usp.Padder
+	State    *Store
 
 	NewWire func(host, port string) Wire
 	Report  func(Result)
@@ -71,8 +73,9 @@ type Edge struct {
 }
 
 type slot struct {
-	edge *Edge
-	wire Wire
+	edge  *Edge
+	wire  Wire
+	index int
 
 	mu      sync.Mutex
 	session *Session
@@ -96,10 +99,11 @@ func New(cfg Config) *Edge {
 	if cfg.Port == "443" {
 		e.base = "https://" + cfg.Host
 	}
-	for range cfg.Parallel {
+	for i := range cfg.Parallel {
 		e.slots = append(e.slots, &slot{
 			edge:  e,
 			wire:  cfg.NewWire(cfg.Host, cfg.Port),
+			index: i,
 			delay: backoff.New(500*time.Millisecond, 30*time.Second),
 		})
 	}
@@ -161,16 +165,38 @@ func (e *Edge) Close() {
 	}
 }
 
-// Reset drops every session without shutting the edge down. Used when the
-// uplink changed underneath us: the sockets are still open and lead nowhere.
+// Reset is what an uplink change asks for: the sockets are open and lead
+// nowhere. It drops the connections and leaves the sessions alone — the legs
+// redial from the offsets they already hold, and nothing riding on them
+// notices that the network underneath changed.
 func (e *Edge) Reset() int {
 	n := 0
 	for _, s := range e.slots {
-		if s.shut() {
+		s.wire.Rebind()
+		if sess := s.live(); sess != nil {
+			sess.Rotate()
 			n++
 		}
 	}
 	return n
+}
+
+// Suspend stops without telling the exit, leaving it holding the sessions and
+// the offsets on disk for the next run to pick up.
+func (e *Edge) Suspend() {
+	if e.closed.Swap(true) {
+		return
+	}
+	for _, s := range e.slots {
+		s.mu.Lock()
+		sess := s.session
+		s.session = nil
+		s.mu.Unlock()
+		if sess != nil {
+			sess.Suspend()
+		}
+		s.wire.Close()
+	}
 }
 
 func (e *Edge) Dial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -377,6 +403,9 @@ func (s *slot) ensure(ctx context.Context) (*Session, error) {
 		Bearer:      e.cfg.Bearer,
 		Label:       e.cfg.Label,
 		Slots:       e.cfg.Slots,
+		Edge:        e.cfg.Name,
+		Slot:        s.index,
+		State:       e.cfg.State,
 		Client:      s.wire.Client(),
 		ReplayBytes: e.cfg.Replay,
 		Padder:      e.cfg.Padder,
@@ -390,8 +419,12 @@ func (s *slot) ensure(ctx context.Context) (*Session, error) {
 		OnHello: func(h usp.ServerHello, spent time.Duration) {
 			e.hello.Store(&h)
 			e.report(nil, "", spent)
-			logging.Infof("Edge %s: session up over %s from %s/%s in %s",
-				e.cfg.Name, s.wire.Protocol(), h.Region, h.Country, spent.Round(time.Millisecond))
+			how := "up"
+			if h.Resumed {
+				how = "resumed"
+			}
+			logging.Infof("Edge %s: session %s over %s from %s/%s in %s",
+				e.cfg.Name, how, s.wire.Protocol(), h.Region, h.Country, spent.Round(time.Millisecond))
 		},
 		OnLeg: func(kind string, err error) {
 			e.legs.Add(1)

@@ -26,9 +26,10 @@ const (
 	PathDown  = "/proxy/d/"
 	PathClose = "/proxy/c/"
 
-	HeaderUp   = "X-Usp-Up"
-	HeaderDown = "X-Usp-Down"
-	HeaderWire = "X-Usp-Wire"
+	HeaderUp    = "X-Usp-Up"
+	HeaderDown  = "X-Usp-Down"
+	HeaderWire  = "X-Usp-Wire"
+	HeaderReset = "X-Usp-Up-Reset"
 
 	SessionIDLen = 22
 	DefaultSlots = "a"
@@ -67,6 +68,9 @@ type SessionConfig struct {
 	Bearer        string
 	Label         string
 	Slots         string
+	Edge          string
+	Slot          int
+	State         *Store
 	Client        *http.Client
 	StreamWindow  int64
 	SessionWindow int64
@@ -90,6 +94,12 @@ type Session struct {
 	hello   atomic.Pointer[usp.ServerHello]
 	ready   chan struct{}
 	once    sync.Once
+
+	resumed  bool
+	sendMark atomic.Bool
+
+	rotMu sync.Mutex
+	rot   chan struct{}
 
 	closed atomic.Bool
 	cancel context.CancelFunc
@@ -159,7 +169,16 @@ func Open(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		id:      mintSession(cfg.Slots),
 		started: time.Now(),
 		ready:   make(chan struct{}),
+		rot:     make(chan struct{}),
 		cancel:  cancel,
+	}
+
+	saved, ok := cfg.State.Take(cfg.Edge, cfg.Slot)
+	if ok {
+		s.id, s.resumed = saved.Session, true
+		s.sendMark.Store(true)
+		hello.ResumeSession = saved.Session
+		hello.ResumeDownAt = uint64(saved.Down)
 	}
 	s.mux = newMux(muxConfig{
 		StreamWindow:  cfg.StreamWindow,
@@ -173,6 +192,9 @@ func Open(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		Local:         &net.TCPAddr{IP: net.IPv4zero},
 		Remote:        cfg.Remote,
 	})
+	if ok {
+		s.mux.restore(saved.Up, saved.Down)
+	}
 	s.mux.seed(&usp.Frame{Type: usp.TypeHello, Flags: usp.FlagUrgent, Payload: hello.Encode()})
 
 	s.wg.Add(3)
@@ -223,16 +245,71 @@ func (s *Session) Open(ctx context.Context, target usp.Addr, udp bool) (net.Conn
 	return s.mux.Open(ctx, target, udp)
 }
 
+func (s *Session) Resumed() bool { return s.resumed }
+
+// Rotate throws away the connections under the session without touching the
+// session. It is what an uplink change should do: the sockets lead nowhere, the
+// offsets are still good, and the streams riding on them never notice.
+func (s *Session) Rotate() {
+	s.rotMu.Lock()
+	close(s.rot)
+	s.rot = make(chan struct{})
+	s.rotMu.Unlock()
+}
+
+func (s *Session) rotation() <-chan struct{} {
+	s.rotMu.Lock()
+	defer s.rotMu.Unlock()
+	return s.rot
+}
+
+// watch ties a leg's lifetime to the next rotation.
+func (s *Session) watch(ctx context.Context, cancel context.CancelFunc) func() {
+	rot := s.rotation()
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-rot:
+			cancel()
+		case <-ctx.Done():
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
+}
+
 func (s *Session) Close() {
 	if s.closed.Swap(true) {
 		return
 	}
+	s.cfg.State.Forget(s.cfg.Edge, s.cfg.Slot)
 	s.cancel()
 	s.mux.Close(net.ErrClosed)
 
 	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
 	defer cancel()
 	_, _ = post(ctx, s.cfg, s.cfg.Base+PathClose+s.id, nil)
+	s.wg.Wait()
+}
+
+// Suspend is the other way to stop: the client is going away but means to come
+// back, so the exit is left holding the session and the offsets go to disk.
+func (s *Session) Suspend() {
+	if s.closed.Swap(true) {
+		return
+	}
+	err := s.cfg.State.Put(State{
+		Edge:    s.cfg.Edge,
+		Slot:    s.cfg.Slot,
+		Session: s.id,
+		Up:      s.mux.replay.End(),
+		Down:    s.mux.DownlinkAt(),
+	})
+	if err != nil {
+		logging.Infof("Session %s: state not saved: %v", s.short(), err)
+	}
+	s.cancel()
+	s.mux.Close(net.ErrClosed)
 	s.wg.Wait()
 }
 
@@ -310,6 +387,7 @@ func (s *Session) short() string {
 func (s *Session) downLeg(ctx context.Context) error {
 	legCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer s.watch(legCtx, cancel)()
 
 	req, err := http.NewRequestWithContext(legCtx, http.MethodGet, s.cfg.Base+PathDown+s.id, nil)
 	if err != nil {
@@ -345,6 +423,7 @@ func (s *Session) downLeg(ctx context.Context) error {
 func (s *Session) upLeg(ctx context.Context) error {
 	legCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer s.watch(legCtx, cancel)()
 
 	from := s.mux.UplinkAt()
 	pr, pw := io.Pipe()
@@ -356,6 +435,13 @@ func (s *Session) upLeg(ctx context.Context) error {
 	s.decorate(req)
 	req.Header.Set(HeaderUp, strconv.FormatInt(from, 10))
 	req.Header.Set("Content-Type", "application/octet-stream")
+
+	// A resumed session has no frames left to replay: the process that wrote
+	// them is gone. The exit is told to take this offset as the new truth and
+	// forget whatever half a frame it was still holding.
+	if s.sendMark.CompareAndSwap(true, false) {
+		req.Header.Set(HeaderReset, "1")
+	}
 
 	// The request has to be in flight before the first byte of backlog is
 	// written: an io.Pipe blocks until somebody reads it, and the only reader

@@ -521,6 +521,21 @@ pub const Edge = struct {
         return s;
     }
 
+    fn dropStreams(self: *Edge, s: *Session) void {
+        var victims: [64]*Stream = undefined;
+        while (true) {
+            var count: usize = 0;
+            var it = s.streams.valueIterator();
+            while (it.next()) |slot| {
+                if (count == victims.len) break;
+                victims[count] = slot.*;
+                count += 1;
+            }
+            if (count == 0) return;
+            for (victims[0..count]) |st| self.closeStream(st, .session_gone, false);
+        }
+    }
+
     fn refuseSession(self: *Edge, conn: *Conn, err: Refusal) void {
         switch (err) {
             error.Misdirected => self.replyAndClose(conn, 421, "Misdirected Request", "wrong slot"),
@@ -541,6 +556,12 @@ pub const Edge = struct {
         // counter tells the two apart.
         s.hellos += 1;
         const resumed = s.hellos > 1;
+
+        // Whoever introduces themselves twice has lost their stream table: only
+        // a restarted client sends a second hello, because a replayed one lands
+        // in the region we skip. The sockets it used to own are already dead on
+        // its side, so they go here too rather than linger until the idle sweep.
+        if (resumed) self.dropStreams(s);
 
         var buf: [512]u8 = undefined;
         var w = usp.Writer.init(&buf);
@@ -572,7 +593,17 @@ pub const Edge = struct {
             return;
         };
         const from = conn.request.up_offset orelse s.up_consumed;
-        if (from > s.up_consumed) {
+
+        // A client that restarted has nothing left to replay: its frames died
+        // with the process. It says so, and the offset it names becomes the new
+        // truth — including throwing away whatever half a frame we were holding.
+        if (conn.request.up_reset) {
+            s.up_consumed = from;
+            s.up_skip = 0;
+            s.head_len = 0;
+            s.in_body = false;
+            s.payload.consume(s.payload.size());
+        } else if (from > s.up_consumed) {
             self.stats.resume_failures += 1;
             self.replyAndClose(conn, 409, "Conflict", "uplink gap");
             return;

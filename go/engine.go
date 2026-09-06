@@ -129,9 +129,8 @@ func shutdown(e *engine) {
 	}
 	logging.Infof("Stopping engine; goroutines now: %d", runtime.NumGoroutine())
 	e.cancel()
-	e.reset()
 	if e.fleet != nil {
-		e.fleet.Close()
+		e.fleet.Suspend()
 	}
 	e.wg.Wait()
 	e.closeTun()

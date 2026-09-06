@@ -555,7 +555,18 @@ func (m *Mux) dispatch(f usp.Frame) error {
 	}
 }
 
-// seed puts a frame at offset zero of the uplink without a leg to write it to.
+// restore moves both counters to where a previous run left them, so a resumed
+// session continues the same numbered stream instead of starting a second one
+// under the same name.
+func (m *Mux) restore(up, down int64) {
+	m.replay.Reset(up)
+	m.upAcked.Store(up)
+	m.downOff.Store(down)
+	m.downAcks.Store(down)
+}
+
+// seed puts a frame at the current end of the uplink without a leg to write it
+// to.
 // The replay ring is what a fresh leg sends first, so a frame seeded before the
 // session has any connection at all is simply the first thing the exit reads —
 // which is how the hello travels without a round trip of its own.

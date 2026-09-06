@@ -11,6 +11,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
@@ -33,6 +34,8 @@ class MyVpnService : VpnService() {
             System.loadLibrary("unsafie")
         }
     }
+
+    private external fun setStateDir(dir: String)
 
     private external fun startGoCore(fd: Int, mtu: Int)
 
@@ -159,6 +162,7 @@ class MyVpnService : VpnService() {
         Log.i(TAG, "TUN established, fd=$fd mtu=$MTU")
 
         try {
+            setStateDir(File(filesDir, "sessions").absolutePath)
             startGoCore(fd, MTU)
             synchronized(lock) { running = true }
             _running.value = true

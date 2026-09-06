@@ -17,6 +17,7 @@ var (
 var (
 	buildInsecureTLS = ""
 	buildDisableH3   = ""
+	buildStateDir    = "/run/unsafie"
 	buildStatusAddr  = "127.0.0.1:9977"
 	buildSocksAddr   = "127.0.0.1:1080"
 )

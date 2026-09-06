@@ -12,6 +12,7 @@ pub const Request = struct {
     keep_alive: bool = true,
     expect_continue: bool = false,
     up_offset: ?u64 = null,
+    up_reset: bool = false,
     down_offset: ?u64 = null,
     wire: []const u8 = &.{},
     authorization: []const u8 = &.{},
@@ -77,6 +78,8 @@ pub fn parse(buf: []const u8) !?Parsed {
             if (std.ascii.indexOfIgnoreCase(value, "100-continue") != null) out.expect_continue = true;
         } else if (eqlIgnoreCase(name, "x-usp-up")) {
             out.up_offset = std.fmt.parseInt(u64, value, 10) catch null;
+        } else if (eqlIgnoreCase(name, "x-usp-up-reset")) {
+            out.up_reset = value.len > 0 and value[0] != '0';
         } else if (eqlIgnoreCase(name, "x-usp-down")) {
             out.down_offset = std.fmt.parseInt(u64, value, 10) catch null;
         } else if (eqlIgnoreCase(name, "x-usp-wire")) {

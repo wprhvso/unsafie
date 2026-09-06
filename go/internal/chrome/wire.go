@@ -127,6 +127,14 @@ func closeIdle(rt http.RoundTripper) {
 	}
 }
 
+// Rebind drops the connections without holding the protocol responsible. The
+// network moved; HTTP/3 did not stop working just because the address it was
+// bound to did.
+func (w *Wire) Rebind() {
+	closeIdle(w.h2)
+	closeIdle(w.h3)
+}
+
 // Degrade is the only thing the layers above have to say about protocols: this
 // did not work. What that means for HTTP/3 versus HTTP/2 is decided here.
 func (w *Wire) Degrade(err error) {
