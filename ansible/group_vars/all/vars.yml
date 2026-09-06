@@ -8,7 +8,6 @@ domains:
   - alertmanager.unsafie.com
   - dumb.unsafie.com
   - github.unsafie.com
-admin_email: admin@unsafie.com
 
 victoriametrics_version: 1.151.0
 victorialogs_version: 1.52.0

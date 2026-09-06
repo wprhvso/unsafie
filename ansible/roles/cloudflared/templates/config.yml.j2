@@ -1,0 +1,18 @@
+tunnel: {{ cloudflared_tunnel_id }}
+credentials-file: {{ cloudflared_config_dir }}/{{ cloudflared_tunnel_id }}.json
+metrics: {{ cloudflared_metrics_addr }}
+protocol: {{ cloudflared_protocol }}
+loglevel: {{ cloudflared_loglevel }}
+no-autoupdate: true
+
+originRequest:
+  connectTimeout: {{ cloudflared_connect_timeout }}
+  keepAliveConnections: {{ cloudflared_keepalive_connections }}
+  disableChunkedEncoding: false
+
+ingress:
+{% for host in cloudflared_hostnames %}
+  - hostname: {{ host }}
+    service: {{ cloudflared_origin }}
+{% endfor %}
+  - service: http_status:404

@@ -1,0 +1,18 @@
+cloudflared_version: 2026.8.3
+cloudflared_deb_url: "https://github.com/cloudflare/cloudflared/releases/download/{{ cloudflared_version }}/cloudflared-linux-amd64.deb"
+
+cloudflared_user: cloudflared
+cloudflared_config_dir: /etc/cloudflared
+
+cloudflared_tunnel_name: "{{ domain }}"
+cloudflared_account_tag: "{{ vault_cloudflared_account_tag }}"
+cloudflared_tunnel_id: "{{ vault_cloudflared_tunnel_id }}"
+cloudflared_tunnel_secret: "{{ vault_cloudflared_tunnel_secret }}"
+
+cloudflared_hostnames: "{{ domains }}"
+cloudflared_origin: http://127.0.0.1:80
+cloudflared_metrics_addr: 127.0.0.1:2000
+cloudflared_protocol: quic
+cloudflared_loglevel: info
+cloudflared_connect_timeout: 10s
+cloudflared_keepalive_connections: 32
