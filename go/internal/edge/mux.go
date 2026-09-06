@@ -39,6 +39,7 @@ type muxConfig struct {
 	OnStats       func(map[uint16]uint64)
 	OnFault       func(usp.Reason, usp.Addr)
 	OnRTT         func(time.Duration, time.Duration)
+	OnHello       func(usp.ServerHello)
 	Local         net.Addr
 	Remote        net.Addr
 }
@@ -57,7 +58,8 @@ type Mux struct {
 	nextID  uint16
 	fatal   error
 
-	session *credit
+	session    *credit
+	peerStream int64
 
 	wmu     sync.Mutex
 	writer  *usp.Writer
@@ -85,6 +87,7 @@ func newMux(cfg muxConfig) *Mux {
 		streams:    make(map[uint16]*stream),
 		nextID:     1,
 		session:    newCredit(cfg.SessionWindow),
+		peerStream: cfg.StreamWindow,
 		wready:     make(chan struct{}),
 		replay:     newRing(cfg.ReplayBytes),
 		done:       make(chan struct{}),
@@ -167,7 +170,7 @@ func (m *Mux) Open(ctx context.Context, target usp.Addr, udp bool) (net.Conn, er
 		m.mu.Unlock()
 		return nil, usp.ReasonTooManyStreams
 	}
-	s := newStream(m, id, target, udp, m.cfg.StreamWindow)
+	s := newStream(m, id, target, udp, m.cfg.StreamWindow, m.peerStream)
 	m.streams[id] = s
 	m.mu.Unlock()
 
@@ -530,11 +533,64 @@ func (m *Mux) dispatch(f usp.Frame) error {
 	case usp.TypeGoaway:
 		return errGoaway
 
-	case usp.TypeHelloAck, usp.TypeSettings:
+	case usp.TypeHelloAck:
+		hello, err := usp.DecodeServerHello(payload)
+		if err != nil {
+			return err
+		}
+		m.applyHello(hello)
+		if m.cfg.OnHello != nil {
+			m.cfg.OnHello(hello)
+		}
+		return nil
+
+	case usp.TypeSettings:
 		return nil
 
 	default:
 		return nil
+	}
+}
+
+// seed puts a frame at offset zero of the uplink without a leg to write it to.
+// The replay ring is what a fresh leg sends first, so a frame seeded before the
+// session has any connection at all is simply the first thing the exit reads —
+// which is how the hello travels without a round trip of its own.
+func (m *Mux) seed(f *usp.Frame) {
+	buf := make([]byte, usp.HeaderSize+len(f.Payload))
+	usp.PutHeader(buf, f.Type, f.Flags, f.Stream, len(f.Payload))
+	copy(buf[usp.HeaderSize:], f.Payload)
+	m.replay.Append(buf)
+}
+
+// applyHello adjusts the credit the client is allowed to spend once the exit
+// says what it will accept. Streams opened before the answer arrived started on
+// the shared default, so they are corrected by the difference rather than reset.
+func (m *Mux) applyHello(h usp.ServerHello) {
+	if h.SessionWindow > 0 {
+		if delta := int64(h.SessionWindow) - m.cfg.SessionWindow; delta != 0 {
+			m.cfg.SessionWindow = int64(h.SessionWindow)
+			m.session.add(delta)
+		}
+	}
+	if h.StreamWindow == 0 {
+		return
+	}
+
+	m.mu.Lock()
+	delta := int64(h.StreamWindow) - m.peerStream
+	m.peerStream = int64(h.StreamWindow)
+	streams := make([]*stream, 0, len(m.streams))
+	for _, s := range m.streams {
+		streams = append(streams, s)
+	}
+	m.mu.Unlock()
+
+	if delta == 0 {
+		return
+	}
+	for _, s := range streams {
+		s.tx.add(delta)
 	}
 }
 

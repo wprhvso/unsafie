@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	rand2 "math/rand/v2"
 	"net"
 	"net/http"
 	"strconv"
@@ -20,7 +22,6 @@ import (
 )
 
 const (
-	PathOpen  = "/proxy/o"
 	PathUp    = "/proxy/u/"
 	PathDown  = "/proxy/d/"
 	PathClose = "/proxy/c/"
@@ -29,13 +30,16 @@ const (
 	HeaderDown = "X-Usp-Down"
 	HeaderWire = "X-Usp-Wire"
 
-	openTimeout   = 12 * time.Second
-	legTTL        = 55 * time.Second
-	legTTLSpread  = 0.25
-	keepalive     = 15 * time.Second
-	reviveWindow  = 90 * time.Second
-	closeTimeout  = 3 * time.Second
-	maxHelloReply = usp.MaxHelloSize
+	SessionIDLen = 22
+	DefaultSlots = "a"
+
+	legTTL       = 55 * time.Second
+	legTTLSpread = 0.25
+	keepalive    = 15 * time.Second
+	reviveWindow = 90 * time.Second
+	closeTimeout = 3 * time.Second
+	helloTimeout = 12 * time.Second
+	maxReply     = 4 << 10
 )
 
 var (
@@ -62,6 +66,7 @@ type SessionConfig struct {
 	Base          string
 	Bearer        string
 	Label         string
+	Slots         string
 	Client        *http.Client
 	StreamWindow  int64
 	SessionWindow int64
@@ -72,15 +77,20 @@ type SessionConfig struct {
 	OnFault       func(usp.Reason, usp.Addr)
 	OnRTT         func(time.Duration, time.Duration)
 	OnLeg         func(kind string, err error)
+	OnHello       func(usp.ServerHello, time.Duration)
 	Remote        net.Addr
 }
 
 type Session struct {
-	cfg   SessionConfig
-	mux   *Mux
-	hello usp.ServerHello
+	cfg SessionConfig
+	mux *Mux
 
-	id     string
+	id      string
+	started time.Time
+	hello   atomic.Pointer[usp.ServerHello]
+	ready   chan struct{}
+	once    sync.Once
+
 	closed atomic.Bool
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -89,7 +99,30 @@ type Session struct {
 	revive atomic.Int64
 }
 
+// mintSession names the session on the client side, which is what makes the
+// whole thing zero round trip: both legs can leave at once because neither has
+// to wait to be told where to go.
+//
+// The first character picks the exit process — nginx maps it to a backend — and
+// the remaining 126 bits make the name unguessable to anyone who got past the
+// bearer token at the edge.
+func mintSession(slots string) string {
+	if slots == "" {
+		slots = DefaultSlots
+	}
+	var raw [16]byte
+	_, _ = rand.Read(raw[:])
+	id := base64.RawURLEncoding.EncodeToString(raw[:])
+	return string(slots[rand2.IntN(len(slots))]) + id[1:]
+}
+
+// Open costs nothing on the wire. Both legs and the hello leave together; the
+// exit creates the session when it first sees the name and answers with a
+// HELLO_ACK frame at offset zero of the downlink.
 func Open(ctx context.Context, cfg SessionConfig) (*Session, error) {
+	if cfg.Client == nil {
+		return nil, errors.New("edge: no HTTP client")
+	}
 	if cfg.StreamWindow == 0 {
 		cfg.StreamWindow = usp.DefaultStreamWindow
 	}
@@ -120,31 +153,27 @@ func Open(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		hello.Wire = cfg.Wire()
 	}
 
-	openCtx, cancelOpen := context.WithTimeout(ctx, openTimeout)
-	defer cancelOpen()
-
-	body, err := post(openCtx, cfg, cfg.Base+PathOpen, hello.Encode())
-	if err != nil {
-		return nil, err
-	}
-	server, err := usp.DecodeServerHello(body)
-	if err != nil {
-		return nil, err
-	}
-
 	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	s := &Session{cfg: cfg, hello: server, id: server.Session, cancel: cancel}
+	s := &Session{
+		cfg:     cfg,
+		id:      mintSession(cfg.Slots),
+		started: time.Now(),
+		ready:   make(chan struct{}),
+		cancel:  cancel,
+	}
 	s.mux = newMux(muxConfig{
-		StreamWindow:  int64(orDefault(server.StreamWindow, uint32(cfg.StreamWindow))),
-		SessionWindow: int64(orDefault(server.SessionWindow, uint32(cfg.SessionWindow))),
+		StreamWindow:  cfg.StreamWindow,
+		SessionWindow: cfg.SessionWindow,
 		ReplayBytes:   cfg.ReplayBytes,
-		MaxStreams:    int(orDefault(uint32(server.MaxStreams), uint32(cfg.MaxStreams))),
+		MaxStreams:    cfg.MaxStreams,
 		Padder:        cfg.Padder,
 		OnFault:       cfg.OnFault,
 		OnRTT:         cfg.OnRTT,
+		OnHello:       s.onHello,
 		Local:         &net.TCPAddr{IP: net.IPv4zero},
 		Remote:        cfg.Remote,
 	})
+	s.mux.seed(&usp.Frame{Type: usp.TypeHello, Flags: usp.FlagUrgent, Payload: hello.Encode()})
 
 	s.wg.Add(3)
 	go func() { defer s.wg.Done(); s.pump(runCtx, "down", s.downLeg) }()
@@ -154,16 +183,35 @@ func Open(ctx context.Context, cfg SessionConfig) (*Session, error) {
 	return s, nil
 }
 
-func orDefault(v, fallback uint32) uint32 {
-	if v == 0 {
-		return fallback
+func (s *Session) onHello(h usp.ServerHello) {
+	s.hello.Store(&h)
+	s.once.Do(func() { close(s.ready) })
+	if s.cfg.OnHello != nil {
+		s.cfg.OnHello(h, time.Since(s.started))
 	}
-	return v
 }
 
 func (s *Session) ID() string { return s.id }
 
-func (s *Session) Hello() usp.ServerHello { return s.hello }
+func (s *Session) Hello() usp.ServerHello {
+	if h := s.hello.Load(); h != nil {
+		return *h
+	}
+	return usp.ServerHello{}
+}
+
+// Ready waits for the exit to introduce itself. Nothing on the data path needs
+// it — streams open optimistically — but the prober and the logs do.
+func (s *Session) Ready(ctx context.Context) error {
+	select {
+	case <-s.ready:
+		return nil
+	case <-s.mux.Done():
+		return s.mux.failure()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 func (s *Session) Mux() *Mux { return s.mux }
 
@@ -238,9 +286,8 @@ func (s *Session) giveUp(err error) bool {
 	var status *StatusError
 	if errors.As(err, &status) {
 		switch status.Status {
-		case http.StatusNotFound, http.StatusGone, http.StatusConflict:
-			return true
-		case http.StatusUnauthorized, http.StatusForbidden:
+		case http.StatusNotFound, http.StatusGone, http.StatusConflict,
+			http.StatusMisdirectedRequest, http.StatusUnauthorized, http.StatusForbidden:
 			return true
 		}
 	}
@@ -329,7 +376,7 @@ func (s *Session) upLeg(ctx context.Context) error {
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxReply))
 
 	if resp.StatusCode/100 != 2 {
 		return statusError(resp)
@@ -340,9 +387,14 @@ func (s *Session) upLeg(ctx context.Context) error {
 
 func (s *Session) keepalive(ctx context.Context) {
 	interval := keepalive
-	if s.hello.KeepaliveMS > 0 {
-		interval = time.Duration(s.hello.KeepaliveMS) * time.Millisecond
+	waitCtx, cancel := context.WithTimeout(ctx, helloTimeout)
+	if err := s.Ready(waitCtx); err == nil {
+		if ms := s.Hello().KeepaliveMS; ms > 0 {
+			interval = time.Duration(ms) * time.Millisecond
+		}
 	}
+	cancel()
+
 	t := time.NewTicker(interval)
 	defer t.Stop()
 
@@ -408,7 +460,7 @@ func post(ctx context.Context, cfg SessionConfig, url string, body []byte) ([]by
 	if resp.StatusCode/100 != 2 {
 		return nil, statusError(resp)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxHelloReply))
+	return io.ReadAll(io.LimitReader(resp.Body, maxReply))
 }
 
 func statusError(resp *http.Response) error {

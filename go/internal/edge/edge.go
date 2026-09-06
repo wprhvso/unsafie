@@ -41,6 +41,7 @@ type Config struct {
 	Port     string
 	Bearer   string
 	Label    string
+	Slots    string
 	Parallel int
 	Replay   int
 	Padder   usp.Padder
@@ -294,7 +295,12 @@ func (e *Edge) leastLoaded() *Session {
 func (e *Edge) Warm(ctx context.Context) error {
 	var last error
 	for _, s := range e.slots {
-		if _, err := s.ensure(ctx); err != nil {
+		sess, err := s.ensure(ctx)
+		if err != nil {
+			last = err
+			continue
+		}
+		if err := sess.Ready(ctx); err != nil {
 			last = err
 		}
 	}
@@ -370,6 +376,7 @@ func (s *slot) ensure(ctx context.Context) (*Session, error) {
 		Base:        e.base,
 		Bearer:      e.cfg.Bearer,
 		Label:       e.cfg.Label,
+		Slots:       e.cfg.Slots,
 		Client:      s.wire.Client(),
 		ReplayBytes: e.cfg.Replay,
 		Padder:      e.cfg.Padder,
@@ -380,17 +387,25 @@ func (s *slot) ensure(ctx context.Context) (*Session, error) {
 			e.rtt.Store(int64(rtt))
 			e.skew.Store(int64(skew))
 		},
+		OnHello: func(h usp.ServerHello, spent time.Duration) {
+			e.hello.Store(&h)
+			e.report(nil, "", spent)
+			logging.Infof("Edge %s: session up over %s from %s/%s in %s",
+				e.cfg.Name, s.wire.Protocol(), h.Region, h.Country, spent.Round(time.Millisecond))
+		},
 		OnLeg: func(kind string, err error) {
 			e.legs.Add(1)
-			if err != nil {
-				logging.Infof("Edge %s: %s leg ended: %v", e.cfg.Name, kind, err)
+			if err == nil {
+				return
 			}
+			logging.Infof("Edge %s: %s leg ended: %v", e.cfg.Name, kind, err)
+			s.wire.Degrade(err)
+			e.report(err, "", 0)
 		},
 	})
 	if err != nil {
 		s.lastErr = err
 		s.nextTry = time.Now().Add(s.delay.Next())
-		s.wire.Degrade(err)
 		e.report(err, "", time.Since(started))
 		return nil, err
 	}
@@ -398,12 +413,6 @@ func (s *slot) ensure(ctx context.Context) (*Session, error) {
 	s.delay.Reset()
 	s.lastErr = nil
 	s.session = sess
-	hello := sess.Hello()
-	e.hello.Store(&hello)
-	e.report(nil, "", time.Since(started))
-	logging.Infof("Edge %s: session %s up over %s from %s/%s in %s",
-		e.cfg.Name, sess.short(), s.wire.Protocol(), hello.Region, hello.Country,
-		time.Since(started).Round(time.Millisecond))
 	return sess, nil
 }
 

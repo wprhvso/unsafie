@@ -133,6 +133,7 @@ func buildFleet() *fleet.Fleet {
 			Port:     ep.Port(),
 			Bearer:   buildBearer,
 			Label:    "unsafie/" + buildVersion,
+			Slots:    buildSlots,
 			Parallel: 3,
 			Replay:   4 << 20,
 			Padder:   pad,

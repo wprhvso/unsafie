@@ -72,14 +72,14 @@ type stream struct {
 	}
 }
 
-func newStream(m *Mux, id uint16, target usp.Addr, udp bool, window int64) *stream {
+func newStream(m *Mux, id uint16, target usp.Addr, udp bool, window, credit int64) *stream {
 	s := &stream{
 		id:     id,
 		mux:    m,
 		target: target,
 		udp:    udp,
 		rx:     newRecvBuf(udp),
-		tx:     newCredit(window),
+		tx:     newCredit(credit),
 		window: window,
 		opened: make(chan struct{}),
 		done:   make(chan struct{}),

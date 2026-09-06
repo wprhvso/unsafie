@@ -71,7 +71,6 @@ pub const Conn = struct {
     session: ?*Session = null,
     dec: http.ChunkDecoder = .{},
     body_left: ?u64 = null,
-    hello_need: usize = 0,
     close_after: bool = false,
     dying: bool = false,
     dead_next: ?*Conn = null,
@@ -125,6 +124,8 @@ pub const Session = struct {
 
     send_credit: i64 = 0,
     recv_credited: u64 = 0,
+    stream_window: u32 = 0,
+    greeted: bool = false,
 
     created: i64 = 0,
     last: i64 = 0,
@@ -139,7 +140,6 @@ pub const Edge = struct {
     listener: Reg = .{ .kind = .listener },
     dns_reg: Reg = .{ .kind = .dns },
     dns_id: u16 = 1,
-    minter: ids.Minter,
     sessions: std.StringHashMap(*Session),
     pending: std.AutoHashMap(u16, *Stream),
     stats: Stats = .{},
@@ -154,7 +154,6 @@ pub const Edge = struct {
         self.* = .{
             .allocator = allocator,
             .cfg = cfg,
-            .minter = ids.Minter.init(),
             .sessions = std.StringHashMap(*Session).init(allocator),
             .pending = std.AutoHashMap(u16, *Stream).init(allocator),
             .scratch = try allocator.alloc(u8, 1 << 20),
@@ -358,16 +357,6 @@ pub const Edge = struct {
 
     fn advance(self: *Edge, conn: *Conn) void {
         while (!conn.dying) {
-            if (conn.hello_need > 0) {
-                if (conn.in.size() < conn.hello_need) return;
-                const need = conn.hello_need;
-                conn.hello_need = 0;
-                self.openSession(conn, conn.in.readable()[0..need]);
-                conn.in.consume(need);
-                conn.head_done = false;
-                continue;
-            }
-
             if (!conn.head_done) {
                 const parsed = http.parse(conn.in.readable()) catch {
                     self.replyAndClose(conn, 400, "Bad Request", "bad request");
@@ -475,24 +464,6 @@ pub const Edge = struct {
             self.serveMetrics(conn);
             return;
         }
-        if (std.mem.eql(u8, path, "/proxy/o")) {
-            if (conn.request.chunked or (conn.request.content_length orelse 0) > usp.max_payload) {
-                self.replyAndClose(conn, 400, "Bad Request", "hello must be a sized body");
-                return;
-            }
-            const need: usize = @intCast(conn.request.content_length orelse 0);
-            if (conn.in.size() < need) {
-                conn.hello_need = need;
-                conn.role = .none;
-                conn.head_done = false;
-                return;
-            }
-            self.openSession(conn, conn.in.readable()[0..need]);
-            conn.in.consume(need);
-            conn.head_done = false;
-            return;
-        }
-
         if (std.mem.startsWith(u8, path, "/proxy/u/")) {
             self.attachUp(conn, path["/proxy/u/".len..]);
             return;
@@ -512,62 +483,62 @@ pub const Edge = struct {
         self.replyAndClose(conn, 404, "Not Found", "no such endpoint");
     }
 
-    fn openSession(self: *Edge, conn: *Conn, body: []const u8) void {
-        const hello = usp.parseClientHello(body) catch {
-            self.replyAndClose(conn, 400, "Bad Request", "bad hello");
-            return;
-        };
+    const Refusal = error{ BadName, Misdirected, Full, OutOfMemory };
 
-        if (hello.resume_session.len == ids.id_len) {
-            if (self.sessions.get(hello.resume_session)) |old| {
-                self.stats.sessions_resumed += 1;
-                self.sendHello(conn, old, true);
-                return;
-            }
-        }
+    // A session is created by whichever leg names it first. There is no opening
+    // handshake to wait for: the uplink carries the hello as its first frame and
+    // the downlink is already open by the time the answer is written to it.
+    fn ensureSession(self: *Edge, key: []const u8) Refusal!*Session {
+        if (self.sessions.get(key)) |s| return s;
+        if (!ids.valid(key)) return error.BadName;
+        if (self.cfg.slot != 0 and key[0] != self.cfg.slot) return error.Misdirected;
+        if (self.sessions.count() >= self.cfg.max_sessions) return error.Full;
 
-        if (self.sessions.count() >= self.cfg.max_sessions) {
-            self.replyAndClose(conn, 503, "Service Unavailable", "too many sessions");
-            return;
-        }
+        const s = try self.allocator.create(Session);
+        errdefer self.allocator.destroy(s);
 
-        const s = self.allocator.create(Session) catch {
-            self.replyAndClose(conn, 503, "Service Unavailable", "out of memory");
-            return;
-        };
         const now = std.time.milliTimestamp();
         s.* = .{
             .edge = self,
             .streams = std.AutoHashMap(u16, *Stream).init(self.allocator),
-            .replay = Ring.init(self.allocator, self.cfg.replay_bytes) catch {
-                self.allocator.destroy(s);
-                self.replyAndClose(conn, 503, "Service Unavailable", "out of memory");
-                return;
-            },
+            .replay = try Ring.init(self.allocator, self.cfg.replay_bytes),
             .out = Buffer.init(self.allocator),
             .wire = Buffer.init(self.allocator),
             .payload = Buffer.init(self.allocator),
-            .send_credit = @intCast(if (hello.session_window != 0) hello.session_window else self.cfg.session_window),
+            .send_credit = @intCast(self.cfg.session_window),
+            .stream_window = self.cfg.stream_window,
             .created = now,
             .last = now,
         };
-        self.minter.mint(&s.id);
-        if (self.cfg.slot != 0) {
-            var tries: usize = 0;
-            while (s.id[0] != self.cfg.slot and tries < 512) : (tries += 1) self.minter.mint(&s.id);
-        }
+        @memcpy(s.id[0..], key);
 
-        self.sessions.put(s.id[0..], s) catch {
+        self.sessions.put(s.id[0..], s) catch |err| {
             self.freeSession(s);
-            self.replyAndClose(conn, 503, "Service Unavailable", "out of memory");
-            return;
+            return err;
         };
         self.stats.sessions_opened += 1;
-        log.debug("session {s} opened", .{s.id});
-        self.sendHello(conn, s, false);
+        log.debug("session {s} created", .{s.id});
+        return s;
     }
 
-    fn sendHello(self: *Edge, conn: *Conn, s: *Session, resumed: bool) void {
+    fn refuse(self: *Edge, conn: *Conn, err: Refusal) void {
+        switch (err) {
+            error.Misdirected => self.replyAndClose(conn, 421, "Misdirected Request", "wrong slot"),
+            error.BadName => self.replyAndClose(conn, 404, "Not Found", "bad session name"),
+            else => self.replyAndClose(conn, 503, "Service Unavailable", "no capacity"),
+        }
+    }
+
+    fn onHello(self: *Edge, s: *Session, payload: []const u8) !void {
+        const hello = usp.parseClientHello(payload) catch return error.BadFrame;
+
+        if (hello.session_window != 0) s.send_credit = @intCast(hello.session_window);
+        if (hello.stream_window != 0) s.stream_window = hello.stream_window;
+        if (s.greeted) return;
+
+        s.greeted = true;
+        const resumed = s.down_off > 0 or s.up_consumed > payload.len;
+
         var buf: [512]u8 = undefined;
         var w = usp.Writer.init(&buf);
         w.u8v(usp.tag_version, usp.version);
@@ -583,18 +554,18 @@ pub const Edge = struct {
         w.u32v(usp.tag_keepalive, self.cfg.keepalive_ms);
         w.u16v(usp.tag_max_streams, @intCast(self.cfg.max_streams));
         w.u32v(usp.tag_replay, @intCast(self.cfg.replay_bytes));
-        if (resumed) w.u8v(usp.tag_resumed, 1);
+        if (resumed) {
+            w.u8v(usp.tag_resumed, 1);
+            self.stats.sessions_resumed += 1;
+        }
         w.u16v(usp.tag_load, @intCast(@min(1000, self.sessions.count() * 1000 / self.cfg.max_sessions)));
 
-        var head: [4096]u8 = undefined;
-        const response = http.binary(&head, w.bytes(), false);
-        _ = conn.out.append(response) catch {};
-        self.flushConn(conn);
+        self.emit(s, .hello_ack, usp.flag_urgent, 0, w.bytes());
     }
 
     fn attachUp(self: *Edge, conn: *Conn, key: []const u8) void {
-        const s = self.sessions.get(key) orelse {
-            self.replyAndClose(conn, 404, "Not Found", "unknown session");
+        const s = self.ensureSession(key) catch |err| {
+            self.refuse(conn, err);
             return;
         };
         const from = conn.request.up_offset orelse s.up_consumed;
@@ -617,8 +588,8 @@ pub const Edge = struct {
     }
 
     fn attachDown(self: *Edge, conn: *Conn, key: []const u8) void {
-        const s = self.sessions.get(key) orelse {
-            self.replyAndClose(conn, 404, "Not Found", "unknown session");
+        const s = self.ensureSession(key) catch |err| {
+            self.refuse(conn, err);
             return;
         };
         const from = conn.request.down_offset orelse s.down_off;
@@ -705,6 +676,7 @@ pub const Edge = struct {
         const payload = usp.unpad(header.flags, raw) catch return error.BadFrame;
 
         switch (header.kind) {
+            .hello => try self.onHello(s, payload),
             .open => try self.onOpen(s, header, payload),
             .data => self.onData(s, header.stream, payload),
             .eof => self.onEof(s, header.stream),
@@ -762,7 +734,7 @@ pub const Edge = struct {
             .session = s,
             .udp = proto == 2 or header.flags & usp.flag_udp != 0,
             .to_egress = Buffer.init(self.allocator),
-            .send_credit = @intCast(self.cfg.stream_window),
+            .send_credit = @intCast(if (s.stream_window != 0) s.stream_window else self.cfg.stream_window),
             .port = target.port,
             .deadline = std.time.milliTimestamp() + self.cfg.connect_ms,
         };

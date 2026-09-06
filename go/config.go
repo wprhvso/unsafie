@@ -4,6 +4,7 @@ var (
 	buildEdges  = "waw.unsafie.com,de.unsafie.com,clt.unsafie.com"
 	buildPort   = "443"
 	buildBearer = "dev"
+	buildSlots  = "a"
 )
 
 var (

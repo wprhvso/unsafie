@@ -40,6 +40,7 @@ const (
 	TypeGoaway   Type = 0x0D
 	TypeStats    Type = 0x0E
 	TypeAck      Type = 0x0F
+	TypeHello    Type = 0x10
 )
 
 var typeNames = [...]string{
@@ -58,6 +59,7 @@ var typeNames = [...]string{
 	TypeGoaway:   "GOAWAY",
 	TypeStats:    "STATS",
 	TypeAck:      "ACK",
+	TypeHello:    "HELLO",
 }
 
 func (t Type) String() string {

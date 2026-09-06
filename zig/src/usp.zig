@@ -20,6 +20,7 @@ pub const Type = enum(u8) {
     goaway = 0x0D,
     stats = 0x0E,
     ack = 0x0F,
+    hello = 0x10,
     _,
 };
 
