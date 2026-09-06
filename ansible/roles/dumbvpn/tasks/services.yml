@@ -1,0 +1,37 @@
+- name: relay unit
+  ansible.builtin.template:
+    src: dumbvpn-relay.service.j2
+    dest: /etc/systemd/system/dumbvpn-relay.service
+    mode: "0644"
+  notify:
+    - daemon reload
+    - restart dumbvpn-relay
+
+- name: update unit
+  ansible.builtin.template:
+    src: dumbvpn-update.service.j2
+    dest: /etc/systemd/system/dumbvpn-update.service
+    mode: "0644"
+  notify:
+    - daemon reload
+    - restart dumbvpn-update
+
+- name: hook unit
+  ansible.builtin.template:
+    src: dumbvpn-hook.service.j2
+    dest: /etc/systemd/system/dumbvpn-hook.service
+    mode: "0644"
+  notify:
+    - daemon reload
+    - restart dumbvpn-hook
+
+- name: services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop:
+    - dumbvpn-hook
+    - dumbvpn-update
+    - dumbvpn-relay

@@ -1,9 +1,3 @@
-- name: acme webroot
-  ansible.builtin.file:
-    path: /var/www/acme
-    state: directory
-    mode: "0755"
-
 - name: nginx
   ansible.builtin.include_role:
     name: geerlingguy.nginx
@@ -22,12 +16,13 @@
       gzip on;
       gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
       gzip_min_length 1024;
+      set_real_ip_from 127.0.0.1;
+      real_ip_header CF-Connecting-IP;
     nginx_vhosts:
       - listen: "80 default_server"
         server_name: _
         filename: 000-default.conf
         extra_parameters: |
-          location /.well-known/acme-challenge/ { root /var/www/acme; }
           location / { return 444; }
       - listen: "127.0.0.1:8080"
         server_name: status
@@ -38,33 +33,6 @@
 
 - name: flush
   ansible.builtin.meta: flush_handlers
-
-- name: cert exists
-  ansible.builtin.stat:
-    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
-  register: cert
-
-- name: reload nginx before certbot
-  ansible.builtin.service:
-    name: nginx
-    state: reloaded
-  when: not cert.stat.exists
-
-- name: certbot
-  ansible.builtin.include_role:
-    name: geerlingguy.certbot
-  vars:
-    certbot_install_method: package
-    certbot_auto_renew: true
-    certbot_auto_renew_user: root
-    certbot_auto_renew_hour: "3"
-    certbot_auto_renew_minute: "30"
-    certbot_auto_renew_options: "--quiet --deploy-hook 'systemctl reload nginx'"
-    certbot_create_if_missing: true
-    certbot_create_method: webroot
-    certbot_webroot: /var/www/acme
-    certbot_admin_email: "{{ admin_email }}"
-    certbot_certs: "{{ domains | map('split', ',') | map('community.general.dict_kv', 'domains') | list }}"
 
 - name: teapot page
   ansible.builtin.copy:
@@ -87,15 +55,6 @@
       server {
           listen 80;
           server_name {{ domain }};
-          location /.well-known/acme-challenge/ { root /var/www/acme; }
-          location / { return 301 https://$host$request_uri; }
-      }
-      server {
-          listen 443 ssl;
-          http2 on;
-          server_name {{ domain }};
-          ssl_certificate /etc/letsencrypt/live/{{ domain }}/fullchain.pem;
-          ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem;
           error_page 418 /teapot.html;
           location = /teapot.html { root /var/www; internal; }
           location / { return 418; }

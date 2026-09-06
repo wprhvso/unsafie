@@ -1,0 +1,44 @@
+- name: cryptography
+  ansible.builtin.apt:
+    name: python3-cryptography
+    state: present
+
+- name: tls dir
+  ansible.builtin.file:
+    path: "{{ dumbvpn_tls_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: relay key
+  community.crypto.openssl_privatekey:
+    path: "{{ dumbvpn_relay_key }}"
+    type: ECC
+    curve: secp256r1
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart dumbvpn-relay
+
+- name: relay csr
+  community.crypto.openssl_csr:
+    path: "{{ dumbvpn_tls_dir }}/relay.csr"
+    privatekey_path: "{{ dumbvpn_relay_key }}"
+    common_name: "{{ dumbvpn_relay_host }}"
+    subject_alt_name: "DNS:{{ dumbvpn_relay_host }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: relay cert
+  community.crypto.x509_certificate:
+    path: "{{ dumbvpn_relay_cert }}"
+    privatekey_path: "{{ dumbvpn_relay_key }}"
+    csr_path: "{{ dumbvpn_tls_dir }}/relay.csr"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ dumbvpn_relay_cert_days }}d"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart dumbvpn-relay
