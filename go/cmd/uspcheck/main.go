@@ -25,6 +25,7 @@ func main() {
 	target := flag.String("target", "example.com:80", "what to reach through the tunnel")
 	request := flag.String("request", "", "raw bytes to send once the stream is open")
 	udp := flag.Bool("udp", false, "open a datagram stream instead of a byte stream")
+	maxRead := flag.Int64("max", 2048, "how many bytes to read back")
 	wait := flag.Duration("wait", 8*time.Second, "how long to wait for an answer")
 	flag.Parse()
 
@@ -75,8 +76,11 @@ func main() {
 	}
 
 	_ = conn.SetReadDeadline(time.Now().Add(*wait))
-	body, err := io.ReadAll(io.LimitReader(conn, 2048))
-	fmt.Printf("read %d byte(s)\n", len(body))
+	started := time.Now()
+	body, err := io.ReadAll(io.LimitReader(conn, *maxRead))
+	spent := time.Since(started)
+	fmt.Printf("read %d byte(s) in %s (%.1f Mbit/s)\n", len(body), spent.Round(time.Millisecond),
+		float64(len(body)*8)/spent.Seconds()/1e6)
 	if len(body) > 0 {
 		fmt.Printf("%s\n", firstLines(body, 6))
 	}
