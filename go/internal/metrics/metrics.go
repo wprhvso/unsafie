@@ -236,12 +236,6 @@ func (r *Registry) Histogram(name, help string, l Labels) *Histogram {
 	return r.find(name, l, KindHistogram, help).hist
 }
 
-func Counter(name, help string, l Labels) *Counter { return Default.Counter(name, help, l) }
-func Gauge(name, help string, l Labels) *Gauge     { return Default.Gauge(name, help, l) }
-func Histogram(name, help string, l Labels) *Histogram {
-	return Default.Histogram(name, help, l)
-}
-
 func (r *Registry) snapshot() []*series {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
