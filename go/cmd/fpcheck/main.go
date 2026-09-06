@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -43,12 +44,7 @@ func main() {
 		Host:     parsed.Hostname(),
 		Port:     port,
 		EnableH3: *h3,
-		ListenUDP: func(_ interface {
-			Deadline() (time.Time, bool)
-			Done() <-chan struct{}
-			Err() error
-			Value(any) any
-		}) (net.PacketConn, error) {
+		ListenUDP: func(context.Context) (net.PacketConn, error) {
 			return net.ListenPacket("udp", ":0")
 		},
 	})
