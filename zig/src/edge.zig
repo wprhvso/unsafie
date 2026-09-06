@@ -521,7 +521,7 @@ pub const Edge = struct {
         return s;
     }
 
-    fn refuse(self: *Edge, conn: *Conn, err: Refusal) void {
+    fn refuseSession(self: *Edge, conn: *Conn, err: Refusal) void {
         switch (err) {
             error.Misdirected => self.replyAndClose(conn, 421, "Misdirected Request", "wrong slot"),
             error.BadName => self.replyAndClose(conn, 404, "Not Found", "bad session name"),
@@ -565,7 +565,7 @@ pub const Edge = struct {
 
     fn attachUp(self: *Edge, conn: *Conn, key: []const u8) void {
         const s = self.ensureSession(key) catch |err| {
-            self.refuse(conn, err);
+            self.refuseSession(conn, err);
             return;
         };
         const from = conn.request.up_offset orelse s.up_consumed;
@@ -589,7 +589,7 @@ pub const Edge = struct {
 
     fn attachDown(self: *Edge, conn: *Conn, key: []const u8) void {
         const s = self.ensureSession(key) catch |err| {
-            self.refuse(conn, err);
+            self.refuseSession(conn, err);
             return;
         };
         const from = conn.request.down_offset orelse s.down_off;

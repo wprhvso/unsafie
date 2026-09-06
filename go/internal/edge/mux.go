@@ -534,7 +534,7 @@ func (m *Mux) dispatch(f usp.Frame) error {
 		return errGoaway
 
 	case usp.TypeHelloAck:
-		hello, err := usp.DecodeServerHello(payload)
+		hello, err := usp.DecodeServerHello(f.Payload)
 		if err != nil {
 			return err
 		}
