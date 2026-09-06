@@ -125,7 +125,7 @@ pub const Session = struct {
     send_credit: i64 = 0,
     recv_credited: u64 = 0,
     stream_window: u32 = 0,
-    greeted: bool = false,
+    hellos: u32 = 0,
 
     created: i64 = 0,
     last: i64 = 0,
@@ -534,10 +534,13 @@ pub const Edge = struct {
 
         if (hello.session_window != 0) s.send_credit = @intCast(hello.session_window);
         if (hello.stream_window != 0) s.stream_window = hello.stream_window;
-        if (s.greeted) return;
 
-        s.greeted = true;
-        const resumed = s.down_off > 0 or s.up_consumed > payload.len;
+        // A second hello on a session that already introduced itself is a client
+        // that came back — a new process reusing the name it saved, or one whose
+        // leg outlived our knowledge of it. It gets the same answer; only the
+        // counter tells the two apart.
+        s.hellos += 1;
+        const resumed = s.hellos > 1;
 
         var buf: [512]u8 = undefined;
         var w = usp.Writer.init(&buf);
