@@ -4,6 +4,16 @@ server {
     listen 80;
     server_name {{ unsafie_github_domain }};
 
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{ unsafie_github_domain }};
+
+    include {{ tls_snippet }};
+
     client_max_body_size 32m;
     add_header X-Content-Type-Options nosniff always;
 
