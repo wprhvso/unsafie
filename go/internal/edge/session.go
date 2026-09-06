@@ -346,16 +346,8 @@ func (s *Session) upLeg(ctx context.Context) error {
 	legCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	from := s.mux.UplinkAt()
 	pr, pw := io.Pipe()
-	from, err := s.mux.attachUp(pw)
-	if err != nil {
-		_ = pw.CloseWithError(err)
-		if errors.Is(err, errReplayGone) {
-			return fmt.Errorf("%w: %w", ErrUnrecoverable, err)
-		}
-		return err
-	}
-	defer s.mux.detachUp()
 
 	req, err := http.NewRequestWithContext(legCtx, http.MethodPost, s.cfg.Base+PathUp+s.id, pr)
 	if err != nil {
@@ -365,15 +357,39 @@ func (s *Session) upLeg(ctx context.Context) error {
 	req.Header.Set(HeaderUp, strconv.FormatInt(from, 10))
 	req.Header.Set("Content-Type", "application/octet-stream")
 
+	// The request has to be in flight before the first byte of backlog is
+	// written: an io.Pipe blocks until somebody reads it, and the only reader
+	// is the transport this call sets going.
+	answered := make(chan struct{})
+	var resp *http.Response
+	var reqErr error
+	go func() {
+		defer close(answered)
+		resp, reqErr = s.cfg.Client.Do(req)
+	}()
+
+	if err := s.mux.attachUp(pw, from); err != nil {
+		_ = pw.CloseWithError(err)
+		<-answered
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if errors.Is(err, errReplayGone) {
+			return fmt.Errorf("%w: %w", ErrUnrecoverable, err)
+		}
+		return err
+	}
+	defer s.mux.detachUp()
+
 	stop := time.AfterFunc(backoff.Spread(legTTL, legTTLSpread), func() {
 		_ = pw.Close()
 	})
 	defer stop.Stop()
 
-	resp, err := s.cfg.Client.Do(req)
-	if err != nil {
-		_ = pw.CloseWithError(err)
-		return err
+	<-answered
+	if reqErr != nil {
+		_ = pw.CloseWithError(reqErr)
+		return reqErr
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxReply))

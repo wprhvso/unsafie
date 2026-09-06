@@ -370,14 +370,17 @@ func (m *Mux) flusher() {
 	}
 }
 
-// attachUp binds a fresh uplink body. Whatever the peer had not acknowledged is
-// pushed again first, so the frame stream the exit parses is continuous even
-// though the connection carrying it is not.
-func (m *Mux) attachUp(w io.Writer) (int64, error) {
-	from := m.upAcked.Load()
+// attachUp binds a fresh uplink body starting at the offset the leg declared.
+// Whatever the peer had not acknowledged is pushed again first, so the frame
+// stream the exit parses is continuous even though the connection carrying it
+// is not.
+//
+// The caller must already have the request in flight: the backlog goes straight
+// into the body, and a body nobody is reading yet is a body that blocks.
+func (m *Mux) attachUp(w io.Writer, from int64) error {
 	backlog, ok := m.replay.Since(from)
 	if !ok {
-		return from, errReplayGone
+		return errReplayGone
 	}
 
 	writer := usp.NewWriter(w, writeBufSize, m.cfg.Padder)
@@ -385,7 +388,7 @@ func (m *Mux) attachUp(w io.Writer) (int64, error) {
 
 	if len(backlog) > 0 {
 		if _, err := w.Write(backlog); err != nil {
-			return from, err
+			return err
 		}
 	}
 
@@ -395,7 +398,7 @@ func (m *Mux) attachUp(w io.Writer) (int64, error) {
 	m.wready = make(chan struct{})
 	m.wmu.Unlock()
 	close(ready)
-	return from, nil
+	return nil
 }
 
 func (m *Mux) detachUp() {
