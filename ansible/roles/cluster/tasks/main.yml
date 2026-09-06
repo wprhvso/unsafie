@@ -1,0 +1,100 @@
+- name: Force UTC on every node
+  community.general.timezone:
+    name: UTC
+
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+  notify: restart sshd
+
+- name: Install wireguard
+  ansible.builtin.apt:
+    name: wireguard
+    state: present
+    update_cache: true
+
+- name: Render wireguard mesh
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: /etc/wireguard/wg0.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart wireguard
+
+- name: Enable wireguard
+  ansible.builtin.systemd:
+    name: wg-quick@wg0
+    enabled: true
+    state: started
+
+- name: Config directory
+  ansible.builtin.file:
+    path: /etc/unsafie
+    state: directory
+    owner: root
+    group: unsafie
+    mode: "0750"
+
+- name: Render cluster env
+  ansible.builtin.template:
+    src: cluster.env.j2
+    dest: /etc/unsafie/cluster.env
+    owner: root
+    group: unsafie
+    mode: "0640"
+  notify: restart unsafie target
+
+- name: Lane and release directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: unsafie
+    group: unsafie
+    mode: "0755"
+  loop:
+    - "{{ cluster_lanes_root }}"
+    - "{{ cluster_lanes_root }}/stable"
+    - "{{ cluster_lanes_root }}/canary"
+    - /var/lib/unsafie/releases
+
+- name: Install zig binaries
+  ansible.builtin.copy:
+    src: "bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: "0755"
+  loop:
+    - unsafie-exec
+    - unsafie-relay
+    - unsafie-election
+  ignore_errors: true
+
+- name: Install systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - unsafie.target
+    - unsafie-web@.service
+    - unsafie-worker@.service
+    - unsafie-cron.service
+    - unsafie-relay.service
+  notify: reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable node instances
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: >-
+    {{ ['unsafie.target', 'unsafie-cron.service', 'unsafie-relay.service']
+       + (cluster_web_instances | map('regex_replace', '^(.*)$', 'unsafie-web@\1.service') | list)
+       + (cluster_worker_instances | map('regex_replace', '^(.*)$', 'unsafie-worker@\1.service') | list) }}
+  ignore_errors: true

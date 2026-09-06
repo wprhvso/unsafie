@@ -1,0 +1,8 @@
+[Unit]
+Description=wal-g restore drill into a scratch cluster
+
+[Service]
+Type=oneshot
+User=postgres
+Environment=WALG_PGP_KEY_PATH=/etc/wal-g/restore.key
+ExecStart=/usr/local/bin/walg-restore-drill

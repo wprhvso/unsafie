@@ -1,0 +1,17 @@
+cluster_base_domain: unsafie.com
+cluster_gossip_port: 7373
+cluster_lanes_root: /var/lib/unsafie/lanes
+cluster_mesh_cidr: 10.0.0.0/24
+cluster_arbiter_repo: wprhvso/unsafie-cluster
+cluster_arbiter_path: cluster/leader.json
+
+cluster_web_instances: ["stable-8001"]
+cluster_worker_instances: ["stable-1"]
+cluster_worker_concurrency: 1
+
+cluster_promote_cmd: >-
+  sudo -n /usr/bin/pg_ctlcluster 18 main promote || true
+cluster_dns_cmd: ""
+
+cluster_pg_synchronous: "ANY 1 (de, clt)"
+cluster_max_slot_wal_keep_size: 2GB

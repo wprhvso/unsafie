@@ -1,0 +1,79 @@
+- name: Backups disabled without vault keys
+  ansible.builtin.debug:
+    msg: "wal-g disabled: no R2 credentials in vault"
+  when: not (walg_enabled | bool)
+
+- name: Set up backups
+  when: walg_enabled | bool
+  block:
+    - name: Check installed wal-g
+      ansible.builtin.command: "{{ walg_bin }} --version"
+      register: walg_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Install wal-g
+      ansible.builtin.unarchive:
+        src: "https://github.com/wal-g/wal-g/releases/download/{{ walg_version }}/{{ walg_asset }}.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        extra_opts: ["--transform", "s|{{ walg_asset }}|wal-g|"]
+        mode: "0755"
+      when: walg_version not in walg_installed.stdout
+
+    - name: Config directory
+      ansible.builtin.file:
+        path: "{{ walg_config_path | dirname }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+
+    - name: Render wal-g config
+      ansible.builtin.copy:
+        content: "{{ walg_conf | to_nice_json }}\n"
+        dest: "{{ walg_config_path }}"
+        owner: postgres
+        group: postgres
+        mode: "0600"
+      no_log: true
+
+    - name: Archive command on the leader only
+      ansible.builtin.copy:
+        dest: /usr/local/bin/walg-archive
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          leader=$(psql -tAqc "SELECT leader FROM cluster_state WHERE id=1" unsafie 2>/dev/null | tr -d ' ')
+          [ "$leader" = "{{ node_id }}" ] || exit 0
+          exec {{ walg_bin }} --config {{ walg_config_path }} wal-push "$1"
+
+    - name: Enable archiving
+      ansible.builtin.command:
+        cmd: >-
+          psql -tAqc "ALTER SYSTEM SET archive_mode = on;
+          ALTER SYSTEM SET archive_command = '/usr/local/bin/walg-archive %p';
+          ALTER SYSTEM SET max_slot_wal_keep_size = '{{ cluster_max_slot_wal_keep_size }}';"
+      changed_when: true
+      notify: restart postgres
+
+    - name: Install backup and drill units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - walg-backup.service
+        - walg-backup.timer
+        - walg-restore-drill.service
+        - walg-restore-drill.timer
+
+    - name: Enable timers
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop:
+        - walg-backup.timer
+        - walg-restore-drill.timer

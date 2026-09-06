@@ -1,0 +1,7 @@
+[Unit]
+Description=wal-g full backup
+
+[Service]
+Type=oneshot
+User=postgres
+ExecStart=/bin/sh -c 'leader=$(psql -tAqc "SELECT leader FROM cluster_state WHERE id=1" unsafie | tr -d " "); [ "$leader" = "{{ node_id }}" ] && exec {{ walg_bin }} --config {{ walg_config_path }} backup-push {{ walg_conf.PGDATA }} || echo "not leader, skipping"'

@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from unsafie import events, telemetry
 from unsafie.agent.executor import executor
 from unsafie.agent.maintenance import reaper
+from unsafie.agent.metrics import rollup
 from unsafie.api import static
 from unsafie.cluster.loop import election_loop
 from unsafie.api.routes.admin import admin_router
@@ -54,7 +55,7 @@ async def lifespan(app: FastAPI):
         if role in ("worker", "all"):
             loops.append(executor)
         if role in ("cron", "all"):
-            loops += [runner, watchdog, election_loop, reaper]
+            loops += [runner, watchdog, election_loop, reaper, rollup]
         # The loops outlive this span: they must not inherit it as a parent for the next month.
         with telemetry.detached():
             for loop in loops:

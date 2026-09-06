@@ -1,0 +1,20 @@
+walg_version: v3.0.7
+walg_asset: wal-g-pg-ubuntu-20.04-amd64
+walg_bin: /usr/local/bin/wal-g
+walg_config_path: /etc/wal-g/wal-g.json
+walg_enabled: "{{ (vault_r2_access_key | default('')) | length > 0 }}"
+walg_s3_prefix: "s3://{{ vault_r2_bucket | default('unsafie-backups') }}/{{ node_id | default('node') }}/postgres"
+walg_backup_schedule: "*-*-* 03:00:00"
+walg_conf:
+  PGDATA: /var/lib/postgresql/18/main
+  PGHOST: /var/run/postgresql
+  PGUSER: postgres
+  WALG_S3_PREFIX: "{{ walg_s3_prefix }}"
+  AWS_ACCESS_KEY_ID: "{{ vault_r2_access_key | default('') }}"
+  AWS_SECRET_ACCESS_KEY: "{{ vault_r2_secret_key | default('') }}"
+  AWS_ENDPOINT: "{{ vault_r2_endpoint | default('') }}"
+  AWS_REGION: auto
+  AWS_S3_FORCE_PATH_STYLE: "true"
+  WALG_COMPRESSION_METHOD: brotli
+  WALG_UPLOAD_CONCURRENCY: "1"
+  WALG_PGP_KEY: "{{ vault_backup_pgp_public | default('') }}"

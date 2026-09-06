@@ -25,3 +25,5 @@
     - { role: grafana, tags: [grafana] }
     - { role: dumbvpn, tags: [dumbvpn] }
     - { role: unsafie, tags: [unsafie] }
+    - { role: walg, tags: [walg] }
+    - { role: cluster, tags: [cluster] }

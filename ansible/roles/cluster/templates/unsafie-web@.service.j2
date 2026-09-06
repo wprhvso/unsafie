@@ -1,0 +1,31 @@
+[Unit]
+Description=unsafie web %i
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=unsafie.target
+
+[Service]
+Type=exec
+User=unsafie
+Group=unsafie
+EnvironmentFile=/etc/unsafie/app.env
+EnvironmentFile=/etc/unsafie/cluster.env
+Environment=HOME=/var/lib/unsafie
+ExecStart=/usr/local/bin/unsafie-exec web %i
+Restart=always
+RestartSec=2
+TimeoutStopSec=30
+MemoryHigh=384M
+MemoryMax=512M
+CPUWeight=200
+OOMPolicy=stop
+LogExtraFields=UNSAFIE_ROLE=web
+LogExtraFields=UNSAFIE_INSTANCE=%i
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/unsafie
+
+[Install]
+WantedBy=unsafie.target

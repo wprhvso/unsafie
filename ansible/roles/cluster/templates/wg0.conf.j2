@@ -1,0 +1,13 @@
+[Interface]
+Address = {{ node_mesh_ip }}/24
+ListenPort = 51820
+PrivateKey = {{ vault_wg_private_keys[node_id] }}
+
+{% for host in groups['cluster'] if host != inventory_hostname %}
+[Peer]
+PublicKey = {{ vault_wg_public_keys[hostvars[host].node_id] }}
+Endpoint = {{ hostvars[host].ansible_host }}:51820
+AllowedIPs = {{ hostvars[host].node_mesh_ip }}/32
+PersistentKeepalive = 25
+
+{% endfor %}

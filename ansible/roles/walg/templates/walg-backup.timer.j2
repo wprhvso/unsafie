@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly wal-g backup
+
+[Timer]
+OnCalendar={{ walg_backup_schedule }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

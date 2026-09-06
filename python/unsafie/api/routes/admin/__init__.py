@@ -4,6 +4,7 @@ from unsafie.api.dependencies.auth import admin_required
 from unsafie.api.routes.admin import (
     bots,
     chats,
+    cluster,
     config,
     credentials,
     deliveries,
@@ -39,6 +40,7 @@ for module in (
     shares,
     stats,
     events,
+    cluster,
 ):
     admin_router.include_router(module.router)
 

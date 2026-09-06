@@ -1,0 +1,30 @@
+[Unit]
+Description=unsafie cron
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=unsafie.target
+
+[Service]
+Type=exec
+User=unsafie
+Group=unsafie
+EnvironmentFile=/etc/unsafie/app.env
+EnvironmentFile=/etc/unsafie/cluster.env
+Environment=HOME=/var/lib/unsafie
+ExecStart=/usr/local/bin/unsafie-exec cron stable-cron
+Restart=always
+RestartSec=2
+TimeoutStopSec=60
+MemoryHigh=384M
+MemoryMax=512M
+CPUWeight=120
+OOMPolicy=stop
+LogExtraFields=UNSAFIE_ROLE=cron
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/unsafie
+
+[Install]
+WantedBy=unsafie.target
