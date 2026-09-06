@@ -149,6 +149,24 @@ func main() {
 	}
 }
 
+// drain fills the tunnel with a download so the request being measured has
+// something to be stuck behind.
+func drain(ctx context.Context, session *edge.Session, bytes int) {
+	addr, err := usp.ParseAddr("speed.cloudflare.com:80")
+	if err != nil {
+		return
+	}
+	conn, err := session.Mux().OpenStrict(ctx, addr, false)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	fmt.Fprintf(conn, "GET /__down?bytes=%d HTTP/1.1\r\nHost: speed.cloudflare.com\r\n"+
+		"User-Agent: uspcheck\r\nConnection: close\r\n\r\n", bytes)
+	_, _ = io.Copy(io.Discard, conn)
+}
+
 func firstLines(b []byte, n int) []byte {
 	count := 0
 	for i, c := range b {
