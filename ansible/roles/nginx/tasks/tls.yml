@@ -1,0 +1,74 @@
+- name: cloudflare token
+  ansible.builtin.assert:
+    that: tls_cloudflare_api_token | default('', true) | length > 0
+    fail_msg: >-
+      Нет vault_cloudflare_api_token: нужен Cloudflare API Token
+      с правами Zone:Read + DNS:Edit на зону {{ domain }}.
+    quiet: true
+
+# DNS-01 не требует ни открытого 80-го, ни живого vhost'а, поэтому сертификат
+# выпускается до того, как появятся server-блоки с ssl_certificate.
+- name: acme.sh
+  ansible.builtin.include_role:
+    name: nickjj.acme_sh
+  vars:
+    acme_sh_account_email: "{{ tls_email }}"
+    acme_sh_git_update: true
+    acme_sh_upgrade: true
+    acme_sh_copy_certs_to_path: "{{ tls_certs_path }}"
+    acme_sh_default_staging: "{{ tls_staging }}"
+    acme_sh_default_dns_provider: dns_cf
+    acme_sh_default_dns_provider_api_keys:
+      CF_Token: "{{ tls_cloudflare_api_token }}"
+    acme_sh_default_dns_sleep: "{{ tls_dns_sleep }}"
+    # Тип ключа фиксируем явно: иначе --install-cert промахнётся мимо каталога *_ecc.
+    acme_sh_default_extra_flags_issue: "--server letsencrypt --keylength ec-256"
+    acme_sh_default_extra_flags_install_cert: "--ecc"
+    acme_sh_default_install_cert_reloadcmd: "{{ tls_reload_cmd }}"
+    acme_sh_domains:
+      - domains: "{{ domains }}"
+
+# Роль кладёт каталог 0755, а рядом с сертификатом лежит приватный ключ.
+- name: key stays root-only
+  ansible.builtin.file:
+    path: "{{ tls_certs_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: snippets dir
+  ansible.builtin.file:
+    path: "{{ tls_snippet | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: tls snippet
+  ansible.builtin.copy:
+    dest: "{{ tls_snippet }}"
+    mode: "0644"
+    content: |
+      # managed by ansible
+      ssl_certificate {{ tls_cert }};
+      ssl_certificate_key {{ tls_key }};
+      ssl_protocols TLSv1.2 TLSv1.3;
+      ssl_prefer_server_ciphers off;
+      ssl_session_cache shared:SSL:10m;
+      ssl_session_timeout 1d;
+      ssl_session_tickets off;
+  notify: reload nginx
+
+# Чужой SNI и голый IP по 443 обрываем так же, как по 80.
+- name: default tls vhost
+  ansible.builtin.copy:
+    dest: /etc/nginx/sites-enabled/000-default-tls.conf
+    mode: "0644"
+    content: |
+      server {
+          listen 443 ssl default_server;
+          http2 on;
+          server_name _;
+          include {{ tls_snippet }};
+          return 444;
+      }
+  notify: reload nginx

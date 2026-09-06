@@ -3,6 +3,18 @@ domains:
   - "{{ domain }}"
   - "*.{{ domain }}"
 
+# TLS: один wildcard-сертификат от acme.sh, валидация DNS-01 через Cloudflare.
+# vault_cloudflare_api_token — токен с Zone:Read + DNS:Edit на зону domain.
+tls_email: "admin@{{ domain }}"
+tls_certs_path: /etc/ssl/acme
+tls_cert: "{{ tls_certs_path }}/{{ domain }}.pem"
+tls_key: "{{ tls_certs_path }}/{{ domain }}.key"
+tls_snippet: /etc/nginx/snippets/tls.conf
+tls_reload_cmd: systemctl reload nginx
+tls_staging: false
+tls_dns_sleep: 30
+tls_cloudflare_api_token: "{{ vault_cloudflare_api_token }}"
+
 victoriametrics_version: 1.151.0
 victorialogs_version: 1.52.0
 victoriatraces_version: 0.11.0

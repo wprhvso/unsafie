@@ -34,6 +34,10 @@
 - name: flush
   ansible.builtin.meta: flush_handlers
 
+- name: tls
+  ansible.builtin.import_tasks: tls.yml
+  tags: [tls]
+
 - name: teapot page
   ansible.builtin.copy:
     dest: /var/www/teapot.html
@@ -55,6 +59,13 @@
       server {
           listen 80;
           server_name {{ domain }};
+          location / { return 301 https://$host$request_uri; }
+      }
+      server {
+          listen 443 ssl;
+          http2 on;
+          server_name {{ domain }};
+          include {{ tls_snippet }};
           error_page 418 /teapot.html;
           location = /teapot.html { root /var/www; internal; }
           location / { return 418; }

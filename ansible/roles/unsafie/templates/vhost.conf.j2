@@ -3,6 +3,16 @@ server {
     listen 80;
     server_name {{ unsafie_domain }};
 
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{ unsafie_domain }};
+
+    include {{ tls_snippet }};
+
     root {{ unsafie_src }}/svelte/build;
     index index.html;
 
