@@ -25,8 +25,8 @@
   community.crypto.openssl_csr:
     path: "{{ dumbvpn_tls_dir }}/relay.csr"
     privatekey_path: "{{ dumbvpn_relay_key }}"
-    common_name: "{{ dumbvpn_domain }}"
-    subject_alt_name: "DNS:{{ dumbvpn_domain }}"
+    common_name: "{{ dumbvpn_relay_host }}"
+    subject_alt_name: "DNS:{{ dumbvpn_relay_host }}"
     owner: root
     group: root
     mode: "0644"

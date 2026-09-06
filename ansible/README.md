@@ -40,8 +40,7 @@ ansible-playbook site.yml --tags unsafie-deploy
 
 TLS терминируется на краю Cloudflare. На сервере nginx слушает только `:80`,
 сертификатов не держит, редиректов на https не делает. Порты 80 и 443 в ufw закрыты,
-наружу торчит только `dumbvpn_relay_port` — relay ходит мимо Cloudflare
-со своим самоподписанным сертификатом (клиент его не проверяет).
+наружу торчит только `dumbvpn_relay_port`.
 
 Реальный адрес клиента nginx берёт из `CF-Connecting-IP`, доверяя `127.0.0.1`,
 поэтому `$remote_addr` в логах остаётся публичным IP.
@@ -74,3 +73,16 @@ done
 ```
 
 В зоне появятся `CNAME <host> -> <UUID>.cfargotunnel.com` в режиме proxied.
+
+### Relay мимо туннеля
+
+Relay dumbvpn — не HTTP-сервис, через Cloudflare он ходить не может и остаётся
+на своём порту напрямую: `dumbvpn_relay_host` (по умолчанию `relay.{{ domain }}`)
+заводится в зоне как `A -> <ip сервера>` в режиме **DNS only**, порт
+`dumbvpn_relay_port` открыт в ufw. Сертификат relay самоподписанный и живёт в
+`/etc/dumbvpn/tls`, клиент его не проверяет.
+
+`dumb.{{ domain }}` при этом уходит в туннель целиком: там только update-API и
+webhook, публичный сертификат для них даёт край Cloudflare. Значит в `.env`
+dumbvpn `SERVER_HOST` меняется на `relay.{{ domain }}`, а `UPDATE_BASEURL`
+остаётся прежним.

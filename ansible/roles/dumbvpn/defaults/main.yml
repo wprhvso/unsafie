@@ -3,6 +3,7 @@ dumbvpn_github_repo: wprhvso/dumbvpn
 dumbvpn_branch: main
 
 dumbvpn_domain: "dumb.{{ domain }}"
+dumbvpn_relay_host: "relay.{{ domain }}"
 
 dumbvpn_relay_port: 8443
 
