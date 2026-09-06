@@ -13,6 +13,7 @@ updateflags := if relver == "dev" { "" } else { \
 ldflags := "-s -w -buildid=" + \
     " -X main.buildEdges=" + env_var("EDGE_HOSTS") + \
     " -X main.buildPort=" + env_var("EDGE_PORT") + \
+    " -X main.buildSlots=" + env_var("EDGE_SLOTS") + \
     " -X main.buildBearer=" + env_var("CLIENT_TOKEN") + \
     " -X main.buildVersion=" + relver + \
     updateflags
