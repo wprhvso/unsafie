@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from unsafie.api.dependencies.auth import admin_required
 from unsafie.api.routes.admin import (
+    artifacts,
     bots,
     chats,
     config,
@@ -12,7 +13,6 @@ from unsafie.api.routes.admin import (
     instances,
     overview,
     schedule,
-    shares,
     ssh,
     stats,
     subscriptions,
@@ -38,7 +38,7 @@ for module in (
     schedule,
     watches,
     ssh,
-    shares,
+    artifacts,
     stats,
     events,
 ):

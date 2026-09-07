@@ -142,7 +142,10 @@ class Settings(BaseSettings):
 
     public_base_url: str = "https://unsafie.com"
     github_base_url: str = "https://github.unsafie.com"
-    share_base_url: str = "https://unsafie.com"
+    artifact_base_url: str = Field(
+        default="https://unsafie.com",
+        validation_alias=AliasChoices("ARTIFACT_BASE_URL", "SHARE_BASE_URL"),
+    )
     static_dir: Path = ROOT / "svelte" / "build"
 
     fluent_dir: Path = ROOT / "fluent"
@@ -198,8 +201,6 @@ class Settings(BaseSettings):
     events_block: float = 20.0
 
     live_enabled: bool = True
-    live_link: bool = True
-    live_base_url: str = ""
     live_ttl: float = 86_400.0
     live_buffer: int = 20_000
     live_queue: int = 16_384
@@ -294,16 +295,12 @@ class Settings(BaseSettings):
         return f"postgresql+psycopg://{auth}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     @property
-    def share_origin(self) -> str:
-        return self.share_base_url.rstrip("/")
+    def artifact_origin(self) -> str:
+        return self.artifact_base_url.rstrip("/")
 
     @property
     def public_origin(self) -> str:
         return self.public_base_url.rstrip("/")
-
-    @property
-    def live_origin(self) -> str:
-        return (self.live_base_url or self.public_base_url).rstrip("/")
 
     @property
     def github_origin(self) -> str:

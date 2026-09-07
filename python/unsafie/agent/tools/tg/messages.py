@@ -29,12 +29,12 @@ BUTTONS_HELP = (
 @register(
     SERVER,
     "send_message",
-    "Send a message to the current chat. Needed only in rare cases: your plain text already goes "
-    "to the chat by itself, so calling this to say something ordinary sends it twice. Use it when "
-    "text alone cannot do the job — buttons, an explicit reply_to, a silent message. Markdown "
-    "text; long text is split into several messages automatically. reply_to — reply to a specific "
-    "message_id explicitly (decided automatically otherwise); silent=true — no notification "
-    "sound. " + BUTTONS_HELP,
+    "Send a message to the current chat: the only channel to the user and the only way to give "
+    "feedback — answers, questions, progress, links to artifacts. Nothing else you produce "
+    "reaches them. Keep it short and put long output in create_artifact. Markdown text; long "
+    "text is split into several messages automatically. reply_to — reply to a specific message_id "
+    "explicitly (decided automatically otherwise); silent=true — no notification sound. "
+    + BUTTONS_HELP,
     schema(["text"], text=str, buttons=str, reply_to=int, silent=bool),
     replies=True,
 )

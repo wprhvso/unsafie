@@ -1,4 +1,3 @@
-agent-live = ▸ [{ $url }]({ $url })
 agent-failure = Something broke, try again.
 agent-empty-balance = Balance is empty. Check: /budget
 agent-budget-busy = The whole balance is locked by another turn right now. Wait for it or set a per-turn limit: /budget

@@ -4,21 +4,22 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from aiogram.exceptions import TelegramAPIError
-
 from unsafie.agent import client, credentials, pricing, queue, request
 from unsafie.agent.client import ApiError
-from unsafie.agent.tools.base import ToolContext, current_turn
+from unsafie.agent.tools.base import ToolContext
 from unsafie.agent.tools.registry import ToolSpec
 from unsafie.agent.trace import Recorder
-from unsafie.database.models.response import ResponseKind
 from unsafie.log import short
 from unsafie.settings import settings
-from unsafie.telegram import sender
 
 logger = logging.getLogger(__name__)
 
 EMPTY_RESULT = [{"type": "text", "text": "(no output)"}]
+MAX_REMINDERS = 2
+NOT_DELIVERED = (
+    "Your plain text goes nowhere: the user never sees it. Say it with send_message, or publish "
+    "it with create_artifact and send the link."
+)
 
 
 @dataclass
@@ -110,22 +111,13 @@ async def _call(
     return result
 
 
-async def _speak(ctx: ToolContext, value: str) -> str | None:
-    turn = await current_turn(ctx)
-    try:
-        response = await sender.send(
-            ctx.bot,
-            bot_id=ctx.bot_id,
-            chat_id=ctx.chat_id,
-            markdown=value,
-            kind=ResponseKind.AGENT,
-            turn=turn,
-        )
-    except TelegramAPIError as e:
-        logger.error("%s text not delivered error=%s", ctx.prefix, e)
-        return f"Telegram rejected your text: {e}. Rewrite it and say it again."
-    logger.info("%s text delivered messages=%s", ctx.prefix, response.message_ids)
-    return None
+def _ask(messages: list[dict], value: str) -> None:
+    block = {"type": "text", "text": value}
+    last = messages[-1] if messages else None
+    if last is not None and last.get("role") == "user" and isinstance(last.get("content"), list):
+        last["content"].append(block)
+        return
+    messages.append({"role": "user", "content": [block]})
 
 
 async def run(
@@ -146,6 +138,7 @@ async def run(
     replying = {name for name, spec in tools.items() if spec.replies}
     catalogue = request.tools(definitions)
     marked = -1
+    reminders = 0
 
     while result.steps < settings.agent_max_steps:
         if result.cost_usd >= budget_usd:
@@ -196,16 +189,13 @@ async def run(
         pricing.merge(result.usage, reply.usage)
         result.stop_reason = reply.stop_reason
         recorder.reply(reply)
-        messages.append(reply.as_message())
+        if reply.content:
+            messages.append(reply.as_message())
         text = reply.text.strip()
-        rejected: str | None = None
         if text:
             result.text = text
-            rejected = await _speak(ctx, text)
-            if rejected is None:
-                result.replied = True
-            else:
-                recorder.note("unsafie.text_rejected", {"error": short(rejected, 300)})
+            recorder.note("unsafie.text_dropped", {"chars": len(text)})
+            logger.info("%s text not delivered: %s", ctx.prefix, short(text))
 
         calls = reply.calls
         if calls:
@@ -214,8 +204,6 @@ async def run(
                 content.append(await _call(ctx, tools, call, recorder))
                 if call.get("name") in replying:
                     result.replied = True
-            if rejected is not None:
-                content.append({"type": "text", "text": rejected})
             extra = await queue.drain(ctx.turn_id)
             if extra is not None:
                 recorder.note("unsafie.messages_injected")
@@ -230,11 +218,13 @@ async def run(
         extra = await queue.drain(ctx.turn_id)
         if extra is not None:
             recorder.note("unsafie.stop_blocked", {"reason": "pending messages"})
-            messages.append({"role": "user", "content": [{"type": "text", "text": extra}]})
+            _ask(messages, extra)
             continue
 
-        if rejected is not None:
-            messages.append({"role": "user", "content": [{"type": "text", "text": rejected}]})
+        if text and not result.replied and reminders < MAX_REMINDERS:
+            reminders += 1
+            recorder.note("unsafie.text_reminder", {"attempt": reminders})
+            _ask(messages, NOT_DELIVERED)
             continue
 
         return result
