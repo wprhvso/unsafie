@@ -1,8 +1,7 @@
 import sys
 
-from unsafie_cli import commands
+from unsafie_cli import commands, parser
 from unsafie_cli import help as help_pages
-from unsafie_cli import parser
 from unsafie_cli.errors import FAILED, OK, CliError
 from unsafie_cli.output import Out, colors_wanted
 

@@ -1,0 +1,33 @@
+name: lock
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: resolve
+        run: uv lock
+        working-directory: python
+
+      - name: commit if it moved
+        run: |
+          if [ -n "$(git status --porcelain python/uv.lock)" ]; then
+            git config user.name "unsafie"
+            git config user.email "bot@unsafie.com"
+            git add python/uv.lock
+            git commit -m "pool: refresh uv.lock"
+            git push
+          else
+            echo "the lock is already current"
+          fi
