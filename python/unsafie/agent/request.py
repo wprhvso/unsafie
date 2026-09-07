@@ -1,6 +1,5 @@
 import logging
 
-from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -9,6 +8,7 @@ EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_EFFORT = "low"
 UNCACHEABLE = frozenset({"thinking", "redacted_thinking"})
 DOWNGRADABLE = ("thinking", "effort", "output_config", "context_management", "fallbacks")
+PREAMBLE = "You are a Claude agent, built on Anthropic's Claude Agent SDK."
 
 _unsupported: dict[str, set[str]] = {}
 
@@ -17,14 +17,10 @@ def cache_control() -> dict:
     return {"type": "ephemeral", "ttl": settings.cache_ttl}
 
 
-def system() -> list[dict]:
+def system(prompt: str) -> list[dict]:
     return [
-        {
-            "type": "text",
-            "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
-            "cache_control": cache_control(),
-        },
-        {"type": "text", "text": SYSTEM_PROMPT, "cache_control": cache_control()},
+        {"type": "text", "text": PREAMBLE, "cache_control": cache_control()},
+        {"type": "text", "text": prompt, "cache_control": cache_control()},
     ]
 
 
@@ -119,6 +115,7 @@ def cached(messages: list[dict], marks: set[int]) -> list[dict]:
 def build(
     *,
     model: str,
+    prompt: str,
     messages: list[dict],
     marks: set[int],
     definitions: list[dict],
@@ -130,7 +127,7 @@ def build(
         "model": model,
         "max_tokens": max_tokens,
         "stream": True,
-        "system": system(),
+        "system": system(prompt),
         "messages": cached(messages, marks),
     }
     body["tools"] = definitions if definitions else []

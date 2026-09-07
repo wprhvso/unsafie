@@ -150,10 +150,6 @@ def holder(token: str | None) -> str | None:
     return token.split(":", 1)[0] if token else None
 
 
-async def owner(name: str) -> str | None:
-    return holder(await client().get(key("lock", name)))
-
-
 async def owners(names: Iterable[str]) -> dict[str, str | None]:
     wanted = list(names)
     if not wanted:
@@ -166,22 +162,16 @@ async def mark(name: str, value: str, ttl: float) -> None:
     await client().set(key("mark", name), value, px=int(ttl * 1000))
 
 
+async def marked(name: str) -> str | None:
+    return await client().get(key("mark", name))
+
+
 async def marks(names: Iterable[str]) -> dict[str, str | None]:
     wanted = list(names)
     if not wanted:
         return {}
     values = await client().mget([key("mark", n) for n in wanted])
     return dict(zip(wanted, values, strict=True))
-
-
-async def lease(name: str, ttl: float) -> bool:
-    return bool(
-        await client().set(key("lease", name), settings.instance_id, nx=True, px=int(ttl * 1000))
-    )
-
-
-async def leased(name: str) -> bool:
-    return bool(await client().exists(key("lease", name)))
 
 
 async def _keep(held: Held) -> None:

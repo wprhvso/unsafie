@@ -16,6 +16,7 @@ from unsafie.database.models.subscription import GithubSubscription
 from unsafie.database.models.webhook_delivery import WebhookDelivery
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.github import GithubAppRepository
+from unsafie.database.repositories.segment import SegmentRepository
 from unsafie.database.repositories.stats import StatsRepository
 from unsafie.presence import instances
 from unsafie.telegram import poller
@@ -59,6 +60,7 @@ async def overview():
             deliveries_failed=await _count(
                 session, WebhookDelivery, WebhookDelivery.error.is_not(None)
             ),
+            history_bytes=await SegmentRepository(session).total_bytes(),
             github_app=app.slug if app else None,
             day=PeriodRead(**(await stats.period(now - timedelta(days=1))).__dict__),
             week=PeriodRead(**(await stats.period(now - timedelta(days=7))).__dict__),

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from unsafie.agent import client, credentials, pricing, queue, request
 from unsafie.agent.client import ApiError
 from unsafie.agent.tools.base import ToolContext
-from unsafie.agent.tools.registry import Bound
+from unsafie.agent.tools.registry import ToolSpec
 from unsafie.agent.trace import Recorder
 from unsafie.log import short
 from unsafie.settings import settings
@@ -61,20 +61,22 @@ def _failed(call_id: str, message: str) -> dict:
     }
 
 
-async def _call(ctx: ToolContext, bound: dict[str, Bound], block: dict) -> dict:
+async def _call(ctx: ToolContext, tools: dict[str, ToolSpec], block: dict) -> dict:
     name = block.get("name") or ""
     call_id = block.get("id") or ""
     args = block.get("input") if isinstance(block.get("input"), dict) else {}
-    tool = bound.get(name)
-    if tool is None:
+    spec = tools.get(name)
+    if spec is None:
         logger.warning("%s tool=%s does not exist", ctx.prefix, name)
         return _failed(call_id, f"there is no tool named {name}")
-    missing = [key for key in tool.required if key not in args]
+    missing = [key for key in spec.required if key not in args]
     if missing:
         logger.warning("%s tool=%s missing %s", ctx.prefix, name, missing)
         return _failed(call_id, f"{name}: missing required argument(s): {', '.join(missing)}")
     try:
-        payload = await asyncio.wait_for(tool.run(args), timeout=settings.agent_tool_timeout)
+        payload = await asyncio.wait_for(
+            spec.handler(ctx, args), timeout=settings.agent_tool_timeout
+        )
     except TimeoutError:
         logger.warning("%s tool=%s timed out", ctx.prefix, name)
         return _failed(call_id, f"{name} timed out after {settings.agent_tool_timeout:.0f}s")
@@ -97,14 +99,15 @@ async def run(
     messages: list[dict],
     credential,
     model: str,
+    prompt: str,
     effort: str | None,
     budget_usd: float,
     definitions: list[dict],
-    bound: dict[str, Bound],
+    tools: dict[str, ToolSpec],
     recorder: Recorder,
 ) -> Result:
     result = Result()
-    replying = {name for name, tool in bound.items() if tool.replies}
+    replying = {name for name, spec in tools.items() if spec.replies}
     catalogue = request.tools(definitions)
     marked = -1
     nudges = 0
@@ -125,6 +128,7 @@ async def run(
         marked = len(messages) - 1
         body = request.build(
             model=model,
+            prompt=prompt,
             messages=messages,
             marks=marks,
             definitions=catalogue,
@@ -158,7 +162,7 @@ async def run(
         if calls:
             content: list[dict] = []
             for call in calls:
-                content.append(await _call(ctx, bound, call))
+                content.append(await _call(ctx, tools, call))
                 if call.get("name") in replying:
                     result.replied = True
             extra = await queue.drain(ctx.turn_id)

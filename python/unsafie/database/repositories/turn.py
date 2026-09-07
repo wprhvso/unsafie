@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -95,22 +96,6 @@ class TurnRepository:
             return None
         return await self.session.get(Turn, turn_id)
 
-    async def is_session_head(self, turn: Turn) -> bool:
-        if turn.session_id is None:
-            return False
-        later = await self.session.scalar(
-            select(func.count())
-            .select_from(Turn)
-            .where(
-                Turn.bot_id == turn.bot_id,
-                Turn.chat_id == turn.chat_id,
-                Turn.session_id == turn.session_id,
-                Turn.id != turn.id,
-                Turn.created_at >= turn.created_at,
-            )
-        )
-        return not later
-
     async def create(
         self,
         *,
@@ -119,17 +104,16 @@ class TurnRepository:
         user_id: int,
         parent: Turn | None,
         reply_to: int | None,
-        session_id: str | None,
-        forked: bool,
     ) -> Turn:
+        turn_id = uuid.uuid4()
         turn = Turn(
+            id=turn_id,
             bot_id=bot_id,
             chat_id=chat_id,
             user_id=user_id,
             parent_id=parent.id if parent else None,
+            root_id=parent.root_id if parent else turn_id,
             reply_to=reply_to,
-            session_id=session_id,
-            forked=forked,
             status=TurnStatus.RUNNING,
             instance_id=settings.instance_id,
             heartbeat_at=datetime.now(UTC),
@@ -138,22 +122,14 @@ class TurnRepository:
         await self.session.commit()
         await self.session.refresh(turn)
         logger.info(
-            "bot=%s chat=%s turn=%s created parent=%s session=%s forked=%s",
+            "bot=%s chat=%s turn=%s created parent=%s root=%s",
             bot_id,
             chat_id,
             turn.id,
             turn.parent_id,
-            session_id,
-            forked,
+            turn.root_id,
         )
         return turn
-
-    async def set_session(self, turn_id: UUID, session_id: str) -> None:
-        turn = await self.session.get(Turn, turn_id)
-        if turn is None or turn.session_id == session_id:
-            return
-        turn.session_id = session_id
-        await self.session.commit()
 
     async def record(
         self,
@@ -183,6 +159,7 @@ class TurnRepository:
         if turn is None:
             return
         turn.status = status
+        turn.heartbeat_at = None
         turn.finished_at = datetime.now(UTC)
         if note:
             turn.result = note
@@ -247,17 +224,25 @@ class TurnRepository:
         )
         return list(rows)
 
-    async def set_transcript_lines(self, turn_id: UUID, lines: int) -> None:
-        await self.session.execute(
-            update(Turn).where(Turn.id == turn_id).values(transcript_lines=lines)
+    async def conversation(self, root_id: UUID) -> list[Turn]:
+        rows = await self.session.scalars(
+            select(Turn).where(Turn.root_id == root_id).order_by(Turn.created_at)
         )
-        await self.session.commit()
+        return list(rows)
 
     async def beat(self, turn_id: UUID) -> None:
         await self.session.execute(
             update(Turn)
             .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
             .values(heartbeat_at=datetime.now(UTC))
+        )
+        await self.session.commit()
+
+    async def seal(self, turn_id: UUID) -> None:
+        await self.session.execute(
+            update(Turn)
+            .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
+            .values(heartbeat_at=None)
         )
         await self.session.commit()
 
@@ -276,6 +261,7 @@ class TurnRepository:
         now = datetime.now(UTC)
         for turn in rows:
             turn.status = TurnStatus.FAILED
+            turn.heartbeat_at = None
             turn.finished_at = now
             turn.result = turn.result or f"instance {turn.instance_id or 'unknown'} stopped beating"
         await self.session.commit()

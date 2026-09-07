@@ -8,6 +8,7 @@ from unsafie.agent.tools.base import Handler, ToolContext
 logger = logging.getLogger(__name__)
 
 Availability = Callable[[object, ToolContext], Awaitable[bool]]
+Context = Callable[[object, ToolContext], Awaitable[str]]
 
 
 @dataclass(frozen=True)
@@ -33,78 +34,69 @@ class ToolSpec:
 
 
 @dataclass(frozen=True)
-class Bound:
-    spec: ToolSpec
-    run: Callable[[dict], Awaitable[dict]]
-
-    @property
-    def name(self) -> str:
-        return self.spec.name
-
-    @property
-    def replies(self) -> bool:
-        return self.spec.replies
-
-    @property
-    def required(self) -> tuple[str, ...]:
-        return self.spec.required
+class Server:
+    name: str
+    available: Availability | None = None
+    context: Context | None = None
 
 
-_REGISTRY: dict[str, list[ToolSpec]] = defaultdict(list)
-_AVAILABILITY: dict[str, Availability] = {}
+_TOOLS: dict[str, list[ToolSpec]] = defaultdict(list)
+_SERVERS: dict[str, Server] = {}
 
 
 def register(
     server: str, name: str, description: str, input_schema: dict, *, replies: bool = False
 ):
     def decorator(fn: Handler) -> Handler:
-        _REGISTRY[server].append(
-            ToolSpec(server, name, description, input_schema, fn, replies)
-        )
+        _TOOLS[server].append(ToolSpec(server, name, description, input_schema, fn, replies))
         return fn
 
     return decorator
 
 
-def available(server: str, check: Availability) -> None:
-    _AVAILABILITY[server] = check
+def declare(name: str, *, available: Availability | None = None, context: Context | None = None):
+    _SERVERS[name] = Server(name, available, context)
 
 
 def servers() -> list[str]:
-    return list(_REGISTRY)
+    return list(_TOOLS)
 
 
 def specs(server: str) -> list[ToolSpec]:
-    return list(_REGISTRY[server])
+    return list(_TOOLS[server])
 
 
-async def enabled_servers(session, ctx: ToolContext) -> list[str]:
+async def enabled(session, ctx: ToolContext) -> list[str]:
     out: list[str] = []
-    for server in _REGISTRY:
-        check = _AVAILABILITY.get(server)
-        if check is None or await check(session, ctx):
-            out.append(server)
+    for name in _TOOLS:
+        server = _SERVERS.get(name)
+        if server is None or server.available is None or await server.available(session, ctx):
+            out.append(name)
     return out
 
 
-def _bind(handler: Handler, ctx: ToolContext):
-    async def run(args: dict) -> dict:
-        return await handler(ctx, args)
+async def context_for(session, ctx: ToolContext, names: list[str]) -> list[str]:
+    out: list[str] = []
+    for name in names:
+        server = _SERVERS.get(name)
+        if server is None or server.context is None:
+            continue
+        text = await server.context(session, ctx)
+        if text:
+            out.append(text)
+    return out
 
-    run.__name__ = handler.__name__
-    return run
 
-
-def build_tools(ctx: ToolContext, servers: list[str]) -> tuple[list[dict], dict[str, Bound]]:
+def build_tools(ctx: ToolContext, names: list[str]) -> tuple[list[dict], dict[str, ToolSpec]]:
     definitions: list[dict] = []
-    bound: dict[str, Bound] = {}
-    for server in servers:
-        for spec in _REGISTRY[server]:
-            clash = bound.get(spec.name)
+    tools: dict[str, ToolSpec] = {}
+    for name in names:
+        for spec in _TOOLS[name]:
+            clash = tools.get(spec.name)
             if clash is not None:
                 raise RuntimeError(
-                    f"tool {spec.name} is registered by both {clash.spec.server} and {server}"
+                    f"tool {spec.name} is registered by both {clash.server} and {name}"
                 )
-            bound[spec.name] = Bound(spec, _bind(spec.handler, ctx))
+            tools[spec.name] = spec
             definitions.append(spec.definition)
-    return definitions, bound
+    return definitions, tools

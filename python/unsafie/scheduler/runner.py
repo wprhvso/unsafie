@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from unsafie import cluster, events, telemetry
+from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.scheduled_task import TaskKind
@@ -36,30 +36,24 @@ class Runner(Loop):
             async with SessionLocal() as session:
                 due = await ScheduleRepository(session).claim(now, BATCH, settings.job_lease)
         for task in due:
-            async with cluster.try_lock(
-                f"task:{task.id}", ttl=settings.job_lock_ttl, renew=True
-            ) as held:
-                if held is None:
-                    logger.info("task=%s is already running elsewhere", task.id)
-                    continue
-                with telemetry.span(
-                    "scheduler.task",
-                    kind=telemetry.CONSUMER,
-                    attributes={
-                        attrs.TASK_ID: task.id,
-                        attrs.TASK_KIND: str(task.kind),
-                        attrs.BOT_ID: task.bot_id,
-                        attrs.CHAT_ID: task.chat_id,
-                        attrs.USER_ID: task.user_id,
-                        attrs.PROMPT: telemetry.content(task.text),
-                    },
-                ) as span:
-                    try:
-                        await self._fire(task)
-                    except Exception as e:
-                        telemetry.fail(span, e)
-                        logger.exception("task=%s failed", task.id)
-                        await self._advance(task)
+            with telemetry.span(
+                "scheduler.task",
+                kind=telemetry.CONSUMER,
+                attributes={
+                    attrs.TASK_ID: task.id,
+                    attrs.TASK_KIND: str(task.kind),
+                    attrs.BOT_ID: task.bot_id,
+                    attrs.CHAT_ID: task.chat_id,
+                    attrs.USER_ID: task.user_id,
+                    attrs.PROMPT: telemetry.content(task.text),
+                },
+            ) as span:
+                try:
+                    await self._fire(task)
+                except Exception as e:
+                    telemetry.fail(span, e)
+                    logger.exception("task=%s failed", task.id)
+                    await self._advance(task)
 
     async def _advance(self, task) -> None:
         run_at = await service.advance(task)

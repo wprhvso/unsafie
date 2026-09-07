@@ -114,14 +114,14 @@ class TurnRead(Base):
     chat_id: int
     user_id: int
     parent_id: UUID | None = None
-    session_id: str | None = None
-    forked: bool
+    root_id: UUID
     status: str
     credential_id: int | None = None
     cost_usd: float | None = None
     charge: int
     num_turns: int
     result: str | None = None
+    instance_id: str | None = None
     created_at: datetime
     finished_at: datetime | None = None
 
@@ -139,7 +139,9 @@ class TurnDetail(BaseModel):
     turn: TurnRead
     parent: TurnRead | None = None
     children: list[TurnRead] = []
+    conversation: list[TurnRead] = []
     responses: list[ResponseRead] = []
+    messages: int = 0
 
 
 class GithubAppRead(Base):
@@ -307,6 +309,7 @@ class OverviewRead(BaseModel):
     ssh_connections: int
     deliveries_pending: int
     deliveries_failed: int
+    history_bytes: int = 0
     github_app: str | None
     day: PeriodRead
     week: PeriodRead

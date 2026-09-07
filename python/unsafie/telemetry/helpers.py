@@ -5,8 +5,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from opentelemetry import trace
-from opentelemetry.context import Context
-from opentelemetry.trace import Link, Span, SpanKind, Status, StatusCode
+from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 
 from unsafie.errors import OpsError
 from unsafie.telemetry import attrs
@@ -46,44 +45,19 @@ def span(
     *,
     kind: SpanKind = SpanKind.INTERNAL,
     attributes: Attributes = None,
-    parent: Context | None = None,
-    links: list[Link] | None = None,
-    start_time: int | None = None,
 ) -> Iterator[Span]:
     with tracer().start_as_current_span(
         name,
-        context=parent,
         kind=kind,
         attributes=clean(attributes),
-        links=links,
-        start_time=start_time,
         record_exception=False,
         set_status_on_exception=False,
-    ) as current:
+    ) as current_span:
         try:
-            yield current
+            yield current_span
         except BaseException as exc:
-            fail(current, exc)
+            fail(current_span, exc)
             raise
-
-
-def start(
-    name: str,
-    *,
-    kind: SpanKind = SpanKind.INTERNAL,
-    attributes: Attributes = None,
-    parent: Context | None = None,
-    start_time: int | None = None,
-) -> Span:
-    return tracer().start_span(
-        name,
-        context=parent,
-        kind=kind,
-        attributes=clean(attributes),
-        start_time=start_time,
-        record_exception=False,
-        set_status_on_exception=False,
-    )
 
 
 def traced(
@@ -110,15 +84,11 @@ def current() -> Span:
     return trace.get_current_span()
 
 
-def context_of(span: Span) -> Context:
-    return trace.set_span_in_context(span)
-
-
 def annotate(**attributes: Any) -> None:
-    span = trace.get_current_span()
-    if span.is_recording():
+    live = trace.get_current_span()
+    if live.is_recording():
         for key, value in clean(attributes).items():
-            span.set_attribute(key, value)
+            live.set_attribute(key, value)
 
 
 def set_attrs(span: Span, attributes: Attributes) -> None:
@@ -128,13 +98,6 @@ def set_attrs(span: Span, attributes: Attributes) -> None:
 
 
 def event(name: str, attributes: Attributes = None) -> None:
-    span = trace.get_current_span()
-    if span.is_recording():
-        span.add_event(name, clean(attributes))
-
-
-def ids() -> tuple[str, str] | None:
-    context = trace.get_current_span().get_span_context()
-    if not context.is_valid:
-        return None
-    return format(context.trace_id, "032x"), format(context.span_id, "016x")
+    live = trace.get_current_span()
+    if live.is_recording():
+        live.add_event(name, clean(attributes))

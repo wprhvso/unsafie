@@ -1,14 +1,10 @@
 import asyncio
 import logging
 import time
-from collections.abc import Callable
-from typing import Any
 
 from unsafie import telemetry
 
 logger = logging.getLogger(__name__)
-
-GetBot = Callable[[int], Any]
 
 
 class Loop:
@@ -20,18 +16,16 @@ class Loop:
 
     def __init__(self) -> None:
         self._task: asyncio.Task | None = None
-        self.get_bot: GetBot | None = None
 
     async def tick(self) -> None:
         raise NotImplementedError
 
-    def start(self, get_bot: GetBot | None = None) -> None:
+    def start(self) -> None:
         if not self.enabled:
             logger.info("%s disabled", self.name)
             return
         if self._task is not None:
             return
-        self.get_bot = get_bot
         self._task = asyncio.create_task(self._run(), name=self.name)
         logger.info("%s started interval=%ss", self.name, self.interval)
 
@@ -65,8 +59,3 @@ class Loop:
                 "%s tick done in %.1fms", self.name, (time.perf_counter() - started) * 1000
             )
             await asyncio.sleep(max(self.min_interval, self.interval))
-
-
-async def stop_all(loops: list[Loop]) -> None:
-    for loop in reversed(loops):
-        await loop.stop()

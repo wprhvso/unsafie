@@ -1,8 +1,9 @@
 import logging
 
-from unsafie import events
+from unsafie import events, telemetry
 from unsafie.database import SessionLocal
-from unsafie.database.repositories.transcript import TranscriptRepository
+from unsafie.database.repositories.delivery import DeliveryRepository
+from unsafie.database.repositories.segment import SegmentRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.loop import Loop
 from unsafie.settings import settings
@@ -24,7 +25,8 @@ class Janitor(Loop):
 
     async def tick(self) -> None:
         await self._reap()
-        await self._purge()
+        with telemetry.muted():
+            await self._purge()
 
     async def _reap(self) -> None:
         async with SessionLocal() as session:
@@ -39,6 +41,7 @@ class Janitor(Loop):
             events.publish(
                 "turn.reaped",
                 turn_id=str(turn.id),
+                root_id=str(turn.root_id),
                 bot_id=turn.bot_id,
                 chat_id=turn.chat_id,
                 user_id=turn.user_id,
@@ -47,13 +50,10 @@ class Janitor(Loop):
 
     async def _purge(self) -> None:
         async with SessionLocal() as session:
-            gone = await TranscriptRepository(session).purge(settings.transcript_keep_days)
-        if gone:
-            logger.info(
-                "purged %s transcript(s) untouched for %s days",
-                gone,
-                settings.transcript_keep_days,
-            )
+            segments = await SegmentRepository(session).purge(settings.history_keep_days)
+            deliveries = await DeliveryRepository(session).purge(settings.webhook_keep_days)
+        if segments or deliveries:
+            logger.info("purged segments=%s deliveries=%s", segments, deliveries)
 
 
 janitor = Janitor()

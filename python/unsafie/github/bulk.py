@@ -85,12 +85,12 @@ async def _snapshot(client: RepoClient, commit_sha: str) -> int:
 
 
 async def _refuse(full: str, commit_sha: str) -> None:
-    await cluster.lease(name_for(full, commit_sha), settings.snapshot_refused_ttl)
+    await cluster.mark(name_for(full, commit_sha), "refused", settings.snapshot_refused_ttl)
 
 
 async def hydrate(client: RepoClient, commit_sha: str) -> int:
     name = name_for(client.full, commit_sha)
-    if await cluster.leased(name):
+    if await cluster.marked(name):
         return 0
     async with cluster.try_lock(
         name, ttl=settings.snapshot_lock_ttl, wait=settings.snapshot_wait, renew=True
@@ -102,7 +102,7 @@ async def hydrate(client: RepoClient, commit_sha: str) -> int:
                 commit_sha[:7],
             )
             return 0
-        if await cluster.leased(name):
+        if await cluster.marked(name):
             return 0
         try:
             return await _snapshot(client, commit_sha)

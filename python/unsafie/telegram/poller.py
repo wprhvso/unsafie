@@ -125,7 +125,7 @@ class Supervisor(Loop):
             await self._release(bot_id, "the lock is no longer ours")
 
     async def _claim(self, bot_id: int, token: str, restart_mark: str | None) -> None:
-        if await cluster.leased(cooldown_name(bot_id)):
+        if await cluster.marked(cooldown_name(bot_id)):
             return
         held = await cluster.acquire(lock_name(bot_id), ttl=settings.poll_lock_ttl)
         if held is None:
@@ -134,7 +134,7 @@ class Supervisor(Loop):
             self._polling[bot_id] = await self._start(bot_id, token, held, restart_mark)
         except Exception as e:
             await held.release()
-            await cluster.lease(cooldown_name(bot_id), settings.poll_failure_cooldown)
+            await cluster.mark(cooldown_name(bot_id), "1", settings.poll_failure_cooldown)
             logger.exception("bot=%s could not start polling", bot_id)
             events.publish(
                 "bot.crashed", bot_id=bot_id, instance=settings.instance_id, error=str(e)[:500]
@@ -191,7 +191,7 @@ class Supervisor(Loop):
         with contextlib.suppress(Exception):
             await polling.bot.session.close()
         if cooldown:
-            await cluster.lease(cooldown_name(bot_id), settings.poll_failure_cooldown)
+            await cluster.mark(cooldown_name(bot_id), "1", settings.poll_failure_cooldown)
         await polling.held.release()
         events.publish("bot.stopped", bot_id=bot_id, instance=settings.instance_id, reason=why)
         logger.info(

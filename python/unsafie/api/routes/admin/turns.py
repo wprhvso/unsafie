@@ -6,6 +6,7 @@ from unsafie.api.dependencies.paging import paging
 from unsafie.api.schemas.common import Page, PageParams
 from unsafie.api.schemas.models import ResponseRead, TurnDetail, TurnRead
 from unsafie.database import SessionLocal
+from unsafie.database.models.turn_message import TurnMessages
 from unsafie.database.repositories.turn import TurnRepository
 
 router = APIRouter(prefix="/turns", tags=["turns"])
@@ -35,10 +36,14 @@ async def get_turn(turn_id: UUID):
             raise HTTPException(404, "no such turn")
         parent = await repo.get(turn.parent_id) if turn.parent_id else None
         children = await repo.children(turn_id)
+        conversation = await repo.conversation(turn.root_id)
         responses = await repo.responses(turn_id)
+        segment = await session.get(TurnMessages, turn_id)
     return TurnDetail(
         turn=TurnRead.model_validate(turn),
         parent=TurnRead.model_validate(parent) if parent else None,
         children=[TurnRead.model_validate(c) for c in children],
+        conversation=[TurnRead.model_validate(c) for c in conversation],
         responses=[ResponseRead.model_validate(r) for r in responses],
+        messages=segment.count if segment else 0,
     )

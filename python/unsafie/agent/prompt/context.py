@@ -2,16 +2,11 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from unsafie.agent.tools import registry
 from unsafie.agent.tools.base import ToolContext
 from unsafie.database.repositories.user import UserRepository
 from unsafie.scheduler.when import zone
 from unsafie.settings import settings
-
-_PROVIDERS: dict[str, object] = {}
-
-
-def register_context(server: str, provider) -> None:
-    _PROVIDERS[server] = provider
 
 
 async def time_context(session: AsyncSession, ctx: ToolContext) -> str:
@@ -33,11 +28,5 @@ async def time_context(session: AsyncSession, ctx: ToolContext) -> str:
 
 async def build_context(session: AsyncSession, ctx: ToolContext, servers: list[str]) -> str:
     parts = [await time_context(session, ctx)]
-    for server in servers:
-        provider = _PROVIDERS.get(server)
-        if provider is None:
-            continue
-        text = await provider(session, ctx)
-        if text:
-            parts.append(text)
+    parts += await registry.context_for(session, ctx, servers)
     return "\n".join(parts)

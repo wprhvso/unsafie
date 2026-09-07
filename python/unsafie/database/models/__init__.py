@@ -14,8 +14,8 @@ from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch, WatchMode
 from unsafie.database.models.subscription import GithubSubscription
 from unsafie.database.models.transaction import Transaction
-from unsafie.database.models.transcript import Transcript
 from unsafie.database.models.turn import Turn, TurnStatus
+from unsafie.database.models.turn_message import TurnMessages
 from unsafie.database.models.update import Update
 from unsafie.database.models.user import User
 from unsafie.database.models.webhook_delivery import WebhookDelivery
@@ -42,8 +42,8 @@ __all__ = [
     "SshWatch",
     "TaskKind",
     "Transaction",
-    "Transcript",
     "Turn",
+    "TurnMessages",
     "TurnStatus",
     "Update",
     "User",

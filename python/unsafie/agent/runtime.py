@@ -1,7 +1,6 @@
 import json
 import logging
 import time
-import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,10 +10,11 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
 
 from unsafie import events, telemetry
-from unsafie.agent import billing, credentials, loop, queue, request, transcripts, turns
+from unsafie.agent import billing, credentials, loop, queue, request, segments, turns
+from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.request import DEFAULT_EFFORT
-from unsafie.agent.tools import ToolContext, available_servers, build_tools
+from unsafie.agent.tools import ToolContext, build_tools, enabled
 from unsafie.agent.trace import Recorder
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
@@ -108,7 +108,9 @@ async def _punish(credential, result: loop.Result) -> None:
     )
 
 
-async def _execute(ctx: ToolContext, messages: list[dict], servers: list[str]) -> Outcome:
+async def _execute(
+    ctx: ToolContext, messages: list[dict], servers: list[str], system_prompt: str
+) -> Outcome:
     prefix = ctx.prefix
     tried: set[int] = set()
     spent = 0.0
@@ -138,7 +140,7 @@ async def _execute(ctx: ToolContext, messages: list[dict], servers: list[str]) -
                 logger.warning("%s stopped: budget %.6f is spent", prefix, budget)
                 return Outcome("ok" if spent else "empty_balance", cost_usd=spent)
 
-            definitions, bound = build_tools(ctx, servers)
+            definitions, tools = build_tools(ctx, servers)
             telemetry.set_attrs(
                 attempt_span,
                 {
@@ -179,22 +181,18 @@ async def _execute(ctx: ToolContext, messages: list[dict], servers: list[str]) -
                     attrs.TURN_ID: str(ctx.turn_id),
                 },
             ) as query_span:
-                recorder = Recorder(prefix, query_span)
-                ctx.trace.capture()
-                try:
-                    result = await loop.run(
-                        ctx,
-                        messages=messages,
-                        credential=credential,
-                        model=model,
-                        effort=effort,
-                        budget_usd=left,
-                        definitions=definitions,
-                        bound=bound,
-                        recorder=recorder,
-                    )
-                finally:
-                    ctx.trace.release()
+                result = await loop.run(
+                    ctx,
+                    messages=messages,
+                    credential=credential,
+                    model=model,
+                    prompt=system_prompt,
+                    effort=effort,
+                    budget_usd=left,
+                    definitions=definitions,
+                    tools=tools,
+                    recorder=Recorder(prefix),
+                )
                 elapsed = (time.perf_counter() - started) * 1000
                 spent += result.cost_usd
                 _usage(query_span, result)
@@ -286,76 +284,50 @@ def _failure_text(locale: str, outcome: Outcome) -> str:
     return t("agent-failure", locale)
 
 
-async def _set_session(turn: Turn, session_id: str) -> None:
-    async with SessionLocal() as session:
-        await TurnRepository(session).set_session(turn.id, session_id)
-    turn.session_id = session_id
-
-
-async def _history(plan: turns.Plan, prefix: str) -> tuple[list[dict], str, bool]:
-    turn = plan.turn
-    if plan.resume is None:
-        return [], plan.session_id or str(uuid.uuid4()), False
-    if plan.fork:
-        forked = await transcripts.fork(plan.resume, plan.fork_at or 0, turn.bot_id, turn.chat_id)
-        if forked is None:
-            started = str(uuid.uuid4())
-            logger.warning("%s transcript %s is gone, starting %s", prefix, plan.resume, started)
-            return [], started, True
-        session_id, messages = forked
-        return messages, session_id, False
-    messages = await transcripts.load(plan.resume)
-    if messages is None:
-        started = str(uuid.uuid4())
-        logger.warning(
-            "%s transcript %s is nowhere to be found, starting %s", prefix, plan.resume, started
-        )
-        return [], started, True
-    return messages, plan.resume, False
-
-
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
     ctx = ToolContext(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
     prefix = ctx.prefix
-    messages, session_id, lost = await _history(plan, prefix)
-    if session_id != turn.session_id:
-        await _set_session(turn, session_id)
-    if lost:
+    history = await segments.load(turn)
+    system_prompt = history.system or SYSTEM_PROMPT
+    snapshot = None if history.system else system_prompt
+    messages = history.messages
+    if history.lost:
+        logger.warning("%s has a parent but no stored history, starting over", prefix)
         prompt = LOST_CONTEXT + "\n\n" + prompt
     status = TurnStatus.FAILED
     note: str | None = None
     events.publish(
         "turn.started",
         turn_id=str(turn.id),
+        root_id=str(turn.root_id),
         bot_id=turn.bot_id,
         chat_id=turn.chat_id,
         user_id=turn.user_id,
-        resume=plan.resume is not None,
-        fork=plan.fork,
+        resumed=len(messages),
     )
     with telemetry.span(
         "agent.turn",
         attributes={
             attrs.TURN_ID: str(turn.id),
+            attrs.ROOT_ID: str(turn.root_id),
             attrs.BOT_ID: turn.bot_id,
             attrs.CHAT_ID: turn.chat_id,
             attrs.USER_ID: turn.user_id,
             attrs.LOCALE: locale,
-            attrs.RESUME: plan.resume,
-            attrs.FORK: plan.fork,
-            attrs.GEN_AI_CONVERSATION: session_id,
+            attrs.GEN_AI_CONVERSATION: str(turn.root_id),
         },
     ) as turn_span:
+        base = len(messages)
         try:
             async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
                 with telemetry.span("agent.context"):
                     async with SessionLocal() as session:
-                        servers = await available_servers(session, ctx)
+                        servers = await enabled(session, ctx)
                         context = await build_context(session, ctx, servers)
                 messages.append(request.user(prompt, context))
                 while True:
-                    outcome = await _execute(ctx, messages, servers)
+                    outcome = await _execute(ctx, messages, servers, system_prompt)
                     if outcome.status != "ok":
                         await queue.clear(turn.id)
                         note = (
@@ -378,13 +350,8 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             note = "crashed"
             await notify(bot, turn, t("agent-failure", locale))
         finally:
-            await turns.abandon(turn.id)
-            if turn.session_id and messages:
-                stored = await transcripts.save(
-                    turn.session_id, turn.bot_id, turn.chat_id, messages
-                )
-                async with SessionLocal() as session:
-                    await TurnRepository(session).set_transcript_lines(turn.id, stored)
+            await turns.seal(turn.id)
+            await segments.save(turn, messages[base:], snapshot)
             async with SessionLocal() as session:
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)
@@ -400,6 +367,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             events.publish(
                 "turn.finished",
                 turn_id=str(turn.id),
+                root_id=str(turn.root_id),
                 bot_id=turn.bot_id,
                 chat_id=turn.chat_id,
                 user_id=turn.user_id,
@@ -442,9 +410,8 @@ async def dispatch(
             span,
             {
                 attrs.TURN_ID: str(plan.turn.id),
+                attrs.ROOT_ID: str(plan.turn.root_id),
                 attrs.INJECTED: plan.inject,
-                attrs.RESUME: plan.resume,
-                attrs.FORK: plan.fork,
             },
         )
     prompt = build_prompt(plan.in_context)

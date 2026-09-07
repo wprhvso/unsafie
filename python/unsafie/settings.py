@@ -53,7 +53,6 @@ class Settings(BaseSettings):
     poll_failure_cooldown: float = 60.0
 
     job_lease: float = 300.0
-    job_lock_ttl: float = 60.0
     chat_lock_ttl: float = 30.0
     chat_lock_wait: float = 60.0
     repo_lock_ttl: float = 120.0
@@ -63,8 +62,9 @@ class Settings(BaseSettings):
     snapshot_refused_ttl: float = 86_400.0
     queue_ttl: float = 86_400.0
     installation_token_ttl: float = 2_900.0
-    transcript_max_bytes: int = 33_554_432
-    transcript_keep_days: int = 30
+    history_max_bytes: int = 33_554_432
+    history_keep_days: int = 30
+    lineage_depth: int = 500
     shutdown_grace: float = 90.0
     presence_interval: float = 10.0
     turn_heartbeat: float = 15.0
@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     webhook_batch: int = 20
     webhook_worker_interval: float = 2.0
     webhook_max_attempts: int = 5
+    webhook_keep_days: int = 7
 
     log_level: str = "INFO"
     log_truncate: int = 2000
@@ -135,13 +136,6 @@ class Settings(BaseSettings):
     agent_max_nudges: int = 200
     agent_tool_timeout: float = 600.0
 
-    chats_dir: Path = Path("chats")
-    claude_config_dir: Path = Field(
-        default_factory=lambda: Path.home() / ".claude",
-        validation_alias="CLAUDE_CONFIG_DIR",
-    )
-    lineage_depth: int = 500
-
     public_base_url: str = "https://unsafie.com"
     github_base_url: str = "https://github.unsafie.com"
     share_base_url: str = "https://unsafie.com"
@@ -170,8 +164,6 @@ class Settings(BaseSettings):
     github_bulk_max_bytes: int = 104_857_600
     github_bulk_extract_bytes: int = 268_435_456
     github_bulk_file_bytes: int = 4_194_304
-    webhook_keep_days: int = 7
-    webhook_cleanup_interval: int = 3600
 
     ssh_connect_timeout: float = 10.0
     ssh_command_timeout: float = 120.0
@@ -199,14 +191,7 @@ class Settings(BaseSettings):
     events_batch: int = 100
     events_block: float = 20.0
 
-    @field_validator(
-        "fluent_dir",
-        "static_dir",
-        "chats_dir",
-        "claude_config_dir",
-        "github_cache_dir",
-        mode="before",
-    )
+    @field_validator("fluent_dir", "static_dir", "github_cache_dir", mode="before")
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v

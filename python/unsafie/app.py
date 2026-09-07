@@ -15,7 +15,6 @@ from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
 from unsafie.github.cache import sweeper
 from unsafie.github.client.base import close_session
-from unsafie.github.webhooks.cleanup import cleanup
 from unsafie.github.webhooks.worker import worker
 from unsafie.janitor import janitor
 from unsafie.log import setup
@@ -32,6 +31,8 @@ setup()
 telemetry.setup()
 logger = logging.getLogger(__name__)
 
+LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI):
             events.bus.start()
         await upgrade()
         with telemetry.detached():
-            for loop in (cleanup, runner, watchdog, sweeper, supervisor, worker, janitor, presence):
+            for loop in LOOPS:
                 loop.start()
         logger.info("lifespan ready")
     yield
@@ -51,7 +52,7 @@ async def lifespan(app: FastAPI):
         await supervisor.pause()
         if left := await turns.drain(settings.shutdown_grace):
             logger.warning("%s turn(s) still running after the grace period: %s", len(left), left)
-        for loop in (supervisor, presence, janitor, worker, sweeper, watchdog, runner, cleanup):
+        for loop in reversed(LOOPS):
             await loop.stop()
         await pool.close_all()
         await bots.close_all()

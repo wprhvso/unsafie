@@ -3,7 +3,7 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from uuid import UUID
 
 from aiogram import Bot
@@ -28,7 +28,6 @@ class ToolContext:
     user_id: int
     turn_id: UUID
     locale: str = "en"
-    trace: telemetry.Anchor = field(default_factory=telemetry.Anchor)
 
     @property
     def prefix(self) -> str:
@@ -80,7 +79,6 @@ def guarded(fn: Handler) -> Handler:
         counters = metrics.start()
         with telemetry.span(
             f"tool.{name}",
-            parent=ctx.trace.context,
             attributes={
                 attrs.GEN_AI_OPERATION: "execute_tool",
                 attrs.GEN_AI_TOOL_NAME: name,
