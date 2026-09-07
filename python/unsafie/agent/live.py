@@ -1,15 +1,3 @@
-"""Everything a turn does, streamed out for a human to watch.
-
-One Redis stream per turn (`unsafie:live:<turn_id>`), one entry per frame, plus a
-token that points at it (`unsafie:live:token:<TOKEN>`). Both expire together after
-`LIVE_TTL`, so nothing here needs cleaning up and nothing lands in Postgres: the
-page is a window into a running turn, not an archive.
-
-Writes are buffered and flushed on a timer. Model output arrives as hundreds of
-tiny deltas per second, and adjacent deltas of the same block are concatenated in
-the buffer, so a chatty step costs a dozen round-trips instead of a thousand.
-"""
-
 import asyncio
 import contextlib
 import json
@@ -56,7 +44,6 @@ def _now() -> str:
 
 
 def clip(value: str, limit: int | None = None) -> tuple[str, int]:
-    """Cut a string to the limit and report how much was left out."""
     limit = settings.live_max_text if limit is None else limit
     if len(value) <= limit:
         return value, 0
@@ -71,8 +58,6 @@ class Frame:
 
 
 class Live:
-    """The writing end of one turn's stream."""
-
     def __init__(self, turn_id: UUID, token: str) -> None:
         self.turn_id = turn_id
         self.token = token
@@ -88,13 +73,10 @@ class Live:
     def url(self) -> str:
         return url(self.token)
 
-    # ------------------------------------------------------------------ writing
-
     def emit(self, kind: str, /, **data: Any) -> None:
         self._push(Frame(kind, _now(), data))
 
     def append(self, kind: str, step: int, index: int, text: str) -> None:
-        """Add a piece of a streaming block, glued onto the previous piece if it fits."""
         if not text or self._full:
             return
         last = self._buffer[-1] if self._buffer else None
@@ -114,8 +96,6 @@ class Live:
         self._push(frame)
 
     def _push(self, frame: Frame) -> None:
-        # A stream that hit its ceiling still gets to say it is over: a page that
-        # never sees turn.end spins forever.
         if self._full and frame.kind != "turn.end":
             return
         if len(self._buffer) >= settings.live_queue:
@@ -201,7 +181,6 @@ async def _allocate(turn_id: UUID) -> str | None:
 
 
 async def begin(turn_id: UUID) -> Live | None:
-    """Hand out a token and open the stream. None means the turn runs unwatched."""
     if not settings.live_enabled:
         return None
     try:
@@ -228,7 +207,6 @@ async def end(turn_id: UUID) -> None:
 
 
 async def seal(turn_id: UUID, **data: Any) -> None:
-    """Close a stream whose writer is gone — a reaped turn, an instance that died."""
     if turn_id in _streams:
         return
     body = json.dumps(
@@ -253,13 +231,9 @@ def of(turn_id: UUID | None) -> Live | None:
 
 
 def emit(turn_id: UUID | None, kind: str, /, **data: Any) -> None:
-    """Fire and forget from anywhere: unwatched turns simply drop it."""
     stream = of(turn_id)
     if stream is not None:
         stream.emit(kind, **data)
-
-
-# ------------------------------------------------------------------------ reading
 
 
 async def turn_of(token: str) -> UUID | None:
@@ -308,7 +282,6 @@ async def history(turn_id: UUID, after: str | None = None, limit: int | None = N
 
 
 async def follow(turn_id: UUID, after: str | None = None) -> AsyncIterator[dict | str]:
-    """Replay from `after` (or the very beginning) and then hang on new frames."""
     client = cluster.client()
     key = stream_key(turn_id)
     if after is not None:

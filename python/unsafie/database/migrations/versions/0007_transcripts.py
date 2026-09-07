@@ -1,11 +1,3 @@
-"""agent transcripts in postgres
-
-Revision ID: 0007
-Revises: 0006
-Create Date: 2026-09-07 10:00:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

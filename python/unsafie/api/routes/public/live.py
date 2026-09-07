@@ -1,10 +1,3 @@
-"""The public read side of a turn's live stream.
-
-The token in the URL is the whole authorisation: whoever holds the link sees the
-turn, and the link dies with the stream. Nothing else about the account, the chat
-or the other conversations is reachable from here.
-"""
-
 import asyncio
 import json
 import logging
@@ -65,7 +58,6 @@ async def snapshot(
     after: str | None = None,
     limit: int = Query(default=20_000, ge=1, le=100_000),
 ):
-    """Everything recorded so far, so a page can open in the middle of a turn."""
     turn_id = await _resolve(token)
     async with SessionLocal() as session:
         turn = await TurnRepository(session).get(turn_id)
@@ -84,8 +76,6 @@ async def snapshot(
 
 
 def _sse(item: dict) -> str:
-    # Deliberately unnamed: the kind travels inside the payload, so one listener
-    # on the page catches everything, including kinds it has never heard of.
     payload = json.dumps(item, ensure_ascii=False, default=str)
     return f"id: {item.get('id', '')}\ndata: {payload}\n\n"
 
@@ -135,7 +125,6 @@ async def stream(
     after: str | None = Query(default=None),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ):
-    """Server-sent events: replay from `after`, then everything as it happens."""
     turn_id = await _resolve(token)
     return StreamingResponse(
         _body(request, turn_id, after or last_event_id or None),

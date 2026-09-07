@@ -24,7 +24,6 @@ def usd_to_units(usd: Decimal) -> int:
 
 
 def parse_usd(raw: str) -> int | None:
-    """Dollars into units: '0.5', '0,5', '$0.5'. Anything negative means "no limit"."""
     cleaned = raw.replace(",", ".").replace("$", "").replace(" ", "").strip()
     try:
         value = Decimal(cleaned)
@@ -45,19 +44,15 @@ def charge_units(cost_usd: float | None, ratio: float) -> int:
 
 @dataclass
 class Hold:
-    """Money reserved on the balance for as long as the turn runs."""
-
     user_id: int
     turn_id: UUID
     units: int
     balance: int
 
     def usd(self, ratio: float) -> float:
-        """What is still reserved, as dollars the provider will bill at this ratio."""
         return self.units / UNITS_PER_USD / ratio
 
     async def spend(self, charge: int) -> int:
-        """The money really left the balance: charge it and shrink the reservation."""
         async with SessionLocal() as session:
             user = await UserRepository(session).charge(self.user_id, charge)
             await TurnRepository(session).unhold(self.turn_id, min(charge, self.units))
@@ -65,7 +60,6 @@ class Hold:
         return user.balance
 
     async def release(self) -> None:
-        """Whatever was not spent goes back to the balance."""
         units, self.units = self.units, 0
         if units <= 0:
             return
@@ -75,7 +69,6 @@ class Hold:
 
 @asynccontextmanager
 async def hold(user_id: int, turn_id: UUID) -> AsyncIterator[Hold]:
-    """Lock the whole per-turn budget upfront: the balance cannot go negative."""
     async with SessionLocal() as session:
         user = await UserRepository(session).get_or_create(user_id)
         reserved = await TurnRepository(session).hold(turn_id, user_id, user.budget)

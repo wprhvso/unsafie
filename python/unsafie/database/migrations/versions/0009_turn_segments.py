@@ -1,11 +1,3 @@
-"""history as per-turn segments instead of one blob per session
-
-Revision ID: 0009
-Revises: 0008
-Create Date: 2026-09-07 16:00:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

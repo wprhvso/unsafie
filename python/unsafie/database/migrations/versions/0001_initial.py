@@ -1,11 +1,3 @@
-"""initial schema
-
-Revision ID: 0001
-Revises:
-Create Date: 2026-09-04 12:00:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

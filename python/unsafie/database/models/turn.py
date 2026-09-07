@@ -43,7 +43,6 @@ class Turn(Base):
     )
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     charge: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
-    # Money reserved on the balance while the turn runs: spendable is balance - sum(locked).
     locked: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     num_turns: Mapped[int] = mapped_column(default=0, server_default="0")
     result: Mapped[str | None] = mapped_column(Text, nullable=True)

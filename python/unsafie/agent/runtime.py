@@ -75,7 +75,6 @@ async def _bill(
 ) -> int:
     charge = billing.charge_units(result.cost_usd, ratio)
     if charge:
-        # The reservation shrinks by exactly what left the balance, so the rest stays locked.
         balance = await held.spend(charge)
         logger.info("%s charged %s, balance now %s", ctx.prefix, charge, balance)
     async with SessionLocal() as session:
@@ -140,7 +139,6 @@ async def _execute(
                 model = user.model or settings.claude_model
                 effort = user.effort or DEFAULT_EFFORT
 
-            # Only what is locked can be spent, and it shrinks as the money actually goes.
             left = held.usd(ratio)
             if left <= 0:
                 empty = "busy" if held.balance > 0 else "empty_balance"
@@ -290,7 +288,6 @@ async def _execute(
 
 
 async def announce(bot: Bot, turn: Turn, locale: str, stream: live.Live) -> None:
-    """Hand the user the link to watch this turn happen."""
     if not settings.live_link:
         return
     try:
@@ -305,7 +302,6 @@ async def announce(bot: Bot, turn: Turn, locale: str, stream: live.Live) -> None
             preview=False,
         )
     except Exception:
-        # A turn must never die because its watch link could not be delivered.
         logger.warning("turn=%s live link not delivered", turn.id, exc_info=True)
 
 
@@ -392,7 +388,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                         servers = await enabled(session, ctx)
                         context = await build_context(session, ctx, servers)
                 messages.append(request.user(prompt, context))
-                # The whole per-turn budget is locked on the balance until the turn is over.
                 async with billing.hold(turn.user_id, turn.id) as held:
                     telemetry.annotate(**{attrs.LOCKED: held.units})
                     while True:

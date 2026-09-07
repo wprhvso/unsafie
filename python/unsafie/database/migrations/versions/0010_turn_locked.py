@@ -1,11 +1,3 @@
-"""money a running turn keeps reserved on the balance
-
-Revision ID: 0010
-Revises: 0009
-Create Date: 2026-09-07 12:50:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

@@ -1,11 +1,3 @@
-"""per-user effort
-
-Revision ID: 0003
-Revises: 0002
-Create Date: 2026-09-05 07:30:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

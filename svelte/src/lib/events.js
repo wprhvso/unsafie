@@ -10,7 +10,7 @@ export function subscribe({ kinds, match, onEvent, onGap } = {}) {
     try {
       onEvent?.(JSON.parse(e.data));
     } catch {
-      /* empty */
+      void 0;
     }
   };
   source.addEventListener('message', handler);

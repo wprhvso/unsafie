@@ -1,11 +1,3 @@
-"""personal access tokens instead of oauth
-
-Revision ID: 0004
-Revises: 0003
-Create Date: 2026-09-05 16:10:00
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

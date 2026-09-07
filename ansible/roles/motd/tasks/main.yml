@@ -10,10 +10,6 @@
     - 95-hwe-eol
   failed_when: false
 
-# 50-motd-news is not only run by run-parts from pam_motd: motd-news.service
-# execs it directly (ExecStart=/etc/update-motd.d/50-motd-news --force), so
-# dropping the exec bit makes the unit fail with 203/EXEC on every timer run.
-# Keep it executable, the news are switched off by ENABLED=0 below anyway.
 - name: keep 50-motd-news executable
   ansible.builtin.file:
     path: /etc/update-motd.d/50-motd-news
