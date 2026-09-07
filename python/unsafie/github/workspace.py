@@ -116,7 +116,7 @@ async def load_tree(state: Session) -> Tree:
     data = await state.client.tree(worktree.base_tree_sha)
     if data.get("truncated"):
         logger.warning("%s tree is truncated by github", state.label)
-    state.tree = Tree(data.get("tree", []), state.overlay)
+    state.tree = Tree(data.get("tree", []), state.overlay, bool(data.get("truncated")))
     return state.tree
 
 
