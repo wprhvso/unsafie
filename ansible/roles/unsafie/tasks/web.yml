@@ -21,6 +21,7 @@
     group: root
     mode: "0644"
   loop:
+    - { src: upstream.conf.j2, name: "unsafie-upstream" }
     - { src: vhost.conf.j2, name: "unsafie-{{ unsafie_domain }}" }
     - { src: vhost-github.conf.j2, name: "unsafie-{{ unsafie_github_domain }}" }
   notify: reload nginx
@@ -31,6 +32,7 @@
     dest: "/etc/nginx/sites-enabled/{{ item }}.conf"
     state: link
   loop:
+    - "unsafie-upstream"
     - "unsafie-{{ unsafie_domain }}"
     - "unsafie-{{ unsafie_github_domain }}"
   notify: reload nginx

@@ -293,6 +293,7 @@ class OverviewRead(BaseModel):
     chats: int
     bots: int
     bots_running: int
+    instances: int = 0
     running_turns: int
     credentials: int
     credentials_total: int

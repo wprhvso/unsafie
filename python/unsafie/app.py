@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
 from unsafie import cluster, events, telemetry
+from unsafie.agent import turns
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
@@ -17,6 +18,7 @@ from unsafie.github.webhooks.cleanup import cleanup
 from unsafie.github.webhooks.worker import worker
 from unsafie.janitor import janitor
 from unsafie.log import setup
+from unsafie.presence import presence
 from unsafie.scheduler.runner import runner
 from unsafie.settings import settings
 from unsafie.ssh.pool import pool
@@ -39,13 +41,16 @@ async def lifespan(app: FastAPI):
             events.bus.start()
         await upgrade()
         with telemetry.detached():
-            for loop in (cleanup, runner, watchdog, sweeper, supervisor, worker, janitor):
+            for loop in (cleanup, runner, watchdog, sweeper, supervisor, worker, janitor, presence):
                 loop.start()
         logger.info("lifespan ready")
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
         logger.info("lifespan shutdown")
-        for loop in (supervisor, janitor, worker, sweeper, watchdog, runner, cleanup):
+        await supervisor.pause()
+        if left := await turns.drain(settings.shutdown_grace):
+            logger.warning("%s turn(s) still running after the grace period: %s", len(left), left)
+        for loop in (supervisor, presence, janitor, worker, sweeper, watchdog, runner, cleanup):
             await loop.stop()
         await pool.close_all()
         await bots.close_all()

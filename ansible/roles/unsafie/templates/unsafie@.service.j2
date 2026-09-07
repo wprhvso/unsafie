@@ -1,5 +1,5 @@
 [Unit]
-Description=unsafie
+Description=unsafie (%i)
 After=network-online.target postgresql.service redis-server.service
 Wants=network-online.target redis-server.service
 Requires=postgresql.service
@@ -10,6 +10,7 @@ User={{ unsafie_user }}
 Group={{ unsafie_group }}
 WorkingDirectory={{ unsafie_src }}/python
 EnvironmentFile={{ unsafie_config_dir }}/app.env
+EnvironmentFile={{ unsafie_config_dir }}/app-%i.env
 Environment=HOME={{ unsafie_home }}
 Environment=PYTHONUNBUFFERED=1
 ExecStart={{ unsafie_venv }}/bin/python -m unsafie
@@ -32,7 +33,7 @@ RestrictSUIDSGID=true
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=unsafie
+SyslogIdentifier=unsafie-%i
 
 [Install]
 WantedBy=multi-user.target

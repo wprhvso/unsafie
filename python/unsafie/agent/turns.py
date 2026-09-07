@@ -150,8 +150,28 @@ async def _beat(turn_id: UUID) -> None:
             logger.warning("turn=%s heartbeat failed", turn_id, exc_info=True)
 
 
+_here: set[UUID] = set()
+_idle = asyncio.Event()
+_idle.set()
+
+
+def busy() -> list[UUID]:
+    return sorted(_here)
+
+
+async def drain(grace: float) -> list[UUID]:
+    if not _here:
+        return []
+    logger.info("waiting up to %ss for turn(s) %s to finish", grace, busy())
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(_idle.wait(), timeout=grace)
+    return busy()
+
+
 @contextlib.asynccontextmanager
 async def alive(turn_id: UUID) -> AsyncIterator[None]:
+    _here.add(turn_id)
+    _idle.clear()
     task = asyncio.create_task(_beat(turn_id), name=f"heartbeat:{turn_id}")
     try:
         yield
@@ -159,3 +179,6 @@ async def alive(turn_id: UUID) -> AsyncIterator[None]:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+        _here.discard(turn_id)
+        if not _here:
+            _idle.set()

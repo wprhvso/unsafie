@@ -18,6 +18,7 @@ from unsafie.telegram.middleware import UpdateMiddleware
 logger = logging.getLogger(__name__)
 
 RESTART_TTL = 86_400.0
+PAUSE_TIMEOUT = 15.0
 
 
 def lock_name(bot_id: int) -> str:
@@ -89,6 +90,18 @@ class Supervisor(Loop):
             for bot_id, token in wanted.items():
                 if bot_id not in self._polling:
                     await self._claim(bot_id, token, marks.get(restart_name(bot_id)))
+
+    async def pause(self) -> None:
+        for bot_id in self.ids():
+            polling = self._polling[bot_id]
+            try:
+                await asyncio.wait_for(polling.dispatcher.stop_polling(), timeout=PAUSE_TIMEOUT)
+            except RuntimeError:
+                continue
+            except TimeoutError:
+                logger.warning("bot=%s did not acknowledge the stop in %ss", bot_id, PAUSE_TIMEOUT)
+                continue
+            logger.info("bot=%s stopped fetching updates, lease still held", bot_id)
 
     async def on_stop(self) -> None:
         for bot_id in self.ids():

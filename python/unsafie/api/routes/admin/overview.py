@@ -17,7 +17,7 @@ from unsafie.database.models.webhook_delivery import WebhookDelivery
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.github import GithubAppRepository
 from unsafie.database.repositories.stats import StatsRepository
-from unsafie.ssh.pool import pool
+from unsafie.presence import instances
 from unsafie.telegram import poller
 
 router = APIRouter(tags=["overview"])
@@ -35,6 +35,7 @@ async def overview():
         counts = await stats.counts()
         app = await GithubAppRepository(session).get()
         polled = await poller.polled_by(await BotRepository(session).ids())
+        alive = await instances()
         data = OverviewRead(
             users=counts["users"],
             chats=counts["chats"],
@@ -50,7 +51,8 @@ async def overview():
             watches=await _count(session, SshWatch),
             watches_alerting=await _count(session, SshWatch, SshWatch.alerting.is_(True)),
             ssh_hosts=await _count(session, SshHost),
-            ssh_connections=len([s for s in pool.stats() if s["alive"]]),
+            instances=len(alive),
+            ssh_connections=sum(int(i.get("ssh_connections") or 0) for i in alive),
             deliveries_pending=await _count(
                 session, WebhookDelivery, WebhookDelivery.processed_at.is_(None)
             ),

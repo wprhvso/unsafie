@@ -13,3 +13,34 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Install the templated unit for extra instances
+  when: unsafie_instances | length > 0
+  ansible.builtin.template:
+    src: unsafie@.service.j2
+    dest: /etc/systemd/system/unsafie@.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Write the environment of every extra instance
+  loop: "{{ unsafie_instances }}"
+  loop_control:
+    label: "{{ item.name }}"
+  ansible.builtin.template:
+    src: instance.env.j2
+    dest: "{{ unsafie_config_dir }}/app-{{ item.name }}.env"
+    owner: root
+    group: "{{ unsafie_group }}"
+    mode: "0640"
+  register: unsafie_instance_env
+
+- name: Enable and start every extra instance
+  loop: "{{ unsafie_instances }}"
+  loop_control:
+    label: "{{ item.name }}"
+  ansible.builtin.systemd_service:
+    name: "unsafie@{{ item.name }}"
+    enabled: true
+    state: "{{ 'restarted' if unsafie_instance_env is changed else 'started' }}"
+    daemon_reload: true

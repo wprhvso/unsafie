@@ -1,0 +1,8 @@
+# managed by ansible
+upstream unsafie_app {
+    server {{ unsafie_host }}:{{ unsafie_port }} max_fails=3 fail_timeout=10s;
+{% for instance in unsafie_instances if instance.role in ['all', 'web'] %}
+    server {{ unsafie_host }}:{{ instance.port }} max_fails=3 fail_timeout=10s;
+{% endfor %}
+    keepalive 16;
+}

@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     installation_token_ttl: float = 2_900.0
     transcript_max_bytes: int = 33_554_432
     transcript_keep_days: int = 30
+    shutdown_grace: float = 90.0
+    presence_interval: float = 10.0
     turn_heartbeat: float = 15.0
     turn_stale_after: float = 90.0
     janitor_interval: float = 30.0
