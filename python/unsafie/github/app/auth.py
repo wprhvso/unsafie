@@ -1,9 +1,9 @@
 import logging
 import time
-from datetime import UTC, datetime, timedelta
 
 import jwt
 
+from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.repositories.github import GithubAppRepository
@@ -14,9 +14,10 @@ from unsafie.settings import settings
 logger = logging.getLogger(__name__)
 
 JWT_TTL = 540
-INSTALLATION_TTL = timedelta(minutes=50)
 
-_installation_cache: dict[int, tuple[str, datetime]] = {}
+
+def token_key(installation_id: int) -> str:
+    return cluster.key("installation", installation_id, "token")
 
 
 async def load_app() -> GithubApp:
@@ -38,8 +39,9 @@ def app_jwt(app: GithubApp) -> str:
     return jwt.encode(payload, app.private_key, algorithm="RS256")
 
 
-def forget_installation(installation_id: int) -> None:
-    _installation_cache.pop(installation_id, None)
+async def forget_installation(installation_id: int) -> None:
+    await cluster.client().delete(token_key(installation_id))
+    logger.info("installation=%s token forgotten", installation_id)
 
 
 async def _as_app(method: str, path: str) -> tuple[int, dict | list]:
@@ -56,10 +58,9 @@ async def _as_app(method: str, path: str) -> tuple[int, dict | list]:
 
 
 async def installation_token(installation_id: int) -> str:
-    cached = _installation_cache.get(installation_id)
-    now = datetime.now(UTC)
-    if cached and cached[1] > now:
-        return cached[0]
+    cached = await cluster.client().get(token_key(installation_id))
+    if cached:
+        return cached
     status, data = await _as_app("POST", f"/app/installations/{installation_id}/access_tokens")
     if status >= 400 or not isinstance(data, dict):
         message = data.get("message") if isinstance(data, dict) else data
@@ -68,7 +69,9 @@ async def installation_token(installation_id: int) -> str:
             "The App may have been removed from this account."
         )
     token = data["token"]
-    _installation_cache[installation_id] = (token, now + INSTALLATION_TTL)
+    await cluster.client().set(
+        token_key(installation_id), token, px=int(settings.installation_token_ttl * 1000)
+    )
     logger.info("installation=%s token issued", installation_id)
     return token
 

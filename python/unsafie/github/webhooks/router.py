@@ -78,7 +78,7 @@ async def _lifecycle(event: str, payload: dict) -> None:
         installations = InstallationRepository(session)
         if event == "installation":
             if action in ("deleted", "suspend"):
-                auth.forget_installation(installation_id)
+                await auth.forget_installation(installation_id)
                 await installations.set_suspended(installation_id, True)
                 logger.info("installation=%s suspended (%s)", installation_id, action)
                 return

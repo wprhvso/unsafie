@@ -2,11 +2,12 @@ import asyncio
 import contextlib
 import logging
 import uuid
-from collections import defaultdict
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
+from unsafie import cluster
+from unsafie.agent import queue
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
@@ -14,11 +15,6 @@ from unsafie.database.repositories.update import UpdateRepository
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
-
-ChatKey = tuple[int, int]
-
-chat_locks: dict[ChatKey, asyncio.Lock] = defaultdict(asyncio.Lock)
-running: set[UUID] = set()
 
 
 @dataclass(frozen=True)
@@ -31,6 +27,28 @@ class Plan:
     in_context: bool
 
 
+def chat_lock(bot_id: int, chat_id: int) -> str:
+    return f"chat:{bot_id}:{chat_id}"
+
+
+def running_key(turn_id: UUID) -> str:
+    return cluster.key("running", turn_id)
+
+
+async def mark_running(turn_id: UUID) -> None:
+    await cluster.client().set(
+        running_key(turn_id), settings.instance_id, px=int(settings.turn_stale_after * 1000)
+    )
+
+
+async def is_running(turn_id: UUID) -> str | None:
+    return await cluster.client().get(running_key(turn_id))
+
+
+async def abandon(turn_id: UUID) -> None:
+    await cluster.client().delete(running_key(turn_id))
+
+
 async def route(
     *,
     bot_id: int,
@@ -40,17 +58,26 @@ async def route(
     update_db_id: int | None,
 ) -> Plan:
     prefix = f"bot={bot_id} chat={chat_id}"
-    async with chat_locks[(bot_id, chat_id)]:
+    async with cluster.lock(
+        chat_lock(bot_id, chat_id),
+        ttl=settings.chat_lock_ttl,
+        wait=settings.chat_lock_wait,
+        renew=True,
+    ):
         async with SessionLocal() as session:
             turns = TurnRepository(session)
             updates = UpdateRepository(session)
             owner = await turns.owner(bot_id, chat_id, reply_to) if reply_to is not None else None
 
-            if owner is not None and owner.id in running:
+            if owner is not None and (where := await is_running(owner.id)):
                 if update_db_id is not None:
                     await updates.attach(update_db_id, owner.id)
                 logger.info(
-                    "%s reply_to=%s -> inject into running turn=%s", prefix, reply_to, owner.id
+                    "%s reply_to=%s -> inject into turn=%s running on %s",
+                    prefix,
+                    reply_to,
+                    owner.id,
+                    where,
                 )
                 return Plan(owner, None, False, None, inject=True, in_context=True)
 
@@ -76,7 +103,7 @@ async def route(
             )
             if update_db_id is not None:
                 await updates.attach(update_db_id, turn.id)
-            running.add(turn.id)
+            await mark_running(turn.id)
             logger.info(
                 "%s reply_to=%s owner=%s -> turn=%s (%s) resume=%s",
                 prefix,
@@ -89,22 +116,21 @@ async def route(
             return Plan(turn, resume, fork, session_id, inject=False, in_context=owner is not None)
 
 
-async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int, drain) -> str | None:
-    async with chat_locks[(bot_id, chat_id)]:
-        leftover = drain(turn_id)
+async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | None:
+    async with cluster.lock(
+        chat_lock(bot_id, chat_id), ttl=settings.chat_lock_ttl, wait=settings.chat_lock_wait
+    ):
+        leftover = await queue.drain(turn_id)
         if leftover is None:
-            running.discard(turn_id)
+            await abandon(turn_id)
         return leftover
-
-
-def abandon(turn_id: UUID) -> None:
-    running.discard(turn_id)
 
 
 async def _beat(turn_id: UUID) -> None:
     while True:
         await asyncio.sleep(settings.turn_heartbeat)
         try:
+            await mark_running(turn_id)
             async with SessionLocal() as session:
                 await TurnRepository(session).beat(turn_id)
         except asyncio.CancelledError:

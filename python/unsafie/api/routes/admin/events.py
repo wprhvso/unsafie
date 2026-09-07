@@ -38,10 +38,11 @@ def _frame(event: bus.Event) -> str:
 @router.get("/recent")
 async def recent(kinds: str | None = None, match: str | None = None, limit: int = 100):
     selected = [k.strip() for k in (kinds or "").split(",") if k.strip()] or None
-    items = bus.bus.recent(selected, _match(match) or None, min(limit, 500))
+    items = await bus.bus.recent(selected, _match(match) or None, min(limit, 500))
+    oldest, latest = await bus.bus.bounds()
     return {
-        "latest_id": bus.bus.latest_id(),
-        "oldest_id": bus.bus.oldest_id(),
+        "latest_id": latest,
+        "oldest_id": oldest,
         "items": [
             {"id": e.id, "kind": e.kind, "at": e.at.isoformat(), "data": e.data} for e in items
         ],
@@ -49,7 +50,7 @@ async def recent(kinds: str | None = None, match: str | None = None, limit: int 
 
 
 async def _stream(
-    request: Request, kinds: list[str] | None, match: dict | None, after_id: int | None
+    request: Request, kinds: list[str] | None, match: dict | None, after_id: str | None
 ) -> AsyncIterator[str]:
     queue: asyncio.Queue[str] = asyncio.Queue(maxsize=512)
 
@@ -62,7 +63,8 @@ async def _stream(
 
     task = asyncio.create_task(pump(), name="sse-pump")
     try:
-        yield f": connected, latest={bus.bus.latest_id()}\n\n"
+        _, latest = await bus.bus.bounds()
+        yield f": connected, latest={latest}\n\n"
         while True:
             if await request.is_disconnected():
                 return
@@ -80,12 +82,10 @@ async def stream(
     kinds: str | None = Query(default=None),
     match: str | None = Query(default=None),
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
-    after: int | None = Query(default=None),
+    after: str | None = Query(default=None),
 ):
     selected = [k.strip() for k in (kinds or "").split(",") if k.strip()] or None
-    after_id = after
-    if after_id is None and last_event_id and last_event_id.isdigit():
-        after_id = int(last_event_id)
+    after_id = after or last_event_id or None
     return StreamingResponse(
         _stream(request, selected, _match(match) or None, after_id),
         media_type="text/event-stream",

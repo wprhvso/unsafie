@@ -53,6 +53,15 @@ class Settings(BaseSettings):
 
     job_lease: float = 300.0
     job_lock_ttl: float = 60.0
+    chat_lock_ttl: float = 30.0
+    chat_lock_wait: float = 60.0
+    repo_lock_ttl: float = 120.0
+    repo_lock_wait: float = 120.0
+    snapshot_lock_ttl: float = 900.0
+    snapshot_wait: float = 180.0
+    snapshot_refused_ttl: float = 86_400.0
+    queue_ttl: float = 86_400.0
+    installation_token_ttl: float = 2_900.0
     turn_heartbeat: float = 15.0
     turn_stale_after: float = 90.0
     janitor_interval: float = 30.0
@@ -152,8 +161,10 @@ class Settings(BaseSettings):
     http_max_timeout: int = 120
     http_max_body: int = 20_971_520
 
-    events_buffer: int = 1000
-    events_queue: int = 256
+    events_buffer: int = 10_000
+    events_queue: int = 4_096
+    events_batch: int = 100
+    events_block: float = 20.0
 
     @field_validator(
         "fluent_dir",

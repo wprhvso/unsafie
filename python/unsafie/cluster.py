@@ -236,9 +236,11 @@ async def lock(
 
 @contextlib.asynccontextmanager
 async def try_lock(
-    name: str, *, ttl: float | None = None, renew: bool = False
+    name: str, *, ttl: float | None = None, wait: float = 0.0, renew: bool = False
 ) -> AsyncIterator[Held | None]:
-    held = await acquire(name, ttl=ttl)
+    started = time.perf_counter()
+    held = await acquire(name, ttl=ttl, wait=wait)
+    _note(name, time.perf_counter() - started, held is not None)
     if held is None:
         yield None
         return

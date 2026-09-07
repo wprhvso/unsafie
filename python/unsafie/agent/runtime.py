@@ -370,7 +370,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                             await TurnRepository(session).set_session(turn.id, outcome.session_id)
                         turn.session_id = outcome.session_id
                     if outcome.status != "ok":
-                        queue.clear(turn.id)
+                        await queue.clear(turn.id)
                         note = (
                             outcome.status if outcome.error is None else short(outcome.error, 1000)
                         )
@@ -378,9 +378,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                         await notify(bot, turn, _failure_text(locale, outcome))
                         return
                     resume, fork, session_id = outcome.session_id, False, None
-                    leftover = await turns.finish_or_continue(
-                        turn.id, turn.bot_id, turn.chat_id, queue.drain
-                    )
+                    leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
                     if leftover is None:
                         status = TurnStatus.DONE
                         return
@@ -390,11 +388,11 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         except Exception as e:
             telemetry.fail(turn_span, e)
             logger.exception("%s turn crashed", prefix)
-            queue.clear(turn.id)
+            await queue.clear(turn.id)
             note = "crashed"
             await notify(bot, turn, t("agent-failure", locale))
         finally:
-            turns.abandon(turn.id)
+            await turns.abandon(turn.id)
             async with SessionLocal() as session:
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)
@@ -460,7 +458,7 @@ async def dispatch(
     prompt = build_prompt(plan.in_context)
     logger.debug("bot=%s chat=%s %s prompt=%s", bot_id, chat_id, what, short(prompt))
     if plan.inject:
-        n = queue.enqueue(plan.turn.id, prompt)
+        n = await queue.enqueue(plan.turn.id, prompt)
         telemetry.annotate(**{attrs.INJECTED: True, attrs.TURN_ID: str(plan.turn.id)})
         logger.info(
             "bot=%s chat=%s %s queued into turn=%s (pending=%s)",

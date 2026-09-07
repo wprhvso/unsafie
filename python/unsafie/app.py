@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
-from unsafie import cluster, telemetry
+from unsafie import cluster, events, telemetry
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
@@ -35,6 +35,8 @@ async def lifespan(app: FastAPI):
     with telemetry.span("app.startup", kind=telemetry.INTERNAL):
         logger.info("lifespan startup instance=%s role=%s", settings.instance_id, settings.role)
         await cluster.connect()
+        with telemetry.detached():
+            events.bus.start()
         await upgrade()
         with telemetry.detached():
             for loop in (cleanup, runner, watchdog, sweeper, supervisor, worker, janitor):
@@ -49,6 +51,7 @@ async def lifespan(app: FastAPI):
         await bots.close_all()
         await close_session()
         await engine.dispose()
+        await events.bus.stop()
         await cluster.close()
         logger.info("shutdown complete")
     telemetry.shutdown()
