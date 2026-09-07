@@ -191,6 +191,22 @@ class Settings(BaseSettings):
     events_batch: int = 100
     events_block: float = 20.0
 
+    # live view of a running turn: one redis stream per turn, kept for LIVE_TTL
+    live_enabled: bool = True
+    live_link: bool = True
+    live_base_url: str = ""
+    live_ttl: float = 86_400.0
+    live_buffer: int = 20_000
+    live_queue: int = 16_384
+    live_batch: int = 200
+    live_block: float = 20.0
+    live_flush: float = 0.1
+    live_max_text: int = 65_536
+    live_max_bytes: int = 33_554_432
+    live_images: bool = True
+    live_image_bytes: int = 262_144
+    live_stream_seconds: float = 3_600.0
+
     @field_validator("fluent_dir", "static_dir", "github_cache_dir", mode="before")
     @classmethod
     def _path(cls, v):
@@ -270,6 +286,10 @@ class Settings(BaseSettings):
     @property
     def public_origin(self) -> str:
         return self.public_base_url.rstrip("/")
+
+    @property
+    def live_origin(self) -> str:
+        return (self.live_base_url or self.public_base_url).rstrip("/")
 
     @property
     def github_origin(self) -> str:

@@ -1,0 +1,338 @@
+"""Everything a turn does, streamed out for a human to watch.
+
+One Redis stream per turn (`unsafie:live:<turn_id>`), one entry per frame, plus a
+token that points at it (`unsafie:live:token:<TOKEN>`). Both expire together after
+`LIVE_TTL`, so nothing here needs cleaning up and nothing lands in Postgres: the
+page is a window into a running turn, not an archive.
+
+Writes are buffered and flushed on a timer. Model output arrives as hundreds of
+tiny deltas per second, and adjacent deltas of the same block are concatenated in
+the buffer, so a chatty step costs a dozen round-trips instead of a thousand.
+"""
+
+import asyncio
+import contextlib
+import json
+import logging
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
+
+from redis.exceptions import RedisError
+
+from unsafie import cluster
+from unsafie.settings import settings
+from unsafie.slugs import generate_slug
+
+logger = logging.getLogger(__name__)
+
+BODY = "b"
+STREAM = "live"
+GAP = "gap"
+ATTEMPTS = 16
+TRUNCATED = "live.truncated"
+
+
+def stream_key(turn_id: UUID | str) -> str:
+    return cluster.key(STREAM, turn_id)
+
+
+def token_key(token: str) -> str:
+    return cluster.key(STREAM, "token", token)
+
+
+def link_key(turn_id: UUID | str) -> str:
+    return cluster.key(STREAM, "link", turn_id)
+
+
+def url(token: str) -> str:
+    return f"{settings.live_origin}/turn/{token}"
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def clip(value: str, limit: int | None = None) -> tuple[str, int]:
+    """Cut a string to the limit and report how much was left out."""
+    limit = settings.live_max_text if limit is None else limit
+    if len(value) <= limit:
+        return value, 0
+    return value[:limit], len(value) - limit
+
+
+@dataclass
+class Frame:
+    kind: str
+    at: str
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+class Live:
+    """The writing end of one turn's stream."""
+
+    def __init__(self, turn_id: UUID, token: str) -> None:
+        self.turn_id = turn_id
+        self.token = token
+        self.key = stream_key(turn_id)
+        self.frames = 0
+        self.bytes = 0
+        self._buffer: list[Frame] = []
+        self._wake = asyncio.Event()
+        self._task: asyncio.Task | None = None
+        self._full = False
+
+    @property
+    def url(self) -> str:
+        return url(self.token)
+
+    # ------------------------------------------------------------------ writing
+
+    def emit(self, kind: str, /, **data: Any) -> None:
+        self._push(Frame(kind, _now(), data))
+
+    def append(self, kind: str, step: int, index: int, text: str) -> None:
+        """Add a piece of a streaming block, glued onto the previous piece if it fits."""
+        if not text or self._full:
+            return
+        last = self._buffer[-1] if self._buffer else None
+        if (
+            last is not None
+            and last.kind == kind
+            and last.data.get("step") == step
+            and last.data.get("index") == index
+            and len(last.data["text"]) + len(text) <= settings.live_max_text
+        ):
+            last.data["text"] += text
+            return
+        body, cut = clip(text)
+        frame = Frame(kind, _now(), {"step": step, "index": index, "text": body})
+        if cut:
+            frame.data["cut"] = cut
+        self._push(frame)
+
+    def _push(self, frame: Frame) -> None:
+        # A stream that hit its ceiling still gets to say it is over: a page that
+        # never sees turn.end spins forever.
+        if self._full and frame.kind != "turn.end":
+            return
+        if len(self._buffer) >= settings.live_queue:
+            logger.warning("live: turn=%s buffer is full, %s dropped", self.turn_id, frame.kind)
+            return
+        self._buffer.append(frame)
+        self._wake.set()
+
+    def _encode(self, frame: Frame) -> str:
+        self.frames += 1
+        body = json.dumps(
+            {"seq": self.frames, "kind": frame.kind, "at": frame.at, "data": frame.data},
+            ensure_ascii=False,
+            default=str,
+        )
+        self.bytes += len(body)
+        return body
+
+    def _batch(self) -> list[str]:
+        out: list[str] = []
+        while self._buffer and len(out) < settings.live_batch:
+            out.append(self._encode(self._buffer.pop(0)))
+            if self.bytes >= settings.live_max_bytes and not self._full:
+                self._full = True
+                self._buffer = [f for f in self._buffer if f.kind == "turn.end"]
+                out.append(self._encode(Frame("note", _now(), {"name": TRUNCATED})))
+                logger.warning(
+                    "live: turn=%s wrote %s bytes, stopping there", self.turn_id, self.bytes
+                )
+                break
+        return out
+
+    async def flush(self) -> None:
+        while self._buffer:
+            batch = self._batch()
+            if not batch:
+                return
+            try:
+                pipe = cluster.client().pipeline(transaction=False)
+                for body in batch:
+                    pipe.xadd(
+                        self.key, {BODY: body}, maxlen=settings.live_buffer, approximate=True
+                    )
+                pipe.pexpire(self.key, int(settings.live_ttl * 1000))
+                await pipe.execute()
+            except (cluster.Unavailable, RedisError, OSError):
+                logger.warning(
+                    "live: turn=%s lost %s frame(s)", self.turn_id, len(batch), exc_info=True
+                )
+
+    async def _pump(self) -> None:
+        while True:
+            await self._wake.wait()
+            self._wake.clear()
+            await asyncio.sleep(settings.live_flush)
+            await self.flush()
+
+    def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.create_task(self._pump(), name=f"live:{self.turn_id}")
+
+    async def stop(self) -> None:
+        task, self._task = self._task, None
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        await self.flush()
+
+
+_streams: dict[UUID, Live] = {}
+
+
+async def _allocate(turn_id: UUID) -> str | None:
+    client = cluster.client()
+    ttl = int(settings.live_ttl * 1000)
+    for _ in range(ATTEMPTS):
+        token = generate_slug()
+        if await client.set(token_key(token), str(turn_id), px=ttl, nx=True):
+            await client.set(link_key(turn_id), token, px=ttl)
+            return token
+    return None
+
+
+async def begin(turn_id: UUID) -> Live | None:
+    """Hand out a token and open the stream. None means the turn runs unwatched."""
+    if not settings.live_enabled:
+        return None
+    try:
+        token = await _allocate(turn_id)
+    except (cluster.Unavailable, RedisError, OSError):
+        logger.warning("live: turn=%s got no token", turn_id, exc_info=True)
+        return None
+    if token is None:
+        logger.error("live: turn=%s found no free token in %s tries", turn_id, ATTEMPTS)
+        return None
+    stream = Live(turn_id, token)
+    stream.start()
+    _streams[turn_id] = stream
+    logger.info("live: turn=%s streams to %s", turn_id, url(token))
+    return stream
+
+
+async def end(turn_id: UUID) -> None:
+    stream = _streams.pop(turn_id, None)
+    if stream is None:
+        return
+    await stream.stop()
+    logger.info("live: turn=%s wrote %s frame(s), %s bytes", turn_id, stream.frames, stream.bytes)
+
+
+async def seal(turn_id: UUID, **data: Any) -> None:
+    """Close a stream whose writer is gone — a reaped turn, an instance that died."""
+    if turn_id in _streams:
+        return
+    body = json.dumps(
+        {"seq": 0, "kind": "turn.end", "at": _now(), "data": data},
+        ensure_ascii=False,
+        default=str,
+    )
+    try:
+        client = cluster.client()
+        if not await client.exists(stream_key(turn_id)):
+            return
+        await client.xadd(
+            stream_key(turn_id), {BODY: body}, maxlen=settings.live_buffer, approximate=True
+        )
+        await client.pexpire(stream_key(turn_id), int(settings.live_ttl * 1000))
+    except (cluster.Unavailable, RedisError, OSError):
+        logger.warning("live: turn=%s could not be sealed", turn_id, exc_info=True)
+
+
+def of(turn_id: UUID | None) -> Live | None:
+    return _streams.get(turn_id) if turn_id is not None else None
+
+
+def emit(turn_id: UUID | None, kind: str, /, **data: Any) -> None:
+    """Fire and forget from anywhere: unwatched turns simply drop it."""
+    stream = of(turn_id)
+    if stream is not None:
+        stream.emit(kind, **data)
+
+
+# ------------------------------------------------------------------------ reading
+
+
+async def turn_of(token: str) -> UUID | None:
+    raw = await cluster.client().get(token_key(token))
+    if not raw:
+        return None
+    try:
+        return UUID(raw)
+    except ValueError:
+        return None
+
+
+async def token_of(turn_id: UUID) -> str | None:
+    return await cluster.client().get(link_key(turn_id))
+
+
+def _decode(entry_id: str, fields: dict) -> dict | None:
+    try:
+        frame = json.loads(fields[BODY])
+    except (KeyError, ValueError, TypeError):
+        logger.warning("live: entry %s is unreadable", entry_id)
+        return None
+    frame["id"] = entry_id
+    return frame
+
+
+async def bounds(turn_id: UUID) -> tuple[str | None, str | None]:
+    client = cluster.client()
+    first = await client.xrange(stream_key(turn_id), count=1)
+    last = await client.xrevrange(stream_key(turn_id), count=1)
+    return (first[0][0] if first else None, last[0][0] if last else None)
+
+
+async def history(turn_id: UUID, after: str | None = None, limit: int | None = None) -> list[dict]:
+    entries = await cluster.client().xrange(
+        stream_key(turn_id), min=after or "-", count=limit or settings.live_buffer
+    )
+    out = []
+    for entry_id, fields in entries:
+        if entry_id == after:
+            continue
+        frame = _decode(entry_id, fields)
+        if frame is not None:
+            out.append(frame)
+    return out
+
+
+async def follow(turn_id: UUID, after: str | None = None) -> AsyncIterator[dict | str]:
+    """Replay from `after` (or the very beginning) and then hang on new frames."""
+    client = cluster.client()
+    key = stream_key(turn_id)
+    if after is not None:
+        oldest, _ = await bounds(turn_id)
+        if oldest is not None and _position(after) < _position(oldest):
+            yield GAP
+    cursor = after or "0-0"
+    while True:
+        entries = await client.xread(
+            {key: cursor},
+            count=settings.live_batch,
+            block=int(settings.live_block * 1000),
+        )
+        for _, items in entries or []:
+            for entry_id, fields in items:
+                cursor = entry_id
+                frame = _decode(entry_id, fields)
+                if frame is not None:
+                    yield frame
+
+
+def _position(entry_id: str) -> tuple[int, int]:
+    ms, _, seq = entry_id.partition("-")
+    try:
+        return int(ms), int(seq or 0)
+    except ValueError:
+        return 0, 0

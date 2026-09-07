@@ -1,3 +1,4 @@
+agent-live = ▸ [{ $url }]({ $url })
 agent-failure = Something broke, try again.
 agent-empty-balance = Balance is empty. Check: /budget
 agent-no-credentials = All Anthropic keys are unavailable right now{ $when }. Try later.

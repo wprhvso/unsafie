@@ -10,7 +10,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
 
 from unsafie import events, telemetry
-from unsafie.agent import billing, credentials, loop, queue, request, segments, turns
+from unsafie.agent import billing, credentials, live, loop, queue, request, segments, turns
 from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.request import DEFAULT_EFFORT
@@ -168,6 +168,18 @@ async def _execute(
                 servers,
             )
 
+            live.emit(
+                ctx.turn_id,
+                "attempt.start",
+                attempt=attempt,
+                model=model,
+                effort=effort,
+                budget_usd=left,
+                tools=len(definitions),
+                servers=servers,
+                thinking=settings.claude_thinking,
+                display=settings.claude_thinking_display or "off",
+            )
             started = time.perf_counter()
             with telemetry.span(
                 "gen_ai.invoke_agent",
@@ -191,7 +203,7 @@ async def _execute(
                     budget_usd=left,
                     definitions=definitions,
                     tools=tools,
-                    recorder=Recorder(prefix),
+                    recorder=Recorder(prefix, live.of(ctx.turn_id)),
                 )
                 elapsed = (time.perf_counter() - started) * 1000
                 spent += result.cost_usd
@@ -235,6 +247,19 @@ async def _execute(
                 elapsed,
             )
 
+            live.emit(
+                ctx.turn_id,
+                "attempt.end",
+                attempt=attempt,
+                status=result.status,
+                steps=result.steps,
+                cost_usd=result.cost_usd,
+                charge=charge,
+                usage=result.usage,
+                stop_reason=result.stop_reason,
+                error=short(result.error, 300) if result.error else None,
+            )
+
             if result.status == "ok":
                 async with SessionLocal() as session:
                     await CredentialRepository(session).succeeded(credential.id, result.cost_usd)
@@ -254,6 +279,26 @@ async def _execute(
                 continue
             return Outcome("failed", error=result.error, cost_usd=spent)
     return Outcome("failed", error="attempts exhausted", cost_usd=spent)
+
+
+async def announce(bot: Bot, turn: Turn, locale: str, stream: live.Live) -> None:
+    """Hand the user the link to watch this turn happen."""
+    if not settings.live_link:
+        return
+    try:
+        await sender.send(
+            bot,
+            bot_id=turn.bot_id,
+            chat_id=turn.chat_id,
+            markdown=t("agent-live", locale, url=stream.url),
+            kind=ResponseKind.SYSTEM,
+            turn=turn,
+            silent=True,
+            preview=False,
+        )
+    except Exception:
+        # A turn must never die because its watch link could not be delivered.
+        logger.warning("turn=%s live link not delivered", turn.id, exc_info=True)
 
 
 async def notify(bot: Bot, turn: Turn, text: str) -> None:
@@ -297,6 +342,17 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         prompt = LOST_CONTEXT + "\n\n" + prompt
     status = TurnStatus.FAILED
     note: str | None = None
+    stream = await live.begin(turn.id)
+    if stream is not None:
+        stream.emit(
+            "turn.start",
+            turn_id=str(turn.id),
+            root_id=str(turn.root_id),
+            chat_id=turn.chat_id,
+            resumed=len(messages),
+            prompt=live.clip(prompt)[0],
+        )
+        await announce(bot, turn, locale, stream)
     events.publish(
         "turn.started",
         turn_id=str(turn.id),
@@ -376,6 +432,16 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                 charge=fresh.charge if fresh else 0,
                 note=note,
             )
+            live.emit(
+                turn.id,
+                "turn.end",
+                status=str(status),
+                steps=fresh.num_turns if fresh else 0,
+                cost_usd=fresh.cost_usd if fresh else None,
+                charge=fresh.charge if fresh else 0,
+                note=note,
+            )
+            await live.end(turn.id)
 
 
 async def dispatch(

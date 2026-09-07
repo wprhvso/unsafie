@@ -30,7 +30,9 @@ server {
         try_files $uri =404;
     }
 
-    location /api/admin/events {
+    # Server-sent events: the admin firehose and the per-turn live log. Both must
+    # go out unbuffered, or the page sits empty until nginx decides to flush.
+    location ~ ^/api/(admin/events|live/) {
         proxy_pass http://unsafie_app;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
