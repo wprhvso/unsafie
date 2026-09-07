@@ -175,9 +175,12 @@ async def run(
         try:
             reply = await client.send(credential, body, on_event=recorder.raw)
         except ApiError as e:
-            if request.downgrade(model, e):
+            dropped = request.downgrade(model, e)
+            if dropped:
                 result.steps -= 1
-                recorder.note("unsafie.downgraded", {"reason": short(e.message, 200)})
+                recorder.note(
+                    "unsafie.downgraded", {"dropped": dropped, "reason": short(e.message, 200)}
+                )
                 continue
             result.status = "failed"
             result.failure = credentials.classify_api(e.status, e.kind, e.message)
