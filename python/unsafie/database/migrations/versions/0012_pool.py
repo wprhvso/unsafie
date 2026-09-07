@@ -208,8 +208,7 @@ def upgrade() -> None:
         ("pool_max_machines", "INTEGER", "3"),
         ("pool_max_background", "INTEGER", "10"),
         ("pool_max_minutes_day", "INTEGER", "600"),
-        ("pool_ci_max_runners", "INTEGER", "5"),
-        ("pool_ci_max_minutes_day", "INTEGER", "300"),
+        ("pool_max_machines_day", "INTEGER", "100"),
         ("pool_priority", "INTEGER", "0"),
         ("pool_blocked", "BOOLEAN", "false"),
     ):
@@ -225,8 +224,7 @@ def downgrade() -> None:
         "pool_max_machines",
         "pool_max_background",
         "pool_max_minutes_day",
-        "pool_ci_max_runners",
-        "pool_ci_max_minutes_day",
+        "pool_max_machines_day",
         "pool_priority",
         "pool_blocked",
     ):

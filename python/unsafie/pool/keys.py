@@ -19,8 +19,8 @@ def outbox(command_id: str) -> str:
     return cluster.key(NAMESPACE, "out", command_id)
 
 
-def waiting(user_id: int) -> str:
-    return cluster.key(NAMESPACE, "waiting", user_id)
+def pending() -> str:
+    return cluster.key(NAMESPACE, "pending")
 
 
 def keeper(donor_id: int) -> str:

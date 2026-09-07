@@ -32,6 +32,13 @@ async def runs(http: GithubHTTP, donor: PoolDonor) -> list[dict]:
     return sorted(found.values(), key=lambda run: str(run["created_at"]), reverse=True)
 
 
+async def target(donor: PoolDonor) -> int:
+    idle = await registry.idle_count()
+    hungry = max(0, settings.pool_warm_min - idle)
+    keep = min(donor.jobs, max(settings.pool_warm_min, min(settings.pool_warm_max, idle + hungry)))
+    return max(keep, settings.pool_warm_min if donor.enabled else 0)
+
+
 async def reconcile(donor: PoolDonor) -> dict:
     http = GithubHTTP(donor.token)
     live = await runs(http, donor)
@@ -40,7 +47,8 @@ async def reconcile(donor: PoolDonor) -> dict:
         await http.request("POST", f"/repos/{donor.repo}/actions/runs/{run['id']}/cancel")
         logger.info("pool donor %s: run %s retired at %.0fs", donor.login, run["id"], _age(run))
     kept = [run for run in live if run not in old]
-    missing = max(0, donor.jobs - len(kept))
+    wanted = min(donor.jobs, await target(donor))
+    missing = max(0, wanted - len(kept))
     launched = 0
     if missing:
         repo = await http.request("GET", f"/repos/{donor.repo}")
@@ -53,7 +61,7 @@ async def reconcile(donor: PoolDonor) -> dict:
             )
             launched += 1
     await donors.note(donor.id, "ready")
-    return {"live": len(kept), "retired": len(old), "launched": launched}
+    return {"live": len(kept), "retired": len(old), "launched": launched, "target": wanted}
 
 
 class Keeper(Loop):
@@ -80,11 +88,13 @@ class Keeper(Loop):
                     logger.warning("pool donor %s: %s", donor.login, refused)
                     continue
                 logger.info(
-                    "pool donor %s live=%s launched=%s retired=%s",
+                    "pool donor %s live=%s target=%s launched=%s retired=%s idle=%s",
                     donor.login,
                     stats["live"],
+                    stats["target"],
                     stats["launched"],
                     stats["retired"],
+                    await registry.idle_count(),
                 )
 
 

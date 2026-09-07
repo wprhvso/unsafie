@@ -4,15 +4,15 @@ import time
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from unsafie import tokens
+from unsafie import cluster, tokens
 from unsafie.database import SessionLocal
 from unsafie.database.models.api_token import TokenKind
 from unsafie.database.models.pool import MachineState, PoolLease, PoolMachine
 from unsafie.database.models.user import User
 from unsafie.errors import OpsError
-from unsafie.pool import channel, registry
+from unsafie.pool import channel, keys, registry
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
 
@@ -63,12 +63,17 @@ async def take(
             f"you already hold {len(mine)} machine(s), the limit is {user.pool_max_machines}. "
             "Release one: unsafie release box-N"
         )
+    if await spent_today(user_id) >= user.pool_max_machines_day:
+        raise PoolError(
+            f"you have used {user.pool_max_machines_day} machines today, which is the daily limit"
+        )
     wanted = min(count, room)
     deadline = time.monotonic() + (settings.pool_take_wait if wait is None else wait)
     taken: list[PoolMachine] = []
     aliases = {m.alias for m in mine if m.alias}
+    await _queue_up(user_id)
     while len(taken) < wanted:
-        name = await registry.grab_idle()
+        name = await registry.grab_idle() if await _my_turn(user_id) else None
         if name is None:
             if time.monotonic() >= deadline:
                 break
@@ -80,14 +85,79 @@ async def take(
             continue
         aliases.add(alias)
         taken.append(machine)
+    await _leave_queue(user_id)
     if not taken:
-        free = await registry.idle_count()
+        ahead = await _ahead_of(user_id)
         raise PoolError(
             "no free machine right now"
-            + (f" ({free} idle but they went away)" if free else "")
+            + (f", {ahead} user(s) are waiting before you" if ahead else "")
             + ". The keeper is bringing more up; try again in a few seconds."
         )
     return taken
+
+
+async def _queue_up(user_id: int) -> None:
+    await cluster.client().zadd(keys.pending(), {str(user_id): time.time()}, nx=True)
+
+
+async def _leave_queue(user_id: int) -> None:
+    await cluster.client().zrem(keys.pending(), str(user_id))
+
+
+async def _waiting() -> list[int]:
+    redis = cluster.client()
+    await redis.zremrangebyscore(keys.pending(), 0, time.time() - settings.pool_take_wait * 3)
+    rows = await redis.zrange(keys.pending(), 0, -1)
+    out: list[int] = []
+    for row in rows:
+        try:
+            out.append(int(row))
+        except ValueError:
+            continue
+    return out
+
+
+async def _holdings() -> dict[int, int]:
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(PoolMachine.user_id, func.count())
+            .where(PoolMachine.state == MachineState.LEASED, PoolMachine.gone_at.is_(None))
+            .group_by(PoolMachine.user_id)
+        )
+        return {int(user_id): int(count) for user_id, count in rows if user_id is not None}
+
+
+async def _order() -> list[int]:
+    waiting = await _waiting()
+    if len(waiting) < 2:
+        return waiting
+    holdings = await _holdings()
+    return sorted(waiting, key=lambda user_id: (holdings.get(user_id, 0), waiting.index(user_id)))
+
+
+async def _my_turn(user_id: int) -> bool:
+    order = await _order()
+    return not order or order[0] == user_id
+
+
+async def _ahead_of(user_id: int) -> int:
+    order = await _order()
+    return order.index(user_id) if user_id in order else 0
+
+
+async def spent_today(user_id: int) -> int:
+    async with SessionLocal() as session:
+        used = await session.scalar(
+            select(func.count())
+            .select_from(PoolLease)
+            .where(PoolLease.user_id == user_id, PoolLease.taken_at >= _midnight())
+        )
+    return int(used or 0)
+
+
+def _midnight() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 async def _bind(
