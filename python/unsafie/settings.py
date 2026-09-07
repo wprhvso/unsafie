@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     claude_thinking: str = "adaptive"
     claude_web_search: bool = True
     claude_web_search_max_uses: int = 800
-    claude_thinking_display: str = "updates"
+    claude_thinking_display: str = "raw"
     claude_clear_thinking: bool = True
     claude_clear_thinking_keep: str = "all"
     claude_fallbacks: str = "default"
