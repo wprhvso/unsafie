@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 _bundles: dict[str, FluentBundle | None] = {}
 
 
-def _load(locale: str, part: str = "server") -> FluentBundle | None:
+def _load(locale: str, part: str = "python") -> FluentBundle | None:
     folder = settings.fluent_dir / locale / part
     if not folder.is_dir():
         return None
