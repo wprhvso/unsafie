@@ -78,7 +78,20 @@ class GitMixin:
             f"{self.base}/git/blobs",
             json_body={"content": base64.b64encode(data).decode(), "encoding": "base64"},
         )
-        return result["sha"]
+        sha = result["sha"]
+        await cache.blobs.put(sha, data)
+        return sha
+
+    async def create_blobs(self, blobs: Iterable[bytes]) -> list[str]:
+        items = list(blobs)
+        if not items:
+            return []
+        unique: dict[str, bytes] = {}
+        for data in items:
+            unique.setdefault(cache.git_sha(data), data)
+        shas = await run_limited([self.create_blob(data) for data in unique.values()])
+        created = dict(zip(unique, shas, strict=True))
+        return [created[cache.git_sha(data)] for data in items]
 
     async def create_tree(self, entries: list[dict], base_tree: str | None = None) -> str:
         body: dict[str, Any] = {"tree": entries}

@@ -135,10 +135,11 @@ class Overlay:
 
 
 class Tree:
-    def __init__(self, entries: list[dict], overlay: Overlay) -> None:
+    def __init__(self, entries: list[dict], overlay: Overlay, truncated: bool = False) -> None:
         self.base = {e["path"]: e for e in entries if e.get("type") == "blob"}
         self.dirs = {e["path"] for e in entries if e.get("type") == "tree"}
         self.overlay = overlay
+        self.truncated = truncated
 
     def exists(self, path: str) -> bool:
         entry = self.overlay.entry(path)
@@ -152,6 +153,10 @@ class Tree:
     def blob_sha(self, path: str) -> str | None:
         item = self.base.get(path)
         return item.get("sha") if item else None
+
+    def mode(self, path: str) -> str | None:
+        item = self.base.get(path)
+        return item.get("mode") if item else None
 
     def size(self, path: str) -> int | None:
         entry = self.overlay.entry(path)

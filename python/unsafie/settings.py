@@ -153,6 +153,8 @@ class Settings(BaseSettings):
     github_max_file_bytes: int = 1_048_576
     github_max_changes: int = 200
     github_max_rebase_commits: int = 50
+    github_inline_bytes: int = 131_072
+    github_inline_total_bytes: int = 4_194_304
     github_connections: int = 16
     github_concurrency: int = 8
     github_cache_dir: Path = Path("cache")
