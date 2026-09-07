@@ -1,0 +1,9 @@
+{
+  "include": ["unsafie-cli/src", "unsafie-wire/src"],
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "standard",
+  "venvPath": ".",
+  "venv": ".venv",
+  "reportMissingImports": "error",
+  "reportUnusedImport": "warning"
+}

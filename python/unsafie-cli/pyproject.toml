@@ -1,0 +1,22 @@
+[project]
+name = "unsafie-cli"
+version = "0.1.0"
+description = "The unsafie command line: everything the agent and the human can do, as commands"
+readme = "README.md"
+authors = [{ name = "wprhvso", email = "wprhvso@gmail.com" }]
+requires-python = ">=3.14"
+keywords = ["unsafie", "telegram", "automation", "github-actions", "chrome"]
+dependencies = ["unsafie-wire"]
+
+[project.scripts]
+unsafie = "unsafie_cli.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "unsafie_cli"
+
+[tool.uv.sources]
+unsafie-wire = { workspace = true }

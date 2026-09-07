@@ -24,11 +24,12 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "redis[hiredis]>=8.1.0",
     "sqlalchemy>=2.0.52",
+    "unsafie-wire",
     "uvicorn>=0.52.4",
 ]
 
 [project.scripts]
-unsafie = "unsafie:main"
+unsafie-server = "unsafie:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
@@ -37,6 +38,16 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "unsafie"
 module-root = ""
+
+[tool.uv.workspace]
+members = ["unsafie-cli", "unsafie-wire"]
+
+[tool.uv.sources]
+unsafie-cli = { workspace = true }
+unsafie-wire = { workspace = true }
+
+[dependency-groups]
+dev = ["basedpyright>=1.39", "ruff>=0.16", "unsafie-cli"]
 
 [tool.ruff]
 line-length = 100
@@ -50,4 +61,4 @@ ignore = ["E501"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body", "fastapi.Path"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["unsafie"]
+known-first-party = ["unsafie", "unsafie_cli", "unsafie_wire"]
