@@ -1,7 +1,9 @@
 import asyncio
+import contextlib
 import logging
 import uuid
 from collections import defaultdict
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -9,6 +11,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.update import UpdateRepository
+from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +99,26 @@ async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int, drain) ->
 
 def abandon(turn_id: UUID) -> None:
     running.discard(turn_id)
+
+
+async def _beat(turn_id: UUID) -> None:
+    while True:
+        await asyncio.sleep(settings.turn_heartbeat)
+        try:
+            async with SessionLocal() as session:
+                await TurnRepository(session).beat(turn_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("turn=%s heartbeat failed", turn_id, exc_info=True)
+
+
+@contextlib.asynccontextmanager
+async def alive(turn_id: UUID) -> AsyncIterator[None]:
+    task = asyncio.create_task(_beat(turn_id), name=f"heartbeat:{turn_id}")
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task

@@ -1,6 +1,6 @@
 import logging
 
-from unsafie import events
+from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.delivery import DeliveryRepository
 
@@ -21,7 +21,11 @@ async def accept(delivery_id: str, event: str, payload: dict) -> bool:
     meta = summarize(event, payload)
     async with SessionLocal() as session:
         fresh = await DeliveryRepository(session).store(
-            delivery_id=delivery_id, event=event, payload=payload, **meta
+            delivery_id=delivery_id,
+            event=event,
+            payload=payload,
+            trace_id=telemetry.trace_id(),
+            **meta,
         )
     if not fresh:
         logger.info("delivery=%s %s already seen", delivery_id, event)
@@ -41,3 +45,15 @@ async def done(delivery_id: str, notified: int, error: str | None) -> None:
     async with SessionLocal() as session:
         await DeliveryRepository(session).processed(delivery_id, notified, error)
     events.publish("webhook.processed", delivery_id=delivery_id, notified=notified, error=error)
+
+
+async def failed(delivery_id: str, error: str, attempts: int, give_up: bool) -> None:
+    async with SessionLocal() as session:
+        await DeliveryRepository(session).failed(delivery_id, error, give_up)
+    events.publish(
+        "webhook.failed",
+        delivery_id=delivery_id,
+        error=error[:500],
+        attempts=attempts,
+        give_up=give_up,
+    )

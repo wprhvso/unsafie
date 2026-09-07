@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     poll_claim_interval: float = 10.0
     poll_failure_cooldown: float = 60.0
 
+    job_lease: float = 300.0
+    job_lock_ttl: float = 60.0
+    turn_heartbeat: float = 15.0
+    turn_stale_after: float = 90.0
+    janitor_interval: float = 30.0
+    webhook_batch: int = 20
+    webhook_worker_interval: float = 2.0
+    webhook_max_attempts: int = 5
+
     log_level: str = "INFO"
     log_truncate: int = 2000
     sql_echo: bool = False
@@ -180,6 +189,12 @@ class Settings(BaseSettings):
                 "POLL_CLAIM_INTERVAL must be at most a third of POLL_LOCK_TTL, so that a lock "
                 f"survives two missed renewals (got {self.poll_claim_interval} "
                 f"vs {self.poll_lock_ttl})"
+            )
+        if self.turn_stale_after < self.turn_heartbeat * 3:
+            raise ValueError(
+                "TURN_STALE_AFTER must be at least three heartbeats, or a running turn is "
+                f"reaped while its owner is alive (got {self.turn_stale_after} "
+                f"vs {self.turn_heartbeat})"
             )
         return self
 

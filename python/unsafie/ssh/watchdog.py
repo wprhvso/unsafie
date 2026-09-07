@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from unsafie import events, telemetry
+from unsafie import cluster, events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.ssh_watch import WatchMode
@@ -36,7 +36,7 @@ class Watchdog(Loop):
 
     @property
     def enabled(self) -> bool:
-        return settings.schedule_enabled
+        return settings.schedule_enabled and settings.runs_worker
 
     @property
     def interval(self) -> float:
@@ -46,26 +46,32 @@ class Watchdog(Loop):
         now = datetime.now(UTC)
         with telemetry.muted():
             async with SessionLocal() as session:
-                due = await WatchRepository(session).due(now, BATCH)
+                due = await WatchRepository(session).claim(now, BATCH, settings.job_lease)
         for watch, host in due:
-            with telemetry.span(
-                "ssh.watch",
-                kind=telemetry.CONSUMER,
-                attributes={
-                    attrs.WATCH_ID: watch.id,
-                    attrs.WATCH_NAME: watch.name,
-                    attrs.SSH_ALIAS: host.alias,
-                    attrs.BOT_ID: watch.bot_id,
-                    attrs.CHAT_ID: watch.chat_id,
-                    attrs.USER_ID: watch.user_id,
-                },
-            ) as span:
-                try:
-                    await self._one(watch, host)
-                except Exception as e:
-                    telemetry.fail(span, e)
-                    logger.exception("watch=%s failed", watch.id)
-                    await self._reschedule(watch, failed=True)
+            async with cluster.try_lock(
+                f"watch:{watch.id}", ttl=settings.job_lock_ttl, renew=True
+            ) as held:
+                if held is None:
+                    logger.info("watch=%s is already running elsewhere", watch.id)
+                    continue
+                with telemetry.span(
+                    "ssh.watch",
+                    kind=telemetry.CONSUMER,
+                    attributes={
+                        attrs.WATCH_ID: watch.id,
+                        attrs.WATCH_NAME: watch.name,
+                        attrs.SSH_ALIAS: host.alias,
+                        attrs.BOT_ID: watch.bot_id,
+                        attrs.CHAT_ID: watch.chat_id,
+                        attrs.USER_ID: watch.user_id,
+                    },
+                ) as span:
+                    try:
+                        await self._one(watch, host)
+                    except Exception as e:
+                        telemetry.fail(span, e)
+                        logger.exception("watch=%s failed", watch.id)
+                        await self._reschedule(watch, failed=True)
         with telemetry.muted():
             await pool.pool.sweep()
 

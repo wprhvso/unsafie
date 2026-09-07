@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,15 +50,25 @@ class WatchRepository:
             or 0
         )
 
-    async def due(self, now: datetime, limit: int = 50) -> list[tuple[SshWatch, SshHost]]:
-        rows = await self.session.execute(
-            select(SshWatch, SshHost)
-            .join(SshHost, SshHost.id == SshWatch.host_id)
-            .where(SshWatch.enabled.is_(True), SshWatch.next_run_at <= now)
-            .order_by(SshWatch.next_run_at)
-            .limit(limit)
-        )
-        return [(w, h) for w, h in rows.all()]
+    async def claim(
+        self, now: datetime, limit: int, lease: float
+    ) -> list[tuple[SshWatch, SshHost]]:
+        rows = (
+            await self.session.execute(
+                select(SshWatch, SshHost)
+                .join(SshHost, SshHost.id == SshWatch.host_id)
+                .where(SshWatch.enabled.is_(True), SshWatch.next_run_at <= now)
+                .order_by(SshWatch.next_run_at)
+                .limit(limit)
+                .with_for_update(skip_locked=True, of=SshWatch)
+            )
+        ).all()
+        for watch, _ in rows:
+            watch.next_run_at = now + timedelta(seconds=lease)
+        await self.session.commit()
+        if rows:
+            logger.info("claimed watch(es) %s for %ss", [w.id for w, _ in rows], lease)
+        return [(w, h) for w, h in rows]
 
     async def remove(self, bot_id: int, chat_id: int, watch_id: int) -> bool:
         row = await self.get(bot_id, chat_id, watch_id)

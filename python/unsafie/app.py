@@ -9,13 +9,13 @@ from unsafie import cluster, telemetry
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
-from unsafie.database import SessionLocal, engine
-from unsafie.database.repositories.delivery import DeliveryRepository
-from unsafie.database.repositories.turn import TurnRepository
+from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
 from unsafie.github.cache import sweeper
 from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.cleanup import cleanup
+from unsafie.github.webhooks.worker import worker
+from unsafie.janitor import janitor
 from unsafie.log import setup
 from unsafie.scheduler.runner import runner
 from unsafie.settings import settings
@@ -36,23 +36,14 @@ async def lifespan(app: FastAPI):
         logger.info("lifespan startup instance=%s role=%s", settings.instance_id, settings.role)
         await cluster.connect()
         await upgrade()
-        async with SessionLocal() as session:
-            stale_turns = await TurnRepository(session).mark_stale_running()
-            stale_deliveries = await DeliveryRepository(session).mark_stale()
-        if stale_turns:
-            logger.warning("%s turn(s) were running at shutdown, marked failed", stale_turns)
-        if stale_deliveries:
-            logger.warning(
-                "%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries
-            )
         with telemetry.detached():
-            for loop in (cleanup, runner, watchdog, sweeper, supervisor):
+            for loop in (cleanup, runner, watchdog, sweeper, supervisor, worker, janitor):
                 loop.start()
         logger.info("lifespan ready")
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
         logger.info("lifespan shutdown")
-        for loop in (supervisor, sweeper, watchdog, runner, cleanup):
+        for loop in (supervisor, janitor, worker, sweeper, watchdog, runner, cleanup):
             await loop.stop()
         await pool.close_all()
         await bots.close_all()

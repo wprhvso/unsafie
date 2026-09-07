@@ -360,7 +360,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         },
     ) as turn_span:
         try:
-            async with typing(bot, turn.chat_id, prefix):
+            async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
                 while True:
                     outcome = await _execute(
                         ctx, prompt, resume=resume, fork=fork, session_id=session_id

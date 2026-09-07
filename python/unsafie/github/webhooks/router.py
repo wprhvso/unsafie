@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from sqlalchemy import select
@@ -18,6 +17,7 @@ from unsafie.github import subscriptions
 from unsafie.github.app import auth, install
 from unsafie.github.webhooks import deliveries
 from unsafie.github.webhooks import events as fmt
+from unsafie.settings import settings
 from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
@@ -27,37 +27,23 @@ LIFECYCLE = {"installation", "installation_repositories", "github_app_authorizat
 
 
 async def handle(delivery_id: str, event: str, payload: dict) -> None:
-    if not await deliveries.accept(delivery_id, event, payload):
-        return
-    origin = telemetry.links()
-    parent_trace = telemetry.trace_id()
-    with telemetry.detached():
-        asyncio.create_task(
-            _process(delivery_id, event, payload, origin, parent_trace),
-            name=f"webhook:{delivery_id}",
-        )
+    await deliveries.accept(delivery_id, event, payload)
 
 
-async def _process(
-    delivery_id: str,
-    event: str,
-    payload: dict,
-    origin: list | None = None,
-    parent_trace: str | None = None,
-) -> None:
+async def process(row) -> None:
+    delivery_id, event, payload = row.delivery_id, row.event, row.payload
     notified = 0
     error: str | None = None
-    repo = (payload.get("repository") or {}).get("full_name")
     with telemetry.span(
         f"gh.webhook {event}",
         kind=telemetry.CONSUMER,
-        links=origin,
         attributes={
             attrs.GH_EVENT: event,
             attrs.GH_DELIVERY: delivery_id,
-            attrs.GH_REPO: repo,
-            "unsafie.github.action": payload.get("action"),
-            attrs.PARENT_TRACE: parent_trace,
+            attrs.GH_REPO: row.repo_full_name,
+            "unsafie.github.action": row.action,
+            attrs.GH_ATTEMPT: row.attempts,
+            attrs.PARENT_TRACE: row.trace_id,
         },
     ) as span:
         try:
@@ -70,7 +56,15 @@ async def _process(
             logger.exception("delivery=%s %s failed", delivery_id, event)
             error = str(e)
         telemetry.set_attrs(span, {attrs.GH_NOTIFIED: notified})
-        await deliveries.done(delivery_id, notified, error)
+        if error is None:
+            await deliveries.done(delivery_id, notified, None)
+            return
+        give_up = row.attempts >= settings.webhook_max_attempts
+        await deliveries.failed(delivery_id, error, row.attempts, give_up)
+        if give_up:
+            logger.error(
+                "delivery=%s %s given up after %s attempts", delivery_id, event, row.attempts
+            )
 
 
 async def _lifecycle(event: str, payload: dict) -> None:
