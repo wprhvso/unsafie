@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from unsafie import cluster, events, telemetry
 from unsafie.agent import turns
+from unsafie.agent.client import close_session as close_anthropic
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
         await pool.close_all()
         await bots.close_all()
         await close_session()
+        await close_anthropic()
         await engine.dispose()
         await events.bus.stop()
         await cluster.close()

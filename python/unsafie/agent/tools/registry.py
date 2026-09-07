@@ -3,8 +3,6 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from claude_agent_sdk import create_sdk_mcp_server, tool
-
 from unsafie.agent.tools.base import Handler, ToolContext
 
 logger = logging.getLogger(__name__)
@@ -14,11 +12,42 @@ Availability = Callable[[object, ToolContext], Awaitable[bool]]
 
 @dataclass(frozen=True)
 class ToolSpec:
+    server: str
     name: str
     description: str
     input_schema: dict
     handler: Handler
     replies: bool
+
+    @property
+    def definition(self) -> dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema,
+        }
+
+    @property
+    def required(self) -> tuple[str, ...]:
+        return tuple(self.input_schema.get("required") or ())
+
+
+@dataclass(frozen=True)
+class Bound:
+    spec: ToolSpec
+    run: Callable[[dict], Awaitable[dict]]
+
+    @property
+    def name(self) -> str:
+        return self.spec.name
+
+    @property
+    def replies(self) -> bool:
+        return self.spec.replies
+
+    @property
+    def required(self) -> tuple[str, ...]:
+        return self.spec.required
 
 
 _REGISTRY: dict[str, list[ToolSpec]] = defaultdict(list)
@@ -29,7 +58,9 @@ def register(
     server: str, name: str, description: str, input_schema: dict, *, replies: bool = False
 ):
     def decorator(fn: Handler) -> Handler:
-        _REGISTRY[server].append(ToolSpec(name, description, input_schema, fn, replies))
+        _REGISTRY[server].append(
+            ToolSpec(server, name, description, input_schema, fn, replies)
+        )
         return fn
 
     return decorator
@@ -45,10 +76,6 @@ def servers() -> list[str]:
 
 def specs(server: str) -> list[ToolSpec]:
     return list(_REGISTRY[server])
-
-
-def reply_tools() -> set[str]:
-    return {f"mcp__{srv}__{s.name}" for srv, items in _REGISTRY.items() for s in items if s.replies}
 
 
 async def enabled_servers(session, ctx: ToolContext) -> list[str]:
@@ -68,9 +95,16 @@ def _bind(handler: Handler, ctx: ToolContext):
     return run
 
 
-def build_server(server: str, ctx: ToolContext):
-    tools = [
-        tool(spec.name, spec.description, spec.input_schema)(_bind(spec.handler, ctx))
-        for spec in _REGISTRY[server]
-    ]
-    return create_sdk_mcp_server(name=server, tools=tools)
+def build_tools(ctx: ToolContext, servers: list[str]) -> tuple[list[dict], dict[str, Bound]]:
+    definitions: list[dict] = []
+    bound: dict[str, Bound] = {}
+    for server in servers:
+        for spec in _REGISTRY[server]:
+            clash = bound.get(spec.name)
+            if clash is not None:
+                raise RuntimeError(
+                    f"tool {spec.name} is registered by both {clash.spec.server} and {server}"
+                )
+            bound[spec.name] = Bound(spec, _bind(spec.handler, ctx))
+            definitions.append(spec.definition)
+    return definitions, bound

@@ -2,20 +2,19 @@ import re
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
-from unsafie.database.models.credential import AnthropicCredential, CredentialKind
+from unsafie.database.models.credential import CredentialKind
 
 
 class Failure(StrEnum):
     AUTH = "auth"
     LIMIT = "limit"
     OVERLOADED = "overloaded"
-    MISSING_SESSION = "missing_session"
     OTHER = "other"
 
 
 _AUTH = re.compile(
-    r"invalid api key|authentication[_ ]error|not logged in|\b401\b|unauthorized|"
-    r"invalid (?:bearer |oauth )?token|token (?:has )?(?:expired|been revoked)|"
+    r"invalid api key|authentication[_ ]error|permission[_ ]error|not logged in|\b401\b|\b403\b|"
+    r"unauthorized|invalid (?:bearer |oauth )?token|token (?:has )?(?:expired|been revoked)|"
     r"please (?:run )?/login|oauth token (?:is )?(?:invalid|expired)|invalid x-api-key",
     re.I,
 )
@@ -25,8 +24,25 @@ _LIMIT = re.compile(
     r"out of (?:extra )?usage|resets? (?:at|in) ",
     re.I,
 )
-_OVERLOADED = re.compile(r"overloaded|\b529\b|\b503\b|service unavailable", re.I)
-_MISSING = re.compile(r"no conversation found|session (?:not found|does not exist)", re.I)
+_OVERLOADED = re.compile(r"overloaded|\b529\b|\b503\b|service unavailable|timed? ?out", re.I)
+
+_KINDS = {
+    "authentication_error": Failure.AUTH,
+    "permission_error": Failure.AUTH,
+    "rate_limit_error": Failure.LIMIT,
+    "billing_error": Failure.LIMIT,
+    "overloaded_error": Failure.OVERLOADED,
+    "timeout_error": Failure.OVERLOADED,
+}
+_STATUS = {
+    401: Failure.AUTH,
+    403: Failure.AUTH,
+    402: Failure.LIMIT,
+    429: Failure.LIMIT,
+    503: Failure.OVERLOADED,
+    504: Failure.OVERLOADED,
+    529: Failure.OVERLOADED,
+}
 
 _LIMIT_BASE = {
     CredentialKind.OAUTH: timedelta(minutes=30),
@@ -36,15 +52,7 @@ _LIMIT_MAX = {CredentialKind.OAUTH: timedelta(hours=5), CredentialKind.API_KEY: 
 _OVERLOADED_COOLDOWN = timedelta(minutes=2)
 
 
-def env_for(credential: AnthropicCredential) -> dict[str, str]:
-    if credential.kind == CredentialKind.OAUTH:
-        return {"CLAUDE_CODE_OAUTH_TOKEN": credential.secret, "ANTHROPIC_API_KEY": ""}
-    return {"ANTHROPIC_API_KEY": credential.secret, "CLAUDE_CODE_OAUTH_TOKEN": ""}
-
-
 def classify(text: str) -> Failure:
-    if _MISSING.search(text):
-        return Failure.MISSING_SESSION
     if _AUTH.search(text):
         return Failure.AUTH
     if _OVERLOADED.search(text):
@@ -52,6 +60,16 @@ def classify(text: str) -> Failure:
     if _LIMIT.search(text):
         return Failure.LIMIT
     return Failure.OTHER
+
+
+def classify_api(status: int, kind: str, message: str) -> Failure:
+    by_kind = _KINDS.get(kind)
+    if by_kind is not None:
+        return by_kind
+    by_status = _STATUS.get(status)
+    if by_status is not None:
+        return by_status
+    return classify(message)
 
 
 def cooldown_for(kind: str, failures: int, failure: Failure) -> datetime | None:

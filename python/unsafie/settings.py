@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SECRETS_DIR = Path("/run/secrets")
 
 ROLES = ("all", "web", "worker", "poller")
+CACHE_TTLS = ("5m", "1h")
 POLL_TTL_MARGIN = 10.0
 
 
@@ -105,7 +106,28 @@ class Settings(BaseSettings):
     otel_batch_size: int = 512
     otel_schedule_delay: int = 2000
 
+    anthropic_api_url: str = "https://api.anthropic.com"
+    anthropic_version: str = "2023-06-01"
+    anthropic_beta: str = ""
+    anthropic_oauth_beta: str = "oauth-2025-04-20"
+    anthropic_connections: int = 16
+    anthropic_timeout: float = 900.0
+    anthropic_connect_timeout: float = 20.0
+    anthropic_read_timeout: float = 180.0
+    anthropic_retries: int = 3
+    anthropic_retry_base: float = 2.0
+    anthropic_retry_max: float = 60.0
+
     claude_model: str = "claude-opus-5"
+    claude_max_tokens: int = 32000
+    claude_thinking: str = "adaptive"
+    claude_web_search: bool = True
+    claude_web_search_max_uses: int = 8
+    cache_ttl: str = "1h"
+    agent_max_steps: int = 64
+    agent_max_nudges: int = 2
+    agent_tool_timeout: float = 600.0
+
     chats_dir: Path = Path("chats")
     claude_config_dir: Path = Field(
         default_factory=lambda: Path.home() / ".claude",
@@ -188,6 +210,14 @@ class Settings(BaseSettings):
         value = str(v or "all").strip().lower()
         if value not in ROLES:
             raise ValueError(f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'")
+        return value
+
+    @field_validator("cache_ttl", mode="before")
+    @classmethod
+    def _cache_ttl(cls, v):
+        value = str(v or "1h").strip().lower()
+        if value not in CACHE_TTLS:
+            raise ValueError(f"CACHE_TTL must be one of {', '.join(CACHE_TTLS)}, got '{v}'")
         return value
 
     @model_validator(mode="after")

@@ -9,20 +9,12 @@ from datetime import UTC, datetime
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
-from claude_agent_sdk import (
-    CLIConnectionError,
-    CLIJSONDecodeError,
-    ProcessError,
-    ResultMessage,
-    SystemMessage,
-    query,
-)
 
 from unsafie import events, telemetry
-from unsafie.agent import billing, credentials, queue, transcripts, turns
-from unsafie.agent.options import DEFAULT_EFFORT, build_options
+from unsafie.agent import billing, credentials, loop, queue, request, transcripts, turns
 from unsafie.agent.prompt.context import build_context
-from unsafie.agent.tools import ToolContext, available_servers
+from unsafie.agent.request import DEFAULT_EFFORT
+from unsafie.agent.tools import ToolContext, available_servers, build_tools
 from unsafie.agent.trace import Recorder
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
@@ -52,9 +44,9 @@ LOST_CONTEXT = (
 @dataclass
 class Outcome:
     status: str
-    session_id: str | None = None
     next_at: datetime | None = None
     error: str | None = None
+    cost_usd: float = 0.0
 
 
 def prompt_for(message: Message, in_context: bool) -> str:
@@ -64,79 +56,117 @@ def prompt_for(message: Message, in_context: bool) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
-async def _execute(
-    ctx: ToolContext,
-    prompt: str,
-    *,
-    resume: str | None,
-    fork: bool,
-    session_id: str | None,
-) -> Outcome:
+def _usage(span, result: loop.Result) -> None:
+    telemetry.set_attrs(
+        span,
+        {
+            attrs.GEN_AI_INPUT_TOKENS: result.usage.get("input_tokens"),
+            attrs.GEN_AI_OUTPUT_TOKENS: result.usage.get("output_tokens"),
+            "gen_ai.usage.cache_read_input_tokens": result.usage.get("cache_read_input_tokens"),
+            "gen_ai.usage.cache_creation_input_tokens": result.usage.get(
+                "cache_creation_input_tokens"
+            ),
+        },
+    )
+
+
+async def _bill(ctx: ToolContext, credential, ratio: float, result: loop.Result) -> int:
+    charge = billing.charge_units(result.cost_usd, ratio)
+    async with SessionLocal() as session:
+        if charge:
+            updated = await UserRepository(session).charge(ctx.user_id, charge)
+            logger.info("%s charged %s, balance now %s", ctx.prefix, charge, updated.balance)
+        await TurnRepository(session).record(
+            ctx.turn_id,
+            credential_id=credential.id,
+            cost_usd=result.cost_usd,
+            charge=charge,
+            num_turns=result.steps,
+            result=result.text,
+        )
+    return charge
+
+
+async def _punish(credential, result: loop.Result) -> None:
+    async with SessionLocal() as session:
+        creds = CredentialRepository(session)
+        row = await creds.get(credential.id)
+        if row is None:
+            return
+        cooldown = credentials.cooldown_for(row.kind, row.failures + 1, result.failure)
+        disable = result.failure == credentials.Failure.AUTH
+        await creds.failed(
+            credential.id, error=result.error or "", cooldown_until=cooldown, disable=disable
+        )
+    events.publish(
+        "credential.failed",
+        credential_id=credential.id,
+        kind=str(credential.kind),
+        failure=str(result.failure),
+        cooldown_until=cooldown.isoformat() if cooldown else None,
+        disabled=disable,
+    )
+
+
+async def _execute(ctx: ToolContext, messages: list[dict], servers: list[str]) -> Outcome:
     prefix = ctx.prefix
     tried: set[int] = set()
-    fresh_session_retried = False
+    spent = 0.0
     for attempt in range(1, MAX_ATTEMPTS + 1):
         with telemetry.span(
             "agent.attempt",
-            attributes={
-                attrs.ATTEMPT: attempt,
-                attrs.TURN_ID: str(ctx.turn_id),
-                attrs.RESUME: resume,
-                attrs.FORK: fork,
-            },
+            attributes={attrs.ATTEMPT: attempt, attrs.TURN_ID: str(ctx.turn_id)},
         ) as attempt_span:
             async with SessionLocal() as session:
                 creds = CredentialRepository(session)
-                cred = await creds.pick(tried)
-                if cred is None:
+                credential = await creds.pick(tried)
+                if credential is None:
                     next_at = await creds.next_cooldown()
                     telemetry.refused(attempt_span, f"no usable credential (tried={sorted(tried)})")
                     logger.warning("%s no usable credential (tried=%s)", prefix, sorted(tried))
-                    return Outcome("no_credentials", next_at=next_at)
+                    return Outcome("no_credentials", next_at=next_at, cost_usd=spent)
                 config = await ConfigRepository(session).get()
-                ratio = billing.ratio_for(config, cred.kind)
+                ratio = billing.ratio_for(config, credential.kind)
                 user = await UserRepository(session).get_or_create(ctx.user_id)
                 budget = billing.budget_usd(user.balance, user.budget, ratio)
                 model = user.model or settings.claude_model
                 effort = user.effort or DEFAULT_EFFORT
-                if budget <= 0:
-                    telemetry.refused(attempt_span, "empty balance")
-                    logger.warning("%s aborted: empty balance", prefix)
-                    return Outcome("empty_balance")
-                with telemetry.span("agent.context"):
-                    servers = await available_servers(session, ctx)
-                    context = await build_context(session, ctx, servers)
+
+            left = budget - spent
+            if left <= 0:
+                telemetry.refused(attempt_span, "empty balance")
+                logger.warning("%s stopped: budget %.6f is spent", prefix, budget)
+                return Outcome("ok" if spent else "empty_balance", cost_usd=spent)
+
+            definitions, bound = build_tools(ctx, servers)
             telemetry.set_attrs(
                 attempt_span,
                 {
-                    attrs.CREDENTIAL_ID: cred.id,
-                    attrs.CREDENTIAL_KIND: str(cred.kind),
+                    attrs.CREDENTIAL_ID: credential.id,
+                    attrs.CREDENTIAL_KIND: str(credential.kind),
                     attrs.GEN_AI_MODEL: model,
                     attrs.EFFORT: effort,
-                    attrs.BUDGET_USD: budget,
+                    attrs.BUDGET_USD: left,
                     attrs.SERVERS: servers or None,
                 },
             )
             logger.info(
                 "%s attempt=%s credential=%s(%s) model=%s effort=%s ratio=%s budget=%.6f "
-                "resume=%s fork=%s servers=%s",
+                "messages=%s tools=%s servers=%s",
                 prefix,
                 attempt,
-                cred.id,
-                cred.kind,
+                credential.id,
+                credential.kind,
                 model,
                 effort,
                 ratio,
-                budget,
-                resume,
-                fork,
+                left,
+                len(messages),
+                len(definitions),
                 servers,
             )
-            stderr: list[str] = []
-            result: ResultMessage | None = None
-            seen_session: str | None = None
-            error: str | None = None
-            count = 0
+
+            started = time.perf_counter()
             with telemetry.span(
                 "gen_ai.invoke_agent",
                 kind=telemetry.CLIENT,
@@ -144,168 +174,88 @@ async def _execute(
                     attrs.GEN_AI_SYSTEM: "anthropic",
                     attrs.GEN_AI_OPERATION: "invoke_agent",
                     attrs.GEN_AI_MODEL: model,
-                    attrs.GEN_AI_CONVERSATION: resume or session_id,
                     attrs.EFFORT: effort,
-                    attrs.BUDGET_USD: budget,
+                    attrs.BUDGET_USD: left,
                     attrs.TURN_ID: str(ctx.turn_id),
-                    attrs.PROMPT: telemetry.content(prompt),
                 },
             ) as query_span:
                 recorder = Recorder(prefix, query_span)
-                options = build_options(
-                    ctx,
-                    resume=resume,
-                    fork=fork,
-                    session_id=session_id,
-                    model=model,
-                    effort=effort,
-                    budget_usd=budget,
-                    context=context,
-                    servers=servers,
-                    env=credentials.env_for(cred),
-                    stderr=stderr.append,
-                    recorder=recorder,
-                )
                 ctx.trace.capture()
-                started = time.perf_counter()
                 try:
-                    async for m in query(prompt=prompt, options=options):
-                        count += 1
-                        recorder.message(m)
-                        if isinstance(m, SystemMessage) and m.subtype == "init":
-                            seen_session = m.data.get("session_id") or seen_session
-                        elif isinstance(m, ResultMessage):
-                            result = m
-                            seen_session = m.session_id or seen_session
-                except (ProcessError, CLIConnectionError, CLIJSONDecodeError) as e:
-                    error = f"{e}\n" + "\n".join(stderr[-30:])
+                    result = await loop.run(
+                        ctx,
+                        messages=messages,
+                        credential=credential,
+                        model=model,
+                        effort=effort,
+                        budget_usd=left,
+                        definitions=definitions,
+                        bound=bound,
+                        recorder=recorder,
+                    )
                 finally:
                     ctx.trace.release()
-                    recorder.close()
                 elapsed = (time.perf_counter() - started) * 1000
-                if error is None and result is None:
-                    error = "sdk finished without result\n" + "\n".join(stderr[-30:])
-                if (
-                    error is None
-                    and result is not None
-                    and (result.is_error or result.subtype != "success")
-                ):
-                    error = f"{result.subtype}: {result.result or ''}\n" + "\n".join(stderr[-30:])
+                spent += result.cost_usd
+                _usage(query_span, result)
                 telemetry.set_attrs(
                     query_span,
                     {
-                        attrs.SDK_MESSAGES: count,
-                        attrs.GEN_AI_CONVERSATION: seen_session,
-                        attrs.NUM_TURNS: result.num_turns if result else None,
-                        attrs.COST_USD: result.total_cost_usd if result else None,
-                        attrs.GEN_AI_FINISH_REASONS: [result.subtype] if result else None,
-                        attrs.COMPLETION: telemetry.content(result.result) if result else None,
+                        attrs.SDK_MESSAGES: len(messages),
+                        attrs.NUM_TURNS: result.steps,
+                        attrs.COST_USD: result.cost_usd,
+                        attrs.GEN_AI_FINISH_REASONS: [result.stop_reason]
+                        if result.stop_reason
+                        else None,
+                        attrs.COMPLETION: telemetry.content(result.text),
                     },
                 )
-                _usage(query_span, result)
-                if error is not None:
-                    telemetry.fail(query_span, RuntimeError(short(error, 300)))
-
-            if error is None and result is not None:
-                charge = billing.charge_units(result.total_cost_usd, ratio)
-                async with SessionLocal() as session:
-                    if charge:
-                        updated = await UserRepository(session).charge(ctx.user_id, charge)
-                        logger.info(
-                            "%s charged %s, balance now %s", prefix, charge, updated.balance
-                        )
-                    await CredentialRepository(session).succeeded(cred.id, result.total_cost_usd)
-                    await TurnRepository(session).record(
-                        ctx.turn_id,
-                        credential_id=cred.id,
-                        cost_usd=result.total_cost_usd,
-                        charge=charge,
-                        num_turns=result.num_turns,
-                        result=result.result,
+                if result.status != "ok":
+                    telemetry.fail(
+                        query_span, RuntimeError(short(result.error or result.status, 300))
                     )
-                telemetry.set_attrs(
-                    attempt_span,
-                    {
-                        attrs.OUTCOME: "ok",
-                        attrs.COST_USD: result.total_cost_usd,
-                        attrs.CHARGE: charge,
-                        attrs.NUM_TURNS: result.num_turns,
-                    },
-                )
-                logger.info(
-                    "%s ok credential=%s turns=%s cost=%s charge=%s in %.1fms",
-                    prefix,
-                    cred.id,
-                    result.num_turns,
-                    result.total_cost_usd,
-                    charge,
-                    elapsed,
-                )
-                return Outcome("ok", session_id=seen_session or resume or session_id)
 
-            failure = credentials.classify(error or "")
+            charge = await _bill(ctx, credential, ratio, result)
             telemetry.set_attrs(
-                attempt_span, {attrs.OUTCOME: "failed", attrs.FAILURE: str(failure)}
+                attempt_span,
+                {
+                    attrs.OUTCOME: result.status,
+                    attrs.COST_USD: result.cost_usd,
+                    attrs.CHARGE: charge,
+                    attrs.NUM_TURNS: result.steps,
+                    attrs.FAILURE: str(result.failure) if result.failure else None,
+                },
             )
-            logger.warning(
-                "%s attempt=%s failed credential=%s failure=%s: %s",
+            logger.info(
+                "%s attempt=%s %s steps=%s cost=%.6f charge=%s in %.1fms",
                 prefix,
                 attempt,
-                cred.id,
-                failure,
-                short(error, 600),
+                result.status,
+                result.steps,
+                result.cost_usd,
+                charge,
+                elapsed,
             )
-            if (
-                failure == credentials.Failure.MISSING_SESSION
-                and resume
-                and not fresh_session_retried
-            ):
-                fresh_session_retried = True
-                resume, fork, session_id = None, False, str(uuid.uuid4())
-                async with SessionLocal() as session:
-                    await TurnRepository(session).set_session(ctx.turn_id, session_id)
-                continue
-            if credentials.blames_credential(failure):
-                tried.add(cred.id)
-                async with SessionLocal() as session:
-                    creds = CredentialRepository(session)
-                    row = await creds.get(cred.id)
-                    if row is not None:
-                        cooldown = credentials.cooldown_for(row.kind, row.failures + 1, failure)
-                        await creds.failed(
-                            cred.id,
-                            error=error or "",
-                            cooldown_until=cooldown,
-                            disable=failure == credentials.Failure.AUTH,
-                        )
-                        events.publish(
-                            "credential.failed",
-                            credential_id=cred.id,
-                            kind=str(row.kind),
-                            failure=str(failure),
-                            cooldown_until=cooldown.isoformat() if cooldown else None,
-                            disabled=failure == credentials.Failure.AUTH,
-                        )
-                if seen_session:
-                    resume, fork, session_id = seen_session, False, None
-                continue
-            return Outcome("failed", session_id=seen_session, error=error)
-    return Outcome("failed", error="attempts exhausted")
 
-
-def _usage(span, result: ResultMessage | None) -> None:
-    usage = getattr(result, "usage", None)
-    if not isinstance(usage, dict):
-        return
-    telemetry.set_attrs(
-        span,
-        {
-            attrs.GEN_AI_INPUT_TOKENS: usage.get("input_tokens"),
-            attrs.GEN_AI_OUTPUT_TOKENS: usage.get("output_tokens"),
-            "gen_ai.usage.cache_read_input_tokens": usage.get("cache_read_input_tokens"),
-            "gen_ai.usage.cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
-        },
-    )
+            if result.status == "ok":
+                async with SessionLocal() as session:
+                    await CredentialRepository(session).succeeded(credential.id, result.cost_usd)
+                return Outcome("ok", cost_usd=spent)
+            if result.status == "budget":
+                return Outcome("empty_balance", cost_usd=spent)
+            if result.failure is not None and credentials.blames_credential(result.failure):
+                logger.warning(
+                    "%s credential=%s failed (%s): %s",
+                    prefix,
+                    credential.id,
+                    result.failure,
+                    short(result.error, 600),
+                )
+                tried.add(credential.id)
+                await _punish(credential, result)
+                continue
+            return Outcome("failed", error=result.error, cost_usd=spent)
+    return Outcome("failed", error="attempts exhausted", cost_usd=spent)
 
 
 async def notify(bot: Bot, turn: Turn, text: str) -> None:
@@ -342,36 +292,35 @@ async def _set_session(turn: Turn, session_id: str) -> None:
     turn.session_id = session_id
 
 
-async def _restore(plan: turns.Plan, prefix: str) -> tuple[str | None, bool, str | None, bool]:
+async def _history(plan: turns.Plan, prefix: str) -> tuple[list[dict], str, bool]:
     turn = plan.turn
-    resume, fork, session_id = plan.resume, plan.fork, plan.session_id
-    if resume is None:
-        return resume, fork, session_id, False
-    if fork:
-        if plan.fork_at is None:
-            logger.warning(
-                "%s no transcript line count for %s, forking the whole session", prefix, resume
-            )
-            return resume, True, session_id, False
-        fresh = await transcripts.fork(resume, plan.fork_at, turn.bot_id, turn.chat_id)
-        if fresh is None:
-            logger.warning("%s transcript %s is gone, forking the whole session", prefix, resume)
-            return resume, True, session_id, False
-        await _set_session(turn, fresh)
-        return fresh, False, None, False
-    if await transcripts.ensure(resume, turn.bot_id, turn.chat_id):
-        return resume, fork, session_id, False
-    started = str(uuid.uuid4())
-    logger.warning("%s transcript %s is nowhere to be found, starting %s", prefix, resume, started)
-    await _set_session(turn, started)
-    return None, False, started, True
+    if plan.resume is None:
+        return [], plan.session_id or str(uuid.uuid4()), False
+    if plan.fork:
+        forked = await transcripts.fork(plan.resume, plan.fork_at or 0, turn.bot_id, turn.chat_id)
+        if forked is None:
+            started = str(uuid.uuid4())
+            logger.warning("%s transcript %s is gone, starting %s", prefix, plan.resume, started)
+            return [], started, True
+        session_id, messages = forked
+        return messages, session_id, False
+    messages = await transcripts.load(plan.resume)
+    if messages is None:
+        started = str(uuid.uuid4())
+        logger.warning(
+            "%s transcript %s is nowhere to be found, starting %s", prefix, plan.resume, started
+        )
+        return [], started, True
+    return messages, plan.resume, False
 
 
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
     ctx = ToolContext(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
     prefix = ctx.prefix
-    resume, fork, session_id, lost = await _restore(plan, prefix)
+    messages, session_id, lost = await _history(plan, prefix)
+    if session_id != turn.session_id:
+        await _set_session(turn, session_id)
     if lost:
         prompt = LOST_CONTEXT + "\n\n" + prompt
     status = TurnStatus.FAILED
@@ -382,8 +331,8 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         bot_id=turn.bot_id,
         chat_id=turn.chat_id,
         user_id=turn.user_id,
-        resume=resume is not None,
-        fork=fork,
+        resume=plan.resume is not None,
+        fork=plan.fork,
     )
     with telemetry.span(
         "agent.turn",
@@ -393,19 +342,20 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             attrs.CHAT_ID: turn.chat_id,
             attrs.USER_ID: turn.user_id,
             attrs.LOCALE: locale,
-            attrs.RESUME: resume,
-            attrs.FORK: fork,
-            attrs.GEN_AI_CONVERSATION: session_id or resume,
+            attrs.RESUME: plan.resume,
+            attrs.FORK: plan.fork,
+            attrs.GEN_AI_CONVERSATION: session_id,
         },
     ) as turn_span:
         try:
             async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
+                with telemetry.span("agent.context"):
+                    async with SessionLocal() as session:
+                        servers = await available_servers(session, ctx)
+                        context = await build_context(session, ctx, servers)
+                messages.append(request.user(prompt, context))
                 while True:
-                    outcome = await _execute(
-                        ctx, prompt, resume=resume, fork=fork, session_id=session_id
-                    )
-                    if outcome.session_id and outcome.session_id != turn.session_id:
-                        await _set_session(turn, outcome.session_id)
+                    outcome = await _execute(ctx, messages, servers)
                     if outcome.status != "ok":
                         await queue.clear(turn.id)
                         note = (
@@ -414,14 +364,13 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                         logger.info("%s finished with %s", prefix, outcome.status)
                         await notify(bot, turn, _failure_text(locale, outcome))
                         return
-                    resume, fork, session_id = outcome.session_id, False, None
                     leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
                     if leftover is None:
                         status = TurnStatus.DONE
                         return
-                    prompt = leftover
+                    messages.append(request.user(leftover))
                     telemetry.event("unsafie.turn_rerun")
-                    logger.info("%s re-running with messages that arrived after Stop", prefix)
+                    logger.info("%s re-running with messages that arrived after the reply", prefix)
         except Exception as e:
             telemetry.fail(turn_span, e)
             logger.exception("%s turn crashed", prefix)
@@ -430,11 +379,12 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             await notify(bot, turn, t("agent-failure", locale))
         finally:
             await turns.abandon(turn.id)
-            if turn.session_id:
-                lines = await transcripts.save(turn.session_id, turn.bot_id, turn.chat_id)
-                if lines:
-                    async with SessionLocal() as session:
-                        await TurnRepository(session).set_transcript_lines(turn.id, lines)
+            if turn.session_id and messages:
+                stored = await transcripts.save(
+                    turn.session_id, turn.bot_id, turn.chat_id, messages
+                )
+                async with SessionLocal() as session:
+                    await TurnRepository(session).set_transcript_lines(turn.id, stored)
             async with SessionLocal() as session:
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)

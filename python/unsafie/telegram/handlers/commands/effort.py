@@ -4,7 +4,7 @@ from aiogram import Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
-from unsafie.agent.options import DEFAULT_EFFORT, EFFORT_LEVELS
+from unsafie.agent.request import DEFAULT_EFFORT, EFFORT_LEVELS
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t

@@ -10,7 +10,6 @@ dependencies = [
     "aiohttp>=3.14.0",
     "alembic>=1.19.1",
     "asyncssh>=2.19.0",
-    "claude-agent-sdk>=0.2.151",
     "fastapi>=0.141.1",
     "fluent.runtime>=0.4.0",
     "pyjwt[crypto]>=2.10.0",
