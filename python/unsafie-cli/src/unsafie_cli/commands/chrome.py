@@ -64,7 +64,12 @@ def stop(call: Call, out: Out) -> int:
         out.send({"running": False}, ["chrome was not running"])
         return OK
     if call.on("save-profile") and state.get("profile"):
-        _archive(call, state)
+        name = str(state["profile"])
+        key = f"profiles/{name}.tar.gz"
+        api.client(call).raw(
+            "PUT", f"/blobs/{urllib.parse.quote(key)}", _pack(browser.PROFILES / name)
+        )
+        out.line(f"profile {name} stored as {key}")
     browser.stop(state)
     browser.forget()
     out.send({"stopped": True}, ["chrome stopped"])

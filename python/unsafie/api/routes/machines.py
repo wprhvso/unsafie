@@ -1,12 +1,12 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, WebSocket
 from pydantic import BaseModel
 
 from unsafie import tokens
 from unsafie.database.models.api_token import TokenKind
-from unsafie.pool import channel, donors, registry
+from unsafie.pool import channel, donors, registry, tunnels
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -111,6 +111,25 @@ async def output(
             await channel.started(command_id)
         await channel.push(command_id, frames)
     return {"accepted": len(body.frames)}
+
+
+@router.websocket("/{name}/tunnel/{channel_id}")
+async def tunnel(websocket: WebSocket, name: str, channel_id: str) -> None:
+    token = websocket.query_params.get("token") or ""
+    resolved = await tokens.resolve(token)
+    if resolved is None or resolved.kind != TokenKind.MACHINE or resolved.machine != name:
+        await websocket.close(code=4401)
+        return
+    waiting = tunnels.pending(channel_id)
+    if waiting is None or waiting.machine != name:
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+    tunnels.attach(channel_id, websocket)
+    try:
+        await waiting.closed.wait()
+    finally:
+        tunnels.forget(channel_id)
 
 
 @router.post("/{name}/gone")

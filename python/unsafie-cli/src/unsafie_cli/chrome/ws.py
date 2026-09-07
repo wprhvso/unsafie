@@ -23,14 +23,20 @@ class WsError(RuntimeError):
 class WebSocket:
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         parsed = urllib.parse.urlsplit(url)
-        if parsed.scheme not in ("ws", "http"):
-            raise WsError(f"only plain websockets are supported here, got {parsed.scheme}")
+        if parsed.scheme not in ("ws", "http", "wss", "https"):
+            raise WsError(f"cannot open a websocket to {parsed.scheme}")
+        secure = parsed.scheme in ("wss", "https")
         host = parsed.hostname or "127.0.0.1"
-        port = parsed.port or 80
+        port = parsed.port or (443 if secure else 80)
         path = parsed.path or "/"
         if parsed.query:
             path = f"{path}?{parsed.query}"
-        self.sock = socket.create_connection((host, port), timeout=timeout)
+        raw = socket.create_connection((host, port), timeout=timeout)
+        if secure:
+            import ssl
+
+            raw = ssl.create_default_context().wrap_socket(raw, server_hostname=host)
+        self.sock = raw
         self.sock.settimeout(timeout)
         self._buffer = b""
         self._handshake(host, port, path)
@@ -59,8 +65,13 @@ class WebSocket:
         self._buffer = rest
 
     def send(self, payload: str) -> None:
-        data = payload.encode()
-        header = bytearray([FIN | TEXT])
+        self.send_frame(payload.encode(), TEXT)
+
+    def send_bytes(self, data: bytes) -> None:
+        self.send_frame(data, BINARY)
+
+    def send_frame(self, data: bytes, opcode: int) -> None:
+        header = bytearray([FIN | opcode])
         mask = os.urandom(4)
         size = len(data)
         if size < 126:
@@ -76,13 +87,17 @@ class WebSocket:
         self.sock.sendall(bytes(header) + masked)
 
     def recv(self) -> str | None:
+        payload = self.recv_bytes()
+        return None if payload is None else payload.decode(errors="replace")
+
+    def recv_bytes(self) -> bytes | None:
         while True:
             frame = self._frame()
             if frame is None:
                 return None
             opcode, payload = frame
-            if opcode == TEXT:
-                return payload.decode(errors="replace")
+            if opcode in (TEXT, BINARY):
+                return payload
             if opcode == PING:
                 self._pong(payload)
             elif opcode == CLOSE:

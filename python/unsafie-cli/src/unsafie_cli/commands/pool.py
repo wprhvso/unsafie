@@ -7,6 +7,7 @@ from unsafie_cli import api, config
 from unsafie_cli.errors import FAILED, NOT_FOUND, OK, CliError, Usage
 from unsafie_cli.output import Out
 from unsafie_cli.parser import Call
+from unsafie_wire import markers
 
 FOLLOW_STEP = 2.0
 FOLLOW_LIMIT = 3600.0
@@ -201,6 +202,15 @@ def cp(call: Call, out: Out) -> int:
 def _fail_if(answer: dict, message: str) -> None:
     if answer.get("exit_code") not in (0, None):
         raise CliError(f"{message}: {str(answer.get('output') or '').strip()[:200]}", FAILED)
+
+
+def term(call: Call, out: Out) -> int:
+    body = {"kind": "term", "machine": call.options.machine or None}
+    answer = api.client(call).call("POST", "/pool/desktop", body)
+    url = str(answer.get("url") or "")
+    out.line(markers.link(url, "web terminal"))
+    out.send(answer, [url])
+    return OK
 
 
 def submit(call: Call, out: Out) -> int:

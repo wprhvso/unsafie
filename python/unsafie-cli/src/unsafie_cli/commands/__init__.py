@@ -63,6 +63,7 @@ HANDLERS: dict[tuple[str, ...], Handler] = {
     ("run",): pool.run,
     ("fan",): pool.fan,
     ("cp",): pool.cp,
+    ("term",): pool.term,
     ("job", "submit"): pool.submit,
     ("job", "list"): pool.jobs,
     ("job", "logs"): pool.logs,

@@ -133,7 +133,7 @@ def c(
     )
 
 
-READY_THROUGH = 6
+READY_THROUGH = 7
 
 GLOBAL_FLAGS: tuple[Flag, ...] = (
     _flag("--json # machine readable output"),

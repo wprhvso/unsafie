@@ -11,7 +11,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.pool import CommandStatus, PoolCommand, PoolMachine, PoolUsage
 from unsafie.database.models.user import User
 from unsafie.errors import OpsError
-from unsafie.pool import channel, leases, registry
+from unsafie.pool import channel, leases, registry, tunnels
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -133,6 +133,32 @@ async def run(body: Run, who: Pool) -> dict:
         "seconds": round(result.seconds, 2),
         "truncated": result.truncated,
         "timed_out": result.timed_out,
+    }
+
+
+class Desktop(BaseModel):
+    kind: str = "vnc"
+    display: str | None = None
+    port: int | None = None
+    machine: str | None = None
+
+
+@router.post("/desktop")
+async def desktop(body: Desktop, who: Pool) -> dict:
+    if body.kind not in ("vnc", "term"):
+        raise HTTPException(400, "kind must be vnc or term")
+    try:
+        machine = await leases.resolve(who.user_id, body.machine or who.machine)
+    except OpsError as refused:
+        raise HTTPException(404, str(refused)) from None
+    port = body.port or (settings.pool_vnc_port if body.kind == "vnc" else 0)
+    slug = await tunnels.publish(who.user_id, machine.name, body.kind, port)
+    return {
+        "url": f"{settings.public_origin}/m/{slug}",
+        "slug": slug,
+        "kind": body.kind,
+        "machine": machine.alias or machine.name,
+        "expires_in": settings.pool_desktop_ttl,
     }
 
 

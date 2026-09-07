@@ -191,6 +191,9 @@ class Daemon:
     def _dispatch(self, raw: dict) -> None:
         kind = str(raw.get("kind") or "")
         if kind == wire.FrameKind.COMMAND:
+            if raw.get("tunnel"):
+                threading.Thread(target=self._tunnel, args=(raw["tunnel"],), daemon=True).start()
+                return
             worker = threading.Thread(target=self._execute, args=(raw,), daemon=True)
             worker.start()
             return
@@ -326,6 +329,19 @@ class Daemon:
                 if job.process.poll() is not None:
                     return
                 time.sleep(0.1)
+
+    def _tunnel(self, request: dict) -> None:
+        from unsafie_cli.machine.tunnel import serve_tunnel
+
+        channel_id = str(request.get("channel") or "")
+        kind = str(request.get("kind") or "vnc")
+        port = int(request.get("port") or 0)
+        base = self.link.base.replace("https://", "wss://").replace("http://", "ws://")
+        url = f"{base}/api/v1/machines/{self.name}/tunnel/{channel_id}?token={self.link.token}"
+        try:
+            serve_tunnel(url, kind, port)
+        except Exception as broken:
+            _log(f"tunnel {kind}: {broken}")
 
     def _emit(self, frame: wire.Frame) -> None:
         self.outbox.put({"kind": str(frame.kind), "id": frame.id, **frame.body})
