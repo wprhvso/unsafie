@@ -7,25 +7,32 @@ from unsafie.api.schemas.models import BotRead
 from unsafie.database.models.bot import Bot
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.chat import ChatRepository
-from unsafie.telegram import service
-from unsafie.telegram.manager import manager
+from unsafie.telegram import poller, service
 
 logger = logging.getLogger(__name__)
 
 
-async def read(session: AsyncSession, bot: Bot) -> BotRead:
+async def read(
+    session: AsyncSession, bot: Bot, polled: dict[int, str | None] | None = None
+) -> BotRead:
     _, total = await ChatRepository(session).page(limit=1, bot_id=bot.id)
+    if polled is None:
+        polled = await poller.polled_by([bot.id])
+    owner = polled.get(bot.id)
     return BotRead(
         id=bot.id,
         token_masked=service.mask(bot.token),
-        running=manager.is_running(bot.id),
-        username=manager.username(bot.id),
+        running=owner is not None,
+        polled_by=owner,
+        username=bot.username or None,
         chats=total,
     )
 
 
 async def listing(session: AsyncSession) -> list[BotRead]:
-    return [await read(session, bot) for bot in await BotRepository(session).all()]
+    rows = await BotRepository(session).all()
+    polled = await poller.polled_by([row.id for row in rows])
+    return [await read(session, row, polled) for row in rows]
 
 
 async def create(session: AsyncSession, token: str) -> BotRead:

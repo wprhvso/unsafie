@@ -1,11 +1,3 @@
-/**
- * Zoom of the share page: a pinch with two fingers, ctrl+wheel on a desktop.
- *
- * The scale lives in the --answer-zoom custom property and survives reloads in
- * localStorage; the page is scaled with the CSS zoom property, so paddings and
- * the measure of the text scale along with it.
- */
-
 const KEY = 'answer-zoom';
 const MIN = 0.2;
 const MAX = 5;
@@ -28,7 +20,6 @@ function spread(touches) {
   );
 }
 
-/** Attaches the gestures to the document; returns a teardown function. */
 export function zoomable() {
   let zoom = restore();
   let anchor = zoom;
@@ -45,7 +36,7 @@ export function zoomable() {
     try {
       localStorage.setItem(KEY, String(zoom));
     } catch {
-      /* storage disabled — the zoom simply does not survive the reload */
+      /* empty */
     }
   };
 

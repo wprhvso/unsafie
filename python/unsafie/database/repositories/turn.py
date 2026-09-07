@@ -1,13 +1,14 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.response import Response
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.models.update import Update
+from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,8 @@ class TurnRepository:
             session_id=session_id,
             forked=forked,
             status=TurnStatus.RUNNING,
+            instance_id=settings.instance_id,
+            heartbeat_at=datetime.now(UTC),
         )
         self.session.add(turn)
         await self.session.commit()
@@ -244,13 +247,36 @@ class TurnRepository:
         )
         return list(rows)
 
-    async def mark_stale_running(self) -> int:
-        rows = list(
-            await self.session.scalars(select(Turn).where(Turn.status == TurnStatus.RUNNING))
+    async def set_transcript_lines(self, turn_id: UUID, lines: int) -> None:
+        await self.session.execute(
+            update(Turn).where(Turn.id == turn_id).values(transcript_lines=lines)
         )
+        await self.session.commit()
+
+    async def beat(self, turn_id: UUID) -> None:
+        await self.session.execute(
+            update(Turn)
+            .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
+            .values(heartbeat_at=datetime.now(UTC))
+        )
+        await self.session.commit()
+
+    async def reap_stale(self, stale_after: float) -> list[Turn]:
+        cutoff = datetime.now(UTC) - timedelta(seconds=stale_after)
+        rows = list(
+            await self.session.scalars(
+                select(Turn)
+                .where(
+                    Turn.status == TurnStatus.RUNNING,
+                    func.coalesce(Turn.heartbeat_at, Turn.created_at) < cutoff,
+                )
+                .with_for_update(skip_locked=True)
+            )
+        )
+        now = datetime.now(UTC)
         for turn in rows:
             turn.status = TurnStatus.FAILED
-            turn.finished_at = datetime.now(UTC)
-            turn.result = turn.result or "interrupted by restart"
+            turn.finished_at = now
+            turn.result = turn.result or f"instance {turn.instance_id or 'unknown'} stopped beating"
         await self.session.commit()
-        return len(rows)
+        return rows

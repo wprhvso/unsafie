@@ -1,7 +1,7 @@
 [Unit]
 Description=unsafie
-After=network-online.target postgresql.service
-Wants=network-online.target
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target redis-server.service
 Requires=postgresql.service
 
 [Service]
@@ -15,7 +15,8 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart={{ unsafie_venv }}/bin/python -m unsafie
 Restart=always
 RestartSec=5
-TimeoutStopSec=30
+KillSignal=SIGTERM
+TimeoutStopSec={{ (unsafie_shutdown_grace | int) + 30 }}
 
 MemoryHigh={{ unsafie_memory_high }}
 MemoryMax={{ unsafie_memory_max }}

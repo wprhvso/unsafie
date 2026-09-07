@@ -50,7 +50,7 @@ async def _connect(message: Message, bot_id: int, user_id: int, locale: str, tok
     account, scopes = await pat.save(user_id, token)
     try:
         await message.delete()
-    except Exception as e:  # the token stays in the chat if the bot may not delete messages
+    except Exception as e:
         logger.info("could not delete the message with the token: %s", e)
     repos = await pat.sync(account)
     installations = await pat.link_installations(account)

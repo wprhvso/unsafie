@@ -1,13 +1,3 @@
-"""One request instead of N: the whole repository at a commit, as a tarball.
-
-Reading files through the blobs API costs a request per file. The same content is available as a
-single archive, and the blob sha of every file can be computed locally — so one download fills
-the content-addressed cache for the entire snapshot, and everything after it is a local read.
-
-Anything the archive does not carry (export-ignore, LFS pointers, files over the limit) simply
-stays missing and is fetched the usual way.
-"""
-
 import asyncio
 import logging
 import tarfile
@@ -15,7 +5,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from unsafie import telemetry
+from unsafie import cluster, telemetry
 from unsafie.github import cache, metrics
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.vfs import SKIP_DIRS
@@ -25,9 +15,9 @@ from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
-_inflight: dict[tuple[str, str], asyncio.Task] = {}
-_refused: set[tuple[str, str]] = set()
-REFUSED_LIMIT = 500
+
+def name_for(full: str, commit_sha: str) -> str:
+    return f"snapshot:{full}:{commit_sha}"
 
 
 def _skipped(path: str) -> bool:
@@ -35,11 +25,6 @@ def _skipped(path: str) -> bool:
 
 
 def _extract(archive: Path) -> tuple[int, int]:
-    """Put every reasonable file of the archive into the blob cache. Runs in a worker thread.
-
-    Nothing is written to the paths from the archive: members are read into memory and stored
-    under their own sha, so a crafted archive cannot escape anywhere.
-    """
     files = 0
     total = 0
     with tarfile.open(archive, "r:gz") as tar:
@@ -82,7 +67,7 @@ async def _snapshot(client: RepoClient, commit_sha: str) -> int:
                     client.full,
                     human_size(settings.github_bulk_max_bytes),
                 )
-                _refuse((client.full, commit_sha))
+                await _refuse(client.full, commit_sha)
                 return 0
             files, total = await asyncio.to_thread(_extract, archive)
         telemetry.set_attrs(span, {attrs.GH_FILES: files, attrs.GH_BYTES: total})
@@ -99,27 +84,31 @@ async def _snapshot(client: RepoClient, commit_sha: str) -> int:
     return files
 
 
-def _refuse(key: tuple[str, str]) -> None:
-    if len(_refused) > REFUSED_LIMIT:
-        _refused.clear()
-    _refused.add(key)
+async def _refuse(full: str, commit_sha: str) -> None:
+    await cluster.lease(name_for(full, commit_sha), settings.snapshot_refused_ttl)
 
 
 async def hydrate(client: RepoClient, commit_sha: str) -> int:
-    """Fill the cache from one snapshot. Never fatal: on any trouble we just fetch blobs later."""
-    key = (client.full, commit_sha)
-    if key in _refused:
+    name = name_for(client.full, commit_sha)
+    if await cluster.leased(name):
         return 0
-    task = _inflight.get(key)
-    if task is None:
-        task = asyncio.create_task(_snapshot(client, commit_sha), name="github-snapshot")
-        _inflight[key] = task
-        task.add_done_callback(lambda _: _inflight.pop(key, None))
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        logger.warning("github snapshot %s@%s failed: %s", client.full, commit_sha[:7], e)
-        _refuse(key)
-        return 0
+    async with cluster.try_lock(
+        name, ttl=settings.snapshot_lock_ttl, wait=settings.snapshot_wait, renew=True
+    ) as held:
+        if held is None:
+            logger.info(
+                "github snapshot %s@%s is taking too long elsewhere, reading blobs instead",
+                client.full,
+                commit_sha[:7],
+            )
+            return 0
+        if await cluster.leased(name):
+            return 0
+        try:
+            return await _snapshot(client, commit_sha)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("github snapshot %s@%s failed: %s", client.full, commit_sha[:7], e)
+            await _refuse(client.full, commit_sha)
+            return 0

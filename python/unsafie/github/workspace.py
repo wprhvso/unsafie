@@ -1,9 +1,8 @@
-import asyncio
 import logging
-from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.worktree import Worktree
@@ -20,8 +19,6 @@ from unsafie.github.vfs import Overlay, Tree
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
-
-_locks: dict[tuple[int, str], asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 @dataclass
@@ -44,12 +41,16 @@ class Session:
 
 
 def client_for(repo: Repo, user_id: int) -> RepoClient:
-    """The user's token does the work; the installation token stands by for what it cannot reach."""
     return RepoClient(repo.owner, repo.name, pat.provider(user_id), pat.app_provider(repo))
 
 
-def lock_for(repo_id: int, branch: str) -> asyncio.Lock:
-    return _locks[(repo_id, branch)]
+def lock_for(repo_id: int, branch: str):
+    return cluster.lock(
+        f"repo:{repo_id}:{branch}",
+        ttl=settings.repo_lock_ttl,
+        wait=settings.repo_lock_wait,
+        renew=True,
+    )
 
 
 async def resolve(user_id: int, ref: str | None) -> tuple[UserRepo, Repo]:
@@ -131,7 +132,6 @@ async def read(state: Session, path: str) -> bytes | None:
 
 
 async def read_many(state: Session, paths: Iterable[str]) -> dict[str, bytes | None]:
-    """Read a set of files in one go: the overlay first, everything else as one batch."""
     out: dict[str, bytes | None] = {}
     wanted: dict[str, str] = {}
     for path in dict.fromkeys(paths):

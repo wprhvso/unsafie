@@ -28,8 +28,6 @@ class ToolContext:
     user_id: int
     turn_id: UUID
     locale: str = "en"
-    # Where a tool call belongs in the trace. The SDK invokes these handlers from its own tasks,
-    # which copied their context long before the running attempt existed.
     trace: telemetry.Anchor = field(default_factory=telemetry.Anchor)
 
     @property
@@ -74,7 +72,6 @@ def handle_errors(exc_type: type[Exception], formatter: Callable[[Exception], st
 
 
 def guarded(fn: Handler) -> Handler:
-    """Logs, refusals and the span: every one of the 108 tools passes through here."""
 
     @functools.wraps(fn)
     async def wrapper(ctx: ToolContext, args: dict) -> dict:
@@ -102,7 +99,6 @@ def guarded(fn: Handler) -> Handler:
             except Exception as e:
                 for exc_type, formatter in _HANDLED:
                     if isinstance(e, exc_type):
-                        # An answer for the model, not an incident: the span stays green.
                         telemetry.refused(span, e)
                         logger.info("%s tool=%s refused: %s", ctx.prefix, name, e)
                         return error(formatter(e))

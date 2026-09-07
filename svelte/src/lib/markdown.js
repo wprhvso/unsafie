@@ -1,11 +1,3 @@
-/**
- * Rendering of a shared answer: markdown-it + highlight.js + KaTeX,
- * with a copy button on top of every code block.
- *
- * Everything heavy is imported lazily, so only the share route pays for it —
- * the admin bundle stays untouched.
- */
-
 const MATH = {
   delimiters: [
     { left: '$$', right: '$$', display: true },
@@ -27,11 +19,6 @@ const COPIED_MS = 1600;
 
 const FENCE = /^ {0,3}(?:`{3,}|~{3,})[ \t]*([^\s`{}]+)/gm;
 
-/**
- * The common bundle of highlight.js knows the forty usual languages and is ten
- * times lighter than the full one; everything else — nix, dockerfile, elixir
- * and so on — is worth its megabyte only when the answer really mentions it.
- */
 async function highlighter(source) {
   const { default: common } = await import('highlight.js/lib/common');
   const declared = new Set();
@@ -93,7 +80,6 @@ function addCopyButtons(root, label) {
   }
 }
 
-/** Markdown into a detached container, ready to be moved into the page. */
 export async function render(source, { copyLabel = 'Copy' } = {}) {
   const [{ default: MarkdownIt }, { default: renderMath }, hljs] = await Promise.all([
     import('markdown-it'),
@@ -124,7 +110,6 @@ export async function render(source, { copyLabel = 'Copy' } = {}) {
   return holder;
 }
 
-/** Last resort when a chunk fails to load: the answer as plain text. */
 export function plain(source) {
   const holder = document.createElement('div');
   const pre = document.createElement('pre');

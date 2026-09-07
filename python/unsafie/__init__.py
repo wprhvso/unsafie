@@ -11,11 +11,13 @@ def main() -> None:
     setup()
     telemetry.setup()
     logging.getLogger(__name__).info(
-        "starting uvicorn host=%s port=%s reload=%s model=%s",
+        "starting uvicorn host=%s port=%s reload=%s model=%s instance=%s role=%s",
         settings.host,
         settings.port,
         settings.reload,
         settings.claude_model,
+        settings.instance_id,
+        settings.role,
     )
     uvicorn.run(
         "unsafie.app:app",

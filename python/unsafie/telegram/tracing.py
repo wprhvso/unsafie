@@ -1,14 +1,3 @@
-"""Spans for outgoing Bot API calls.
-
-Everything the bot sends goes through the session middleware chain, so one hook covers
-`sender.py`, the agent tools and aiogram's own internals alike — no call to Telegram can slip
-out of a trace unnoticed.
-
-Two methods are deliberately left out. `getUpdates` hangs for half a minute by design and would
-add a span per poll forever, and `sendChatAction` repeats every five seconds for as long as the
-agent is thinking; neither says anything a trace reader wants to know.
-"""
-
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import (
     BaseRequestMiddleware,
@@ -30,12 +19,6 @@ def method_name(method: TelegramMethod) -> str:
 
 
 def sent_message_id(response) -> int | None:
-    """The id of what was just sent, whatever shape the call returned.
-
-    The middleware chain hands over the unwrapped result, not the `Response` envelope, and a
-    result is anything a Bot API method can return: a `Message`, a `User` from `getMe`, a list
-    from `sendMediaGroup`, a bare `True`. Only the first two lines of that list carry an id.
-    """
     result = getattr(response, "result", response)
     if isinstance(result, list):
         result = result[0] if result else None

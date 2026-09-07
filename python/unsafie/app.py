@@ -2,26 +2,29 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
-from unsafie import telemetry
+from unsafie import cluster, events, telemetry
+from unsafie.agent import turns
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
-from unsafie.database import SessionLocal, engine
-from unsafie.database.repositories.delivery import DeliveryRepository
-from unsafie.database.repositories.turn import TurnRepository
+from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
 from unsafie.github.cache import sweeper
 from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.cleanup import cleanup
+from unsafie.github.webhooks.worker import worker
+from unsafie.janitor import janitor
 from unsafie.log import setup
+from unsafie.presence import presence
 from unsafie.scheduler.runner import runner
 from unsafie.settings import settings
 from unsafie.ssh.pool import pool
 from unsafie.ssh.watchdog import watchdog
-from unsafie.telegram.lifecycle import start_all, stop_all
+from unsafie.telegram import bots
+from unsafie.telegram.poller import supervisor
 from unsafie.telemetry import attrs
 
 setup()
@@ -32,32 +35,29 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     with telemetry.span("app.startup", kind=telemetry.INTERNAL):
-        logger.info("lifespan startup")
-        await upgrade()
-        async with SessionLocal() as session:
-            stale_turns = await TurnRepository(session).mark_stale_running()
-            stale_deliveries = await DeliveryRepository(session).mark_stale()
-        if stale_turns:
-            logger.warning("%s turn(s) were running at shutdown, marked failed", stale_turns)
-        if stale_deliveries:
-            logger.warning(
-                "%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries
-            )
-        await start_all()
-        # The loops outlive this span: they must not inherit it as a parent for the next month.
+        logger.info("lifespan startup instance=%s role=%s", settings.instance_id, settings.role)
+        await cluster.connect()
         with telemetry.detached():
-            for loop in (cleanup, runner, watchdog, sweeper):
+            events.bus.start()
+        await upgrade()
+        with telemetry.detached():
+            for loop in (cleanup, runner, watchdog, sweeper, supervisor, worker, janitor, presence):
                 loop.start()
         logger.info("lifespan ready")
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
         logger.info("lifespan shutdown")
-        for loop in (sweeper, watchdog, runner, cleanup):
+        await supervisor.pause()
+        if left := await turns.drain(settings.shutdown_grace):
+            logger.warning("%s turn(s) still running after the grace period: %s", len(left), left)
+        for loop in (supervisor, presence, janitor, worker, sweeper, watchdog, runner, cleanup):
             await loop.stop()
         await pool.close_all()
-        await stop_all()
+        await bots.close_all()
         await close_session()
         await engine.dispose()
+        await events.bus.stop()
+        await cluster.close()
         logger.info("shutdown complete")
     telemetry.shutdown()
 
@@ -67,8 +67,6 @@ app = FastAPI(title="unsafie", lifespan=lifespan)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Runs inside the server span created by the instrumentation: nginx' request id lands on it,
-    # which is what ties an access-log line to this trace.
     telemetry.annotate(**{attrs.REQUEST_ID: request.headers.get("x-request-id")})
     started = time.perf_counter()
     try:
@@ -96,8 +94,16 @@ app.include_router(admin_router)
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health(response: Response) -> dict[str, object]:
+    redis = await cluster.health()
+    if redis["status"] != "ok":
+        response.status_code = 503
+    return {
+        "status": "ok" if redis["status"] == "ok" else "degraded",
+        "instance": settings.instance_id,
+        "role": settings.role,
+        "redis": redis,
+    }
 
 
 if (assets := static.assets_dir()) is not None:

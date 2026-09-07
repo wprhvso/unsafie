@@ -12,6 +12,7 @@ class BotRead(Base):
     id: int
     token_masked: str
     running: bool
+    polled_by: str | None = None
     username: str | None = None
     chats: int = 0
 
@@ -292,6 +293,7 @@ class OverviewRead(BaseModel):
     chats: int
     bots: int
     bots_running: int
+    instances: int = 0
     running_turns: int
     credentials: int
     credentials_total: int

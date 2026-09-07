@@ -22,7 +22,8 @@
 <Loader state={overview}>
   {@const o = overview.data}
   <div class="grid">
-    <Stat label="Bots" value="{o.bots_running}/{o.bots}" hint="running" tone={o.bots_running < o.bots ? 'warn' : ''} />
+    <Stat label="Bots" value="{o.bots_running}/{o.bots}" hint="polled" tone={o.bots_running < o.bots ? 'warn' : ''} />
+    <Stat label="Instances" value={o.instances} hint="alive" tone={o.instances ? '' : 'bad'} />
     <Stat label="Users" value={o.users} hint="{o.chats} chats" />
     <Stat label="Turns 24h" value={o.day.turns} hint="{o.day.failed} failed" tone={o.day.failed ? 'warn' : ''} />
     <Stat label="Spend 24h" value={usd(o.day.cost_usd)} hint="charged {money(o.day.charge)}" />

@@ -14,11 +14,14 @@ class CleanupLoop(Loop):
     startup_delay = 60.0
 
     @property
+    def enabled(self) -> bool:
+        return settings.runs_worker
+
+    @property
     def interval(self) -> float:
         return float(settings.webhook_cleanup_interval)
 
     async def tick(self) -> None:
-        # Housekeeping, hourly, always the same delete: logged, not traced.
         with telemetry.muted():
             async with SessionLocal() as session:
                 deliveries = await DeliveryRepository(session).purge(settings.webhook_keep_days)

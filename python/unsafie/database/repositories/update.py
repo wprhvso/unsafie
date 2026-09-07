@@ -23,7 +23,7 @@ class UpdateRepository:
         message_id: int | None,
         user_id: int | None,
         payload: dict,
-    ) -> int:
+    ) -> tuple[int, bool]:
         stmt = (
             insert(Update)
             .values(
@@ -38,13 +38,14 @@ class UpdateRepository:
             .returning(Update.id)
         )
         stored = await self.session.scalar(stmt)
-        if stored is None:
+        fresh = stored is not None
+        if not fresh:
             stored = await self.session.scalar(
                 select(Update.id).where(Update.bot_id == bot_id, Update.update_id == update_id)
             )
             logger.info("bot=%s update=%s redelivered, row=%s", bot_id, update_id, stored)
         await self.session.commit()
-        return int(stored)
+        return int(stored), fresh
 
     async def attach(self, update_db_id: int, turn_id: UUID) -> int:
         ordinal = await self.session.scalar(

@@ -12,7 +12,6 @@ class UserClient(GithubHTTP):
         return await self.request("GET", "/user")
 
     async def repos(self, limit: int = 200) -> list[dict]:
-        """Everything the token can reach: own, organization and collaborator repositories."""
         return await self.paginate(
             "/user/repos",
             {"affiliation": "owner,collaborator,organization_member", "sort": "pushed"},

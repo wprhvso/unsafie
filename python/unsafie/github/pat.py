@@ -1,10 +1,3 @@
-"""Personal access tokens — the credential the bot works with.
-
-Everything a token can do goes through the token: repositories, issues, pull requests, actions,
-search, gists, notifications. The GitHub App is kept only for what no token can do — webhook
-delivery and the Checks API — so it is a fallback here, never the entry point.
-"""
-
 import logging
 import string
 
@@ -32,21 +25,18 @@ NICE_SCOPES = ("workflow", "gist", "notifications", "read:org")
 
 
 def looks_like_token(value: str) -> bool:
-    """A PAT, not a subcommand: either a known prefix or the old 40-char hex form."""
     if value.startswith(PREFIXES):
         return True
     return len(value) == 40 and all(c in string.hexdigits for c in value)
 
 
 def missing_scopes(scopes: list[str]) -> list[str]:
-    """Fine-grained tokens report no scopes at all — nothing to complain about then."""
     if not scopes:
         return []
     return [s for s in NEEDED_SCOPES + NICE_SCOPES if s not in scopes]
 
 
 async def verify(token: str) -> tuple[dict, list[str]]:
-    """Who the token belongs to and which classic scopes it carries (empty for fine-grained)."""
     http = await session()
     headers = {
         "Accept": ACCEPT,
@@ -109,7 +99,6 @@ async def user_client(user_id: int, login: str | None = None) -> UserClient:
 
 
 def provider(user_id: int, login: str | None = None) -> TokenProvider:
-    """A lazy token: the account is looked up once per client, not once per request."""
     box: dict[str, str] = {}
 
     async def resolve() -> str:
@@ -122,14 +111,12 @@ def provider(user_id: int, login: str | None = None) -> TokenProvider:
 
 
 def app_provider(repo: Repo) -> TokenProvider | None:
-    """The App token for this repository, if it happens to be installed there."""
     if not repo.installation_id:
         return None
     return auth.installation_provider(repo.installation_id)
 
 
 async def token_for(user_id: int, repo: Repo) -> str:
-    """A single token for a raw download: the user's, or the App's when there is none."""
     account = await account_of(user_id)
     if account and account.token:
         return account.token
@@ -139,7 +126,6 @@ async def token_for(user_id: int, repo: Repo) -> str:
 
 
 async def remember(user_id: int, items: list[dict]) -> list[Repo]:
-    """Save repositories seen by a token and give the user a short alias for each."""
     saved: list[Repo] = []
     async with SessionLocal() as db:
         repos = RepoRepository(db)
@@ -169,7 +155,6 @@ async def sync(account: GithubAccount, limit: int | None = None) -> list[Repo]:
 
 
 async def add(user_id: int, ref: str, alias: str | None = None) -> tuple[Repo, str]:
-    """Bind one repository by owner/name — the way to reach someone else's private repo."""
     account = await require_account(user_id)
     owner, _, name = ref.strip().partition("/")
     if not owner or not name:
@@ -189,7 +174,6 @@ async def add(user_id: int, ref: str, alias: str | None = None) -> tuple[Repo, s
 
 
 async def link_installations(account: GithubAccount) -> list[int]:
-    """Match App installations to the account by login: /user/installations needs an OAuth token."""
     from unsafie.github.app import install
 
     if not await auth.app_configured():

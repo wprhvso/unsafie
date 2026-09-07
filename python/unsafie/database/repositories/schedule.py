@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,14 +54,22 @@ class ScheduleRepository:
             or 0
         )
 
-    async def due(self, now: datetime, limit: int = 50) -> list[ScheduledTask]:
-        rows = await self.session.scalars(
-            select(ScheduledTask)
-            .where(ScheduledTask.enabled.is_(True), ScheduledTask.next_run_at <= now)
-            .order_by(ScheduledTask.next_run_at)
-            .limit(limit)
+    async def claim(self, now: datetime, limit: int, lease: float) -> list[ScheduledTask]:
+        rows = list(
+            await self.session.scalars(
+                select(ScheduledTask)
+                .where(ScheduledTask.enabled.is_(True), ScheduledTask.next_run_at <= now)
+                .order_by(ScheduledTask.next_run_at)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            )
         )
-        return list(rows)
+        for row in rows:
+            row.next_run_at = now + timedelta(seconds=lease)
+        await self.session.commit()
+        if rows:
+            logger.info("claimed task(s) %s for %ss", [r.id for r in rows], lease)
+        return rows
 
     async def fired(self, task: ScheduledTask, next_run_at: datetime | None) -> None:
         task.runs += 1

@@ -19,7 +19,7 @@ from claude_agent_sdk import (
 )
 
 from unsafie import events, telemetry
-from unsafie.agent import billing, credentials, queue, turns
+from unsafie.agent import billing, credentials, queue, transcripts, turns
 from unsafie.agent.options import DEFAULT_EFFORT, build_options
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.tools import ToolContext, available_servers
@@ -41,6 +41,12 @@ from unsafie.telemetry import attrs
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 6
+
+LOST_CONTEXT = (
+    "The earlier part of this conversation could not be restored, so you are seeing it for the "
+    "first time. The message below may reply to something you cannot see: say so plainly instead "
+    "of guessing what it was about."
+)
 
 
 @dataclass
@@ -160,7 +166,6 @@ async def _execute(
                     stderr=stderr.append,
                     recorder=recorder,
                 )
-                # Tools are called from the SDK's own tasks: this is the context they attach to.
                 ctx.trace.capture()
                 started = time.perf_counter()
                 try:
@@ -289,7 +294,6 @@ async def _execute(
 
 
 def _usage(span, result: ResultMessage | None) -> None:
-    """Token counts, when the SDK reports them."""
     usage = getattr(result, "usage", None)
     if not isinstance(usage, dict):
         return
@@ -332,11 +336,44 @@ def _failure_text(locale: str, outcome: Outcome) -> str:
     return t("agent-failure", locale)
 
 
+async def _set_session(turn: Turn, session_id: str) -> None:
+    async with SessionLocal() as session:
+        await TurnRepository(session).set_session(turn.id, session_id)
+    turn.session_id = session_id
+
+
+async def _restore(plan: turns.Plan, prefix: str) -> tuple[str | None, bool, str | None, bool]:
+    turn = plan.turn
+    resume, fork, session_id = plan.resume, plan.fork, plan.session_id
+    if resume is None:
+        return resume, fork, session_id, False
+    if fork:
+        if plan.fork_at is None:
+            logger.warning(
+                "%s no transcript line count for %s, forking the whole session", prefix, resume
+            )
+            return resume, True, session_id, False
+        fresh = await transcripts.fork(resume, plan.fork_at, turn.bot_id, turn.chat_id)
+        if fresh is None:
+            logger.warning("%s transcript %s is gone, forking the whole session", prefix, resume)
+            return resume, True, session_id, False
+        await _set_session(turn, fresh)
+        return fresh, False, None, False
+    if await transcripts.ensure(resume, turn.bot_id, turn.chat_id):
+        return resume, fork, session_id, False
+    started = str(uuid.uuid4())
+    logger.warning("%s transcript %s is nowhere to be found, starting %s", prefix, resume, started)
+    await _set_session(turn, started)
+    return None, False, started, True
+
+
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
     ctx = ToolContext(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
     prefix = ctx.prefix
-    resume, fork, session_id = plan.resume, plan.fork, plan.session_id
+    resume, fork, session_id, lost = await _restore(plan, prefix)
+    if lost:
+        prompt = LOST_CONTEXT + "\n\n" + prompt
     status = TurnStatus.FAILED
     note: str | None = None
     events.publish(
@@ -362,17 +399,15 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         },
     ) as turn_span:
         try:
-            async with typing(bot, turn.chat_id, prefix):
+            async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
                 while True:
                     outcome = await _execute(
                         ctx, prompt, resume=resume, fork=fork, session_id=session_id
                     )
                     if outcome.session_id and outcome.session_id != turn.session_id:
-                        async with SessionLocal() as session:
-                            await TurnRepository(session).set_session(turn.id, outcome.session_id)
-                        turn.session_id = outcome.session_id
+                        await _set_session(turn, outcome.session_id)
                     if outcome.status != "ok":
-                        queue.clear(turn.id)
+                        await queue.clear(turn.id)
                         note = (
                             outcome.status if outcome.error is None else short(outcome.error, 1000)
                         )
@@ -380,9 +415,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                         await notify(bot, turn, _failure_text(locale, outcome))
                         return
                     resume, fork, session_id = outcome.session_id, False, None
-                    leftover = await turns.finish_or_continue(
-                        turn.id, turn.bot_id, turn.chat_id, queue.drain
-                    )
+                    leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
                     if leftover is None:
                         status = TurnStatus.DONE
                         return
@@ -392,11 +425,16 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         except Exception as e:
             telemetry.fail(turn_span, e)
             logger.exception("%s turn crashed", prefix)
-            queue.clear(turn.id)
+            await queue.clear(turn.id)
             note = "crashed"
             await notify(bot, turn, t("agent-failure", locale))
         finally:
-            turns.abandon(turn.id)
+            await turns.abandon(turn.id)
+            if turn.session_id:
+                lines = await transcripts.save(turn.session_id, turn.bot_id, turn.chat_id)
+                if lines:
+                    async with SessionLocal() as session:
+                        await TurnRepository(session).set_transcript_lines(turn.id, lines)
             async with SessionLocal() as session:
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)
@@ -462,8 +500,7 @@ async def dispatch(
     prompt = build_prompt(plan.in_context)
     logger.debug("bot=%s chat=%s %s prompt=%s", bot_id, chat_id, what, short(prompt))
     if plan.inject:
-        n = queue.enqueue(plan.turn.id, prompt)
-        # The work continues in the trace of the turn that is already running.
+        n = await queue.enqueue(plan.turn.id, prompt)
         telemetry.annotate(**{attrs.INJECTED: True, attrs.TURN_ID: str(plan.turn.id)})
         logger.info(
             "bot=%s chat=%s %s queued into turn=%s (pending=%s)",

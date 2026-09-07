@@ -1,18 +1,9 @@
-"""Attribute names in one place, and everything that must never reach a span.
-
-Span *names* stay low-cardinality — anything variable (an id, a repo, a command) is an
-attribute. Payloads (prompts, tool arguments, command output) are optional: a trace store is
-neither a log nor a place for secrets, so content is off by default, always truncated and
-always scrubbed.
-"""
-
 import json
 import re
 from typing import Any
 
 from unsafie.settings import settings
 
-# resource
 SERVICE_NAME = "service.name"
 SERVICE_VERSION = "service.version"
 SERVICE_INSTANCE = "service.instance.id"
@@ -20,7 +11,6 @@ ENVIRONMENT = "deployment.environment.name"
 HOST_NAME = "host.name"
 PROCESS_PID = "process.pid"
 
-# who and where
 BOT_ID = "unsafie.bot_id"
 CHAT_ID = "unsafie.chat_id"
 USER_ID = "unsafie.user_id"
@@ -30,13 +20,18 @@ MESSAGE_ID = "unsafie.message_id"
 REQUEST_ID = "unsafie.request_id"
 LOCALE = "unsafie.locale"
 
-# outcome
+INSTANCE = "unsafie.instance"
+ROLE = "unsafie.role"
+LOCK = "unsafie.lock"
+LOCK_WAIT_MS = "unsafie.lock.wait_ms"
+LOCK_TAKEN = "unsafie.lock.taken"
+
+DUPLICATE = "unsafie.duplicate"
 REFUSED = "unsafie.refused"
 REFUSAL = "unsafie.refusal"
 CANCELLED = "unsafie.cancelled"
 PARENT_TRACE = "unsafie.parent_trace_id"
 
-# telegram
 TG_UPDATE_TYPE = "unsafie.telegram.update_type"
 TG_METHOD = "unsafie.telegram.method"
 TG_CHUNKS = "unsafie.telegram.chunks"
@@ -48,7 +43,6 @@ FILE_MEDIA = "unsafie.file.media"
 TG_SILENT = "unsafie.telegram.silent"
 TG_RETRIES = "unsafie.telegram.retries"
 
-# agent
 TOOL = "unsafie.tool"
 TOOL_ARGS = "unsafie.tool.args"
 TOOL_RESULT = "unsafie.tool.result"
@@ -75,7 +69,6 @@ TOOL_CALLS = "unsafie.tool_calls"
 SDK_MESSAGES = "unsafie.sdk_messages"
 NUM_TURNS = "unsafie.num_turns"
 
-# gen_ai semantic conventions (https://opentelemetry.io/docs/specs/semconv/gen-ai/)
 GEN_AI_SYSTEM = "gen_ai.system"
 GEN_AI_OPERATION = "gen_ai.operation.name"
 GEN_AI_MODEL = "gen_ai.request.model"
@@ -87,7 +80,6 @@ GEN_AI_INPUT_TOKENS = "gen_ai.usage.input_tokens"
 GEN_AI_OUTPUT_TOKENS = "gen_ai.usage.output_tokens"
 GEN_AI_FINISH_REASONS = "gen_ai.response.finish_reasons"
 
-# github
 GH_REPO = "unsafie.github.repo"
 GH_BRANCH = "unsafie.github.branch"
 GH_EVENT = "unsafie.github.event"
@@ -101,7 +93,6 @@ GH_FILES = "unsafie.github.files"
 GH_SHA = "unsafie.github.sha"
 GH_NOTIFIED = "unsafie.github.notified"
 
-# ssh
 SSH_ALIAS = "unsafie.ssh.alias"
 SSH_COMMAND = "unsafie.ssh.command"
 SSH_EXIT = "unsafie.ssh.exit_code"
@@ -110,7 +101,6 @@ SSH_TRUNCATED = "unsafie.ssh.truncated"
 SSH_PATH = "unsafie.ssh.path"
 SSH_BYTES = "unsafie.ssh.bytes"
 
-# scheduler and loops
 LOOP = "unsafie.loop"
 TASK_ID = "unsafie.task.id"
 TASK_KIND = "unsafie.task.kind"
@@ -118,7 +108,6 @@ WATCH_ID = "unsafie.watch.id"
 WATCH_NAME = "unsafie.watch.name"
 WATCH_FIRES = "unsafie.watch.fires"
 
-# http semconv, used for our hand-written client spans
 HTTP_METHOD = "http.request.method"
 HTTP_STATUS = "http.response.status_code"
 HTTP_URL = "url.full"
@@ -149,7 +138,6 @@ def stringify(value: Any) -> str:
 
 
 def clip(value: Any, limit: int | None = None) -> str:
-    """Truncate and scrub. Used for everything that goes into an attribute as text."""
     limit = limit or settings.otel_max_attr_len
     text = scrub(stringify(value))
     if len(text) <= limit:
@@ -158,7 +146,6 @@ def clip(value: Any, limit: int | None = None) -> str:
 
 
 def content(value: Any, limit: int | None = None) -> str | None:
-    """A payload attribute: None (and therefore dropped) unless content capture is on."""
     if value is None or not settings.otel_capture_content:
         return None
     return clip(value, limit)

@@ -68,8 +68,6 @@ class Entry:
 
 
 class Overlay:
-    """Pending changes on top of a base tree: path -> base64 content or None for a deletion."""
-
     def __init__(self, changes: dict[str, Any] | None = None) -> None:
         self.changes: dict[str, Any] = dict(changes or {})
 
@@ -137,8 +135,6 @@ class Overlay:
 
 
 class Tree:
-    """Flat view of a git tree with the overlay applied."""
-
     def __init__(self, entries: list[dict], overlay: Overlay) -> None:
         self.base = {e["path"]: e for e in entries if e.get("type") == "blob"}
         self.dirs = {e["path"] for e in entries if e.get("type") == "tree"}

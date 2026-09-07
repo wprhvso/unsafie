@@ -19,6 +19,12 @@ unsafie_replace_default_vhost: true
 unsafie_db_name: unsafie
 unsafie_db_user: unsafie
 
+unsafie_redis_url: redis://127.0.0.1:6379/0
+unsafie_redis_prefix: unsafie
+unsafie_role: all
+unsafie_shutdown_grace: 90
+unsafie_instances: []
+
 unsafie_memory_high: 2G
 unsafie_memory_max: 3G
 

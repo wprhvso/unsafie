@@ -22,6 +22,7 @@ class Turn(Base):
         Index("ix_turns_chat", "bot_id", "chat_id", "created_at"),
         Index("ix_turns_session", "bot_id", "chat_id", "session_id", "created_at"),
         Index("ix_turns_user", "user_id", "created_at"),
+        Index("ix_turns_alive", "status", "heartbeat_at"),
     )
 
     id: Mapped[UUID] = mapped_column(SQL_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -45,5 +46,8 @@ class Turn(Base):
     charge: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     num_turns: Mapped[int] = mapped_column(default=0, server_default="0")
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript_lines: Mapped[int | None] = mapped_column(nullable=True)
+    instance_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

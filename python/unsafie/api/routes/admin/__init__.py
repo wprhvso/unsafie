@@ -9,6 +9,7 @@ from unsafie.api.routes.admin import (
     deliveries,
     events,
     github,
+    instances,
     overview,
     schedule,
     shares,
@@ -24,6 +25,7 @@ admin_router = APIRouter(prefix="/api/admin", dependencies=[Depends(admin_requir
 
 for module in (
     overview,
+    instances,
     bots,
     credentials,
     config,

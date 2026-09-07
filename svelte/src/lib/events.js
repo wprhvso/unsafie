@@ -1,6 +1,5 @@
 import { browser } from '$app/environment';
 
-/** Subscribe to the server event stream. Returns a stop function. */
 export function subscribe({ kinds, match, onEvent, onGap } = {}) {
   if (!browser) return () => {};
   const params = new URLSearchParams();
@@ -11,7 +10,7 @@ export function subscribe({ kinds, match, onEvent, onGap } = {}) {
     try {
       onEvent?.(JSON.parse(e.data));
     } catch {
-      /* keepalive comments and malformed frames are ignored */
+      /* empty */
     }
   };
   source.addEventListener('message', handler);
@@ -27,7 +26,6 @@ export function subscribe({ kinds, match, onEvent, onGap } = {}) {
   return () => source.close();
 }
 
-/** Re-run `load` at most once per `ms`, triggered by matching events. */
 export function refreshOn(kinds, load, ms = 700) {
   let timer = null;
   return subscribe({

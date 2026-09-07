@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from unsafie import events, telemetry
+from unsafie import cluster, events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.scheduled_task import TaskKind
@@ -10,8 +10,7 @@ from unsafie.fluent import t
 from unsafie.loop import Loop
 from unsafie.scheduler import service
 from unsafie.settings import settings
-from unsafie.telegram import sender
-from unsafie.telegram.manager import manager
+from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ class Runner(Loop):
 
     @property
     def enabled(self) -> bool:
-        return settings.schedule_enabled
+        return settings.schedule_enabled and settings.runs_worker
 
     @property
     def interval(self) -> float:
@@ -33,29 +32,34 @@ class Runner(Loop):
 
     async def tick(self) -> None:
         now = datetime.now(UTC)
-        # Looking for due tasks every 20 seconds is not worth a span; firing one is.
         with telemetry.muted():
             async with SessionLocal() as session:
-                due = await ScheduleRepository(session).due(now, BATCH)
+                due = await ScheduleRepository(session).claim(now, BATCH, settings.job_lease)
         for task in due:
-            with telemetry.span(
-                "scheduler.task",
-                kind=telemetry.CONSUMER,
-                attributes={
-                    attrs.TASK_ID: task.id,
-                    attrs.TASK_KIND: str(task.kind),
-                    attrs.BOT_ID: task.bot_id,
-                    attrs.CHAT_ID: task.chat_id,
-                    attrs.USER_ID: task.user_id,
-                    attrs.PROMPT: telemetry.content(task.text),
-                },
-            ) as span:
-                try:
-                    await self._fire(task)
-                except Exception as e:
-                    telemetry.fail(span, e)
-                    logger.exception("task=%s failed", task.id)
-                    await self._advance(task)
+            async with cluster.try_lock(
+                f"task:{task.id}", ttl=settings.job_lock_ttl, renew=True
+            ) as held:
+                if held is None:
+                    logger.info("task=%s is already running elsewhere", task.id)
+                    continue
+                with telemetry.span(
+                    "scheduler.task",
+                    kind=telemetry.CONSUMER,
+                    attributes={
+                        attrs.TASK_ID: task.id,
+                        attrs.TASK_KIND: str(task.kind),
+                        attrs.BOT_ID: task.bot_id,
+                        attrs.CHAT_ID: task.chat_id,
+                        attrs.USER_ID: task.user_id,
+                        attrs.PROMPT: telemetry.content(task.text),
+                    },
+                ) as span:
+                    try:
+                        await self._fire(task)
+                    except Exception as e:
+                        telemetry.fail(span, e)
+                        logger.exception("task=%s failed", task.id)
+                        await self._advance(task)
 
     async def _advance(self, task) -> None:
         run_at = await service.advance(task)
@@ -66,7 +70,7 @@ class Runner(Loop):
                 await repo.fired(row, run_at)
 
     async def _fire(self, task) -> None:
-        bot = manager.bot(task.bot_id)
+        bot = await bots.bot_for(task.bot_id)
         if bot is None:
             logger.warning("task=%s: bot %s is not running", task.id, task.bot_id)
             await self._advance(task)

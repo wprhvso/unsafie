@@ -8,7 +8,6 @@ Create Date: 2026-09-05 07:00:00
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0002"
@@ -18,8 +17,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("model", sa.String(64), nullable=True))
+    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS model VARCHAR(64)")
 
 
 def downgrade() -> None:
-    op.drop_column("users", "model")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS model")

@@ -1,15 +1,3 @@
-"""Tracing for unsafie: one trace per event, no blank stretches inside it.
-
-    from unsafie import telemetry
-    from unsafie.telemetry import attrs
-
-    with telemetry.span("ssh.exec", kind=telemetry.CLIENT, attributes={attrs.SSH_ALIAS: alias}):
-        ...
-
-Everything else — provider, exporter, context plumbing — lives in the sibling modules and is
-re-exported here, so the rest of the codebase imports one name.
-"""
-
 from opentelemetry.trace import SpanKind
 
 from unsafie.telemetry.anchor import Anchor, detached, links, muted, trace_id
@@ -39,7 +27,6 @@ SERVER = SpanKind.SERVER
 
 
 def instrument_app(app) -> None:
-    """FastAPI server spans; a no-op when tracing is off."""
     if not enabled():
         return
     from unsafie.telemetry import instrument

@@ -1,22 +1,26 @@
 import asyncio
+import contextlib
 import fnmatch
+import json
 import logging
-from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from unsafie import cluster
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
 GAP = "gap"
+STREAM = "events"
+BODY = "body"
 
 
 @dataclass(frozen=True)
 class Event:
-    id: int
+    id: str
     kind: str
     at: datetime
     data: dict[str, Any] = field(default_factory=dict)
@@ -29,64 +33,126 @@ class Event:
         return True
 
 
+def position(entry_id: str) -> tuple[int, int]:
+    ms, _, seq = entry_id.partition("-")
+    try:
+        return int(ms), int(seq or 0)
+    except ValueError:
+        return 0, 0
+
+
+def _parse(entry_id: str, fields: dict) -> Event | None:
+    try:
+        body = json.loads(fields[BODY])
+        return Event(entry_id, body["kind"], datetime.fromisoformat(body["at"]), body.get("data"))
+    except (KeyError, ValueError, TypeError):
+        logger.warning("events: entry %s is unreadable", entry_id)
+        return None
+
+
 class Bus:
-    def __init__(self, buffer: int, queue: int) -> None:
-        self._buffer: deque[Event] = deque(maxlen=buffer)
-        self._subscribers: set[asyncio.Queue[Event]] = set()
-        self._queue_size = queue
-        self._next_id = 1
+    def __init__(self, maxlen: int, queue: int) -> None:
+        self._maxlen = maxlen
+        self._outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=queue)
+        self._writer: asyncio.Task | None = None
+        self._dropped = 0
 
-    def publish(self, kind: str, /, **data: Any) -> Event:
-        event = Event(self._next_id, kind, datetime.now(UTC), data)
-        self._next_id += 1
-        self._buffer.append(event)
-        for q in list(self._subscribers):
+    @property
+    def key(self) -> str:
+        return cluster.key(STREAM)
+
+    def publish(self, kind: str, /, **data: Any) -> None:
+        payload = json.dumps(
+            {"kind": kind, "at": datetime.now(UTC).isoformat(), "data": data},
+            ensure_ascii=False,
+            default=str,
+        )
+        try:
+            self._outbox.put_nowait(payload)
+        except asyncio.QueueFull:
+            self._dropped += 1
+            logger.warning("events: outbox full, dropped %s (%s total)", kind, self._dropped)
+
+    def start(self) -> None:
+        if self._writer is None:
+            self._writer = asyncio.create_task(self._pump(), name="events-writer")
+            logger.info("events -> %s (maxlen=%s)", self.key, self._maxlen)
+
+    async def stop(self) -> None:
+        if self._writer is None:
+            return
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._outbox.join(), timeout=2.0)
+        self._writer.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._writer
+        self._writer = None
+
+    async def _pump(self) -> None:
+        while True:
+            batch = [await self._outbox.get()]
+            while len(batch) < settings.events_batch:
+                try:
+                    batch.append(self._outbox.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
             try:
-                q.put_nowait(event)
-            except asyncio.QueueFull:
-                logger.warning("events: subscriber queue full, dropping %s#%s", kind, event.id)
-        return event
+                pipe = cluster.client().pipeline(transaction=False)
+                for payload in batch:
+                    pipe.xadd(self.key, {BODY: payload}, maxlen=self._maxlen, approximate=True)
+                await pipe.execute()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("events: %s entr(ies) not written", len(batch), exc_info=True)
+            for _ in batch:
+                self._outbox.task_done()
 
-    def oldest_id(self) -> int | None:
-        return self._buffer[0].id if self._buffer else None
+    async def bounds(self) -> tuple[str | None, str | None]:
+        client = cluster.client()
+        first = await client.xrange(self.key, count=1)
+        last = await client.xrevrange(self.key, count=1)
+        return (first[0][0] if first else None, last[0][0] if last else None)
 
-    def latest_id(self) -> int:
-        return self._next_id - 1
-
-    def replay(self, after_id: int | None) -> tuple[list[Event], bool]:
-        if after_id is None:
-            return list(self._buffer), False
-        oldest = self.oldest_id()
-        gap = oldest is not None and after_id < oldest - 1
-        return [e for e in self._buffer if e.id > after_id], gap
+    async def recent(
+        self, kinds: list[str] | None = None, match: dict[str, Any] | None = None, limit: int = 100
+    ) -> list[Event]:
+        entries = await cluster.client().xrevrange(self.key, count=self._maxlen)
+        out = []
+        for entry_id, fields in entries:
+            event = _parse(entry_id, fields)
+            if event is not None and event.matches(kinds, match):
+                out.append(event)
+                if len(out) >= limit:
+                    break
+        return out
 
     async def subscribe(
         self,
         kinds: list[str] | None = None,
         match: dict[str, Any] | None = None,
-        after_id: int | None = None,
+        after_id: str | None = None,
     ) -> AsyncIterator[Event | str]:
-        q: asyncio.Queue[Event] = asyncio.Queue(maxsize=self._queue_size)
-        backlog, gap = self.replay(after_id)
-        self._subscribers.add(q)
-        try:
-            if gap:
+        client = cluster.client()
+        oldest, _ = await self.bounds()
+        if after_id is None:
+            cursor = "0-0"
+        else:
+            if oldest is not None and position(after_id) < position(oldest):
                 yield GAP
-            for e in backlog:
-                if e.matches(kinds, match):
-                    yield e
-            while True:
-                e = await q.get()
-                if e.matches(kinds, match):
-                    yield e
-        finally:
-            self._subscribers.discard(q)
-
-    def recent(
-        self, kinds: list[str] | None = None, match: dict[str, Any] | None = None, limit: int = 100
-    ) -> list[Event]:
-        out = [e for e in reversed(self._buffer) if e.matches(kinds, match)]
-        return out[:limit]
+            cursor = after_id
+        while True:
+            entries = await client.xread(
+                {self.key: cursor},
+                count=settings.events_batch,
+                block=int(settings.events_block * 1000),
+            )
+            for _, items in entries or []:
+                for entry_id, fields in items:
+                    cursor = entry_id
+                    event = _parse(entry_id, fields)
+                    if event is not None and event.matches(kinds, match):
+                        yield event
 
 
 bus = Bus(settings.events_buffer, settings.events_queue)

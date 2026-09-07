@@ -1,10 +1,3 @@
-"""TracerProvider wiring: resource, sampler, limits, exporter, shutdown.
-
-Tracing is optional at runtime. With `OTEL_ENABLED=0` no provider is installed, the global
-tracer stays the no-op one, and every `span()` in the codebase costs one attribute lookup —
-so the instrumentation can stay in the code unconditionally.
-"""
-
 import logging
 import os
 import socket
@@ -45,8 +38,9 @@ def resource() -> Resource:
         {
             attrs.SERVICE_NAME: settings.service_name,
             attrs.SERVICE_VERSION: version(),
-            attrs.SERVICE_INSTANCE: f"{host}:{os.getpid()}",
+            attrs.SERVICE_INSTANCE: settings.instance_id,
             attrs.ENVIRONMENT: settings.environment,
+            attrs.ROLE: settings.role,
             attrs.HOST_NAME: host,
             attrs.PROCESS_PID: os.getpid(),
         }
@@ -54,13 +48,11 @@ def resource() -> Resource:
 
 
 def sampler() -> Sampler:
-    """Parent-based: a sampling decision made upstream is never overturned downstream."""
     ratio = min(max(settings.otel_sample_ratio, 0.0), 1.0)
     return ParentBased(ALWAYS_ON if ratio >= 1.0 else TraceIdRatioBased(ratio))
 
 
 def endpoint() -> str:
-    """OTLP/HTTP needs the full path — VictoriaTraces does not serve the default /v1/traces."""
     url = settings.otel_endpoint.rstrip("/")
     if not settings.otel_protocol.startswith("http"):
         return url
@@ -68,9 +60,6 @@ def endpoint() -> str:
 
 
 def exporter():
-    """gRPC by default. OTLP/HTTP works too, but its exporter pulls in `requests` and a
-    transitive tail of its own, so it is not a dependency: install
-    `opentelemetry-exporter-otlp-proto-http` if a deployment ever needs it."""
     url = endpoint()
     if settings.otel_protocol.startswith("http"):
         try:
@@ -89,7 +78,6 @@ def exporter():
 
 
 def setup() -> None:
-    """Idempotent: uvicorn imports the app module and `python -m unsafie` calls this too."""
     global _provider, _configured
     if _configured:
         return
@@ -117,7 +105,6 @@ def setup() -> None:
             )
         )
     except Exception:
-        # Traces are nice to have; a broken exporter must never keep the bot from starting.
         logger.exception("tracing setup failed, continuing without traces")
         return
     trace.set_tracer_provider(provider)
@@ -144,7 +131,6 @@ def flush(timeout_ms: int = 5000) -> None:
 
 
 def shutdown() -> None:
-    """Flush what is still queued: the last spans of a shutdown are the interesting ones."""
     global _provider
     if _provider is None:
         return

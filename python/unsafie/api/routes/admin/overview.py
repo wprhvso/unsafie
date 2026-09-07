@@ -14,10 +14,11 @@ from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch
 from unsafie.database.models.subscription import GithubSubscription
 from unsafie.database.models.webhook_delivery import WebhookDelivery
+from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.github import GithubAppRepository
 from unsafie.database.repositories.stats import StatsRepository
-from unsafie.ssh.pool import pool
-from unsafie.telegram.manager import manager
+from unsafie.presence import instances
+from unsafie.telegram import poller
 
 router = APIRouter(tags=["overview"])
 
@@ -33,11 +34,13 @@ async def overview():
         stats = StatsRepository(session)
         counts = await stats.counts()
         app = await GithubAppRepository(session).get()
+        polled = await poller.polled_by(await BotRepository(session).ids())
+        alive = await instances()
         data = OverviewRead(
             users=counts["users"],
             chats=counts["chats"],
             bots=await _count(session, Bot),
-            bots_running=len(manager.running_ids()),
+            bots_running=sum(1 for by in polled.values() if by),
             running_turns=counts["running_turns"],
             credentials=counts["credentials"],
             credentials_total=await _count(session, AnthropicCredential),
@@ -48,7 +51,8 @@ async def overview():
             watches=await _count(session, SshWatch),
             watches_alerting=await _count(session, SshWatch, SshWatch.alerting.is_(True)),
             ssh_hosts=await _count(session, SshHost),
-            ssh_connections=len([s for s in pool.stats() if s["alive"]]),
+            instances=len(alive),
+            ssh_connections=sum(int(i.get("ssh_connections") or 0) for i in alive),
             deliveries_pending=await _count(
                 session, WebhookDelivery, WebhookDelivery.processed_at.is_(None)
             ),

@@ -80,7 +80,7 @@ class CredentialRepository:
         )
         if exclude:
             stmt = stmt.where(AnthropicCredential.id.not_in(exclude))
-        row = await self.session.scalar(stmt.limit(1))
+        row = await self.session.scalar(stmt.limit(1).with_for_update(skip_locked=True))
         if row is not None:
             row.last_used_at = now
             row.uses += 1

@@ -1,10 +1,19 @@
+import socket
+import uuid
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, computed_field, field_validator
+from pydantic import AliasChoices, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS_DIR = Path("/run/secrets")
+
+ROLES = ("all", "web", "worker", "poller")
+POLL_TTL_MARGIN = 10.0
+
+
+def _instance_id() -> str:
+    return f"{socket.gethostname().split('.')[0]}-{uuid.uuid4().hex[:8]}"
 
 
 class Settings(BaseSettings):
@@ -19,12 +28,50 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = False
 
+    instance_id: str = Field(default_factory=_instance_id, validation_alias="INSTANCE_ID")
+    role: str = Field(default="all", validation_alias=AliasChoices("UNSAFIE_ROLE", "ROLE"))
+
     database_url_override: str | None = Field(default=None, validation_alias="DATABASE_URL")
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "unsafie"
     db_user: str = "unsafie"
     db_password: str = ""
+
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    redis_max_connections: int = 32
+    redis_timeout: float = 5.0
+    redis_prefix: str = "unsafie"
+    lock_ttl: float = 30.0
+    lock_wait: float = 10.0
+    lock_retry: float = 0.05
+
+    poll_timeout: int = 20
+    poll_lock_ttl: float = 45.0
+    poll_claim_interval: float = 10.0
+    poll_failure_cooldown: float = 60.0
+
+    job_lease: float = 300.0
+    job_lock_ttl: float = 60.0
+    chat_lock_ttl: float = 30.0
+    chat_lock_wait: float = 60.0
+    repo_lock_ttl: float = 120.0
+    repo_lock_wait: float = 120.0
+    snapshot_lock_ttl: float = 900.0
+    snapshot_wait: float = 180.0
+    snapshot_refused_ttl: float = 86_400.0
+    queue_ttl: float = 86_400.0
+    installation_token_ttl: float = 2_900.0
+    transcript_max_bytes: int = 33_554_432
+    transcript_keep_days: int = 30
+    shutdown_grace: float = 90.0
+    presence_interval: float = 10.0
+    turn_heartbeat: float = 15.0
+    turn_stale_after: float = 90.0
+    janitor_interval: float = 30.0
+    webhook_batch: int = 20
+    webhook_worker_interval: float = 2.0
+    webhook_max_attempts: int = 5
 
     log_level: str = "INFO"
     log_truncate: int = 2000
@@ -118,8 +165,10 @@ class Settings(BaseSettings):
     http_max_timeout: int = 120
     http_max_body: int = 20_971_520
 
-    events_buffer: int = 1000
-    events_queue: int = 256
+    events_buffer: int = 10_000
+    events_queue: int = 4_096
+    events_batch: int = 100
+    events_block: float = 20.0
 
     @field_validator(
         "fluent_dir",
@@ -132,6 +181,49 @@ class Settings(BaseSettings):
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _role(cls, v):
+        value = str(v or "all").strip().lower()
+        if value not in ROLES:
+            raise ValueError(f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'")
+        return value
+
+    @model_validator(mode="after")
+    def _polling_handover(self):
+        if self.poll_lock_ttl <= self.poll_timeout + POLL_TTL_MARGIN:
+            raise ValueError(
+                f"POLL_LOCK_TTL must exceed POLL_TIMEOUT by more than {POLL_TTL_MARGIN}s: a dead "
+                f"instance leaves a getUpdates call hanging for up to POLL_TIMEOUT seconds, and "
+                f"the next instance must not start polling before telegram has dropped it "
+                f"(got {self.poll_lock_ttl} vs {self.poll_timeout})"
+            )
+        if self.poll_claim_interval * 3 > self.poll_lock_ttl:
+            raise ValueError(
+                "POLL_CLAIM_INTERVAL must be at most a third of POLL_LOCK_TTL, so that a lock "
+                f"survives two missed renewals (got {self.poll_claim_interval} "
+                f"vs {self.poll_lock_ttl})"
+            )
+        if self.turn_stale_after < self.turn_heartbeat * 3:
+            raise ValueError(
+                "TURN_STALE_AFTER must be at least three heartbeats, or a running turn is "
+                f"reaped while its owner is alive (got {self.turn_stale_after} "
+                f"vs {self.turn_heartbeat})"
+            )
+        return self
+
+    @property
+    def runs_web(self) -> bool:
+        return self.role in ("all", "web")
+
+    @property
+    def runs_worker(self) -> bool:
+        return self.role in ("all", "worker")
+
+    @property
+    def runs_poller(self) -> bool:
+        return self.role in ("all", "poller")
 
     @computed_field
     @property

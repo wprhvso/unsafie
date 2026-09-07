@@ -1,12 +1,3 @@
-"""The one way to open a span in this codebase.
-
-Two rules live here so that they are not repeated 200 times:
-
-* a refusal is not a failure — `OpsError` is an answer to the model ("no such file"), and a
-  trace where every second span is red is a trace nobody reads;
-* a cancelled task is not a failure either — shutdown cancels everything by design.
-"""
-
 import asyncio
 import functools
 from collections.abc import Callable, Iterator, Mapping
@@ -30,7 +21,6 @@ def tracer() -> trace.Tracer:
 
 
 def clean(attributes: Attributes) -> dict[str, Any]:
-    """Drop the Nones: an attribute nobody set is better absent than empty."""
     return {k: v for k, v in (attributes or {}).items() if v is not None}
 
 
@@ -46,7 +36,6 @@ def fail(span: Span, exc: BaseException) -> None:
 
 
 def refused(span: Span, exc: BaseException | str) -> None:
-    """An expected 'no': stays green, but visible as a filterable attribute."""
     span.set_attribute(attrs.REFUSED, True)
     span.set_attribute(attrs.REFUSAL, attrs.clip(str(exc), 500))
 
@@ -86,7 +75,6 @@ def start(
     parent: Context | None = None,
     start_time: int | None = None,
 ) -> Span:
-    """A span that is not tied to the current scope: begins here, ends in another callback."""
     return tracer().start_span(
         name,
         context=parent,
@@ -104,7 +92,6 @@ def traced(
     kind: SpanKind = SpanKind.INTERNAL,
     attributes: Attributes = None,
 ) -> Callable:
-    """Decorator for async functions that deserve a span but no arguments of their own."""
 
     def decorator(fn):
         span_name = name or f"{fn.__module__.rsplit('.', 1)[-1]}.{fn.__name__}"
@@ -124,12 +111,10 @@ def current() -> Span:
 
 
 def context_of(span: Span) -> Context:
-    """The context to hand to a callback that must continue inside this span."""
     return trace.set_span_in_context(span)
 
 
 def annotate(**attributes: Any) -> None:
-    """Add attributes to whatever span is running now (a dependency, a middleware, a hook)."""
     span = trace.get_current_span()
     if span.is_recording():
         for key, value in clean(attributes).items():
@@ -149,7 +134,6 @@ def event(name: str, attributes: Attributes = None) -> None:
 
 
 def ids() -> tuple[str, str] | None:
-    """(trace_id, span_id) as hex, or None outside of a trace."""
     context = trace.get_current_span().get_span_context()
     if not context.is_valid:
         return None

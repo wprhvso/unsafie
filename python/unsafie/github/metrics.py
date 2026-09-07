@@ -1,9 +1,3 @@
-"""Per-task counters of github traffic: how much was fetched and how much came from the cache.
-
-`start()` is called at the beginning of a tool call; the counters live in a context variable,
-so tasks spawned by asyncio.gather share the same dict and add to it.
-"""
-
 from contextvars import ContextVar
 
 from unsafie.mime import human_size

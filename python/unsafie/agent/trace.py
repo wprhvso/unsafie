@@ -1,14 +1,3 @@
-"""What the agent did, as logs and as spans.
-
-`query()` spends its minutes inside the `claude` CLI — a subprocess nobody here can instrument.
-What crosses the boundary is a stream of messages and the tool hooks, and between them they
-account for the whole wall clock: a span for every stretch the model was writing, a span for
-every tool it ran. Without this the agent is one flat span with minutes of nothing inside.
-
-The spans are opened with an explicit parent and explicit timestamps: the hooks run in tasks of
-the SDK, where neither the current context nor "now" is what we mean.
-"""
-
 import logging
 import time
 from typing import Any
@@ -93,8 +82,6 @@ def log_sdk_message(m, prefix: str) -> None:
 
 
 class Recorder:
-    """Fills one `gen_ai.invoke_agent` span with what happened inside the CLI."""
-
     def __init__(self, prefix: str, span: Span) -> None:
         self.prefix = prefix
         self.span = span
@@ -102,8 +89,6 @@ class Recorder:
         self.count = 0
         self._mark = time.time_ns()
         self._open: dict[str, Span] = {}
-
-    # -- the message stream ------------------------------------------------------------------
 
     def message(self, m: Any) -> None:
         self.count += 1
@@ -118,7 +103,6 @@ class Recorder:
             self._mark = time.time_ns()
 
     def _completion(self, m: AssistantMessage) -> None:
-        """The stretch since the previous event is the model writing this message."""
         calls = [b.name for b in m.content if isinstance(b, ToolUseBlock)]
         text = "".join(b.text for b in m.content if isinstance(b, TextBlock))
         thinking = any(isinstance(b, ThinkingBlock) for b in m.content)
@@ -144,10 +128,7 @@ class Recorder:
         span.end(now)
         self._mark = now
 
-    # -- tool hooks --------------------------------------------------------------------------
-
     def tool_started(self, name: str | None, tool_input: Any, tool_use_id: str | None) -> None:
-        """PreToolUse. Our own MCP tools open their own span in `agent.tools.base.guarded`."""
         if not name or name.startswith("mcp__") or len(self._open) >= MAX_OPEN_TOOLS:
             return
         self._mark = time.time_ns()
@@ -166,7 +147,6 @@ class Recorder:
         )
 
     def tool_finished(self, name: str | None, tool_use_id: str | None, response: Any) -> None:
-        """PostToolUse."""
         span = self._open.pop(tool_use_id or name or "", None)
         if span is None:
             return
@@ -175,12 +155,10 @@ class Recorder:
         span.end(self._mark)
 
     def note(self, name: str, attributes: dict | None = None) -> None:
-        """An event on the agent span itself — the Stop hook, an injected message."""
         if self.span.is_recording():
             self.span.add_event(name, telemetry.clean(attributes))
 
     def close(self) -> None:
-        """A tool whose PostToolUse never arrived (denied, crashed) must not leak a span."""
         for key, span in self._open.items():
             span.set_attribute(attrs.TOOL_ERROR, True)
             span.set_attribute(attrs.REFUSAL, "no PostToolUse for " + key)
