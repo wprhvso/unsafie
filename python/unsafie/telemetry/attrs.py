@@ -30,6 +30,13 @@ MESSAGE_ID = "unsafie.message_id"
 REQUEST_ID = "unsafie.request_id"
 LOCALE = "unsafie.locale"
 
+# cluster
+INSTANCE = "unsafie.instance"
+ROLE = "unsafie.role"
+LOCK = "unsafie.lock"
+LOCK_WAIT_MS = "unsafie.lock.wait_ms"
+LOCK_TAKEN = "unsafie.lock.taken"
+
 # outcome
 REFUSED = "unsafie.refused"
 REFUSAL = "unsafie.refusal"

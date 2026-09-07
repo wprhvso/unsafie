@@ -1,3 +1,5 @@
+import socket
+import uuid
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, computed_field, field_validator
@@ -5,6 +7,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS_DIR = Path("/run/secrets")
+
+ROLES = ("all", "web", "worker", "poller")
+
+
+def _instance_id() -> str:
+    """Unique per process, not per host: two instances on one machine must not share a lock."""
+    return f"{socket.gethostname().split('.')[0]}-{uuid.uuid4().hex[:8]}"
 
 
 class Settings(BaseSettings):
@@ -19,12 +28,23 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = False
 
+    instance_id: str = Field(default_factory=_instance_id, validation_alias="INSTANCE_ID")
+    role: str = Field(default="all", validation_alias=AliasChoices("UNSAFIE_ROLE", "ROLE"))
+
     database_url_override: str | None = Field(default=None, validation_alias="DATABASE_URL")
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "unsafie"
     db_user: str = "unsafie"
     db_password: str = ""
+
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    redis_max_connections: int = 32
+    redis_timeout: float = 5.0
+    redis_prefix: str = "unsafie"
+    lock_ttl: float = 30.0
+    lock_wait: float = 10.0
+    lock_retry: float = 0.05
 
     log_level: str = "INFO"
     log_truncate: int = 2000
@@ -132,6 +152,27 @@ class Settings(BaseSettings):
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _role(cls, v):
+        """A typo in UNSAFIE_ROLE must not silently turn a worker into a no-op process."""
+        value = str(v or "all").strip().lower()
+        if value not in ROLES:
+            raise ValueError(f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'")
+        return value
+
+    @property
+    def runs_web(self) -> bool:
+        return self.role in ("all", "web")
+
+    @property
+    def runs_worker(self) -> bool:
+        return self.role in ("all", "worker")
+
+    @property
+    def runs_poller(self) -> bool:
+        return self.role in ("all", "poller")
 
     @computed_field
     @property

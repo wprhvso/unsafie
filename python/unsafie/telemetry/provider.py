@@ -45,8 +45,9 @@ def resource() -> Resource:
         {
             attrs.SERVICE_NAME: settings.service_name,
             attrs.SERVICE_VERSION: version(),
-            attrs.SERVICE_INSTANCE: f"{host}:{os.getpid()}",
+            attrs.SERVICE_INSTANCE: settings.instance_id,
             attrs.ENVIRONMENT: settings.environment,
+            attrs.ROLE: settings.role,
             attrs.HOST_NAME: host,
             attrs.PROCESS_PID: os.getpid(),
         }

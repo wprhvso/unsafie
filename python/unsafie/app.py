@@ -2,10 +2,10 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
-from unsafie import telemetry
+from unsafie import cluster, telemetry
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.public import public_router, share_router
@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     with telemetry.span("app.startup", kind=telemetry.INTERNAL):
-        logger.info("lifespan startup")
+        logger.info("lifespan startup instance=%s role=%s", settings.instance_id, settings.role)
+        await cluster.connect()
         await upgrade()
         async with SessionLocal() as session:
             stale_turns = await TurnRepository(session).mark_stale_running()
@@ -58,6 +59,7 @@ async def lifespan(app: FastAPI):
         await stop_all()
         await close_session()
         await engine.dispose()
+        await cluster.close()
         logger.info("shutdown complete")
     telemetry.shutdown()
 
@@ -96,8 +98,17 @@ app.include_router(admin_router)
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health(response: Response) -> dict[str, object]:
+    """The probe a load balancer reads: an instance without redis cannot take traffic."""
+    redis = await cluster.health()
+    if redis["status"] != "ok":
+        response.status_code = 503
+    return {
+        "status": "ok" if redis["status"] == "ok" else "degraded",
+        "instance": settings.instance_id,
+        "role": settings.role,
+        "redis": redis,
+    }
 
 
 if (assets := static.assets_dir()) is not None:
