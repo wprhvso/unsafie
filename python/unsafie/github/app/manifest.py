@@ -4,8 +4,6 @@ from unsafie.settings import settings
 
 NAME = "unsafie"
 
-# Writing is the token's job. The App only gets what a personal access token cannot do:
-# the Checks API, and the reads GitHub requires before it will deliver the events below.
 PERMISSIONS = {
     "metadata": "read",
     "contents": "read",

@@ -30,8 +30,6 @@ LIFECYCLE = {"installation", "installation_repositories", "github_app_authorizat
 async def handle(delivery_id: str, event: str, payload: dict) -> None:
     if not await deliveries.accept(delivery_id, event, payload):
         return
-    # GitHub gets its 200 now; the delivery is processed afterwards, so it earns a trace of its
-    # own — linked to the request instead of hanging off a span that has already ended.
     origin = telemetry.links()
     parent_trace = telemetry.trace_id()
     with telemetry.detached():

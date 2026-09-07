@@ -14,13 +14,13 @@ class CredentialCreate(BaseModel):
 class CredentialUpdate(BaseModel):
     enabled: bool | None = None
     label: str | None = Field(default=None, max_length=64)
-    reset: bool = False  # сбросить failures/cooldown
+    reset: bool = False
 
 
 class CredentialRead(BaseModel):
     id: int
     kind: CredentialKind
-    secret: str  # маскированный
+    secret: str
     label: str | None
     enabled: bool
     failures: int

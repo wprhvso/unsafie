@@ -55,8 +55,6 @@ class Loop:
         while True:
             started = time.perf_counter()
             try:
-                # A tick is not an event in itself: a loop opens a trace per item it finds, and
-                # every iteration starts from a clean context so nothing leaks between them.
                 with telemetry.detached():
                     await self.tick()
             except asyncio.CancelledError:

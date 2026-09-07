@@ -180,7 +180,6 @@ async def run(user_id: int, host: SshHost, command: str, timeout: float | None =
             attrs.SSH_ALIAS: host.alias,
             attrs.SERVER_ADDRESS: host.host,
             attrs.USER_ID: user_id,
-            # The same 200 characters the log line carries: enough to recognise the command.
             attrs.SSH_COMMAND: telemetry.clip(command, 200),
         },
     ) as span:

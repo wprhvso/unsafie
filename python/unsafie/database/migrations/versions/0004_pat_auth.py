@@ -18,15 +18,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Written with IF EXISTS: a database created straight from the models is already like this.
     op.execute("DROP TABLE IF EXISTS oauth_states")
-    # OAuth tokens are worthless now: everyone has to hand over a PAT with /gh <token>.
     op.execute("UPDATE github_accounts SET token = NULL")
     op.execute("ALTER TABLE github_accounts ADD COLUMN IF NOT EXISTS scopes TEXT")
     op.execute("ALTER TABLE github_accounts DROP COLUMN IF EXISTS token_expires")
     op.execute("ALTER TABLE github_accounts DROP COLUMN IF EXISTS refresh_token")
     op.execute("ALTER TABLE github_accounts DROP COLUMN IF EXISTS refresh_expires")
-    # A repository may now be known from a token alone, without an installation behind it.
     op.execute("ALTER TABLE repos ALTER COLUMN installation_id DROP NOT NULL")
     op.execute("ALTER TABLE repos DROP CONSTRAINT IF EXISTS repos_installation_id_fkey")
     op.execute(

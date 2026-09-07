@@ -90,8 +90,6 @@ class Recorder:
         self._mark = time.time_ns()
         self._open: dict[str, Span] = {}
 
-    # -- the message stream ------------------------------------------------------------------
-
     def message(self, m: Any) -> None:
         self.count += 1
         log_sdk_message(m, f"{self.prefix} sdk#{self.count}")
@@ -129,8 +127,6 @@ class Recorder:
         )
         span.end(now)
         self._mark = now
-
-    # -- tool hooks --------------------------------------------------------------------------
 
     def tool_started(self, name: str | None, tool_input: Any, tool_use_id: str | None) -> None:
         if not name or name.startswith("mcp__") or len(self._open) >= MAX_OPEN_TOOLS:

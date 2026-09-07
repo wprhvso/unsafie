@@ -18,7 +18,6 @@ class CleanupLoop(Loop):
         return float(settings.webhook_cleanup_interval)
 
     async def tick(self) -> None:
-        # Housekeeping, hourly, always the same delete: logged, not traced.
         with telemetry.muted():
             async with SessionLocal() as session:
                 deliveries = await DeliveryRepository(session).purge(settings.webhook_keep_days)

@@ -160,7 +160,6 @@ async def _execute(
                     stderr=stderr.append,
                     recorder=recorder,
                 )
-                # Tools are called from the SDK's own tasks: this is the context they attach to.
                 ctx.trace.capture()
                 started = time.perf_counter()
                 try:
@@ -462,7 +461,6 @@ async def dispatch(
     logger.debug("bot=%s chat=%s %s prompt=%s", bot_id, chat_id, what, short(prompt))
     if plan.inject:
         n = queue.enqueue(plan.turn.id, prompt)
-        # The work continues in the trace of the turn that is already running.
         telemetry.annotate(**{attrs.INJECTED: True, attrs.TURN_ID: str(plan.turn.id)})
         logger.info(
             "bot=%s chat=%s %s queued into turn=%s (pending=%s)",

@@ -35,8 +35,6 @@ class UpdateMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         started = time.perf_counter()
-        # The root of everything that follows: storing the update, routing it into a turn, the
-        # agent run and every message it sends back all hang off this span.
         with telemetry.span(
             "tg.update",
             kind=telemetry.CONSUMER,

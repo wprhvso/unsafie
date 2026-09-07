@@ -37,7 +37,7 @@ def detached() -> Iterator[None]:
 def muted() -> Iterator[None]:
     try:
         from opentelemetry.instrumentation.utils import suppress_instrumentation
-    except ImportError:  # pragma: no cover - instrumentation package is optional
+    except ImportError:  # pragma: no cover
         yield
         return
     with suppress_instrumentation():

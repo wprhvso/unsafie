@@ -25,7 +25,6 @@ def build_hooks(prefix: str, turn_id: UUID, recorder: Recorder | None = None) ->
             name,
             short(input_data.get("tool_input")),
         )
-        # The only place where the start of a built-in tool is visible from this process.
         if recorder is not None:
             recorder.tool_started(name, input_data.get("tool_input"), tool_use_id)
         return {}

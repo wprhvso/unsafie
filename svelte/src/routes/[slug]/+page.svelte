@@ -8,7 +8,6 @@
   import { plain, render } from '$lib/markdown.js';
   import { zoomable } from '$lib/zoom.js';
 
-  // The pinch is ours, so the browser must keep its hands off it.
   const VIEWPORT = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
 
   let view = $state('loading');

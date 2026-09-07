@@ -1,6 +1,5 @@
 import { ApiError } from '$lib/api.js';
 
-/** Reactive wrapper around an async loader: state.data / .loading / .error / .empty. */
 export function resource(loader, { auto = true } = {}) {
   const state = $state({ data: null, loading: false, error: null });
 

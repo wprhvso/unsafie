@@ -52,7 +52,6 @@ class BotManager:
         dispatcher = Dispatcher()
         dispatcher.update.outer_middleware(UpdateMiddleware(bot_id))
         dispatcher.include_router(build_router())
-        # Polling outlives whatever asked to start the bot; a trace must not follow it there.
         with telemetry.detached():
             task = asyncio.create_task(
                 dispatcher.start_polling(bot, handle_signals=False, bot_id=bot_id),

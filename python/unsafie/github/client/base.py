@@ -177,7 +177,6 @@ class GithubHTTP:
                     )
                     logger.info("github %s %s -> %s (%.0fms)", method, url, r.status, ms)
                     if r.status in (401, 403, 404) and may_fall_back:
-                        # The user's token does not reach this repository — try the installation.
                         may_fall_back = False
                         if spare := await self._resolve(self._fallback):
                             headers["Authorization"] = f"Bearer {spare}"

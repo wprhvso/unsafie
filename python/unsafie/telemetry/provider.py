@@ -105,7 +105,6 @@ def setup() -> None:
             )
         )
     except Exception:
-        # Traces are nice to have; a broken exporter must never keep the bot from starting.
         logger.exception("tracing setup failed, continuing without traces")
         return
     trace.set_tracer_provider(provider)

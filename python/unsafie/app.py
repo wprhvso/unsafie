@@ -45,7 +45,6 @@ async def lifespan(app: FastAPI):
                 "%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries
             )
         await start_all()
-        # The loops outlive this span: they must not inherit it as a parent for the next month.
         with telemetry.detached():
             for loop in (cleanup, runner, watchdog, sweeper):
                 loop.start()
@@ -69,8 +68,6 @@ app = FastAPI(title="unsafie", lifespan=lifespan)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Runs inside the server span created by the instrumentation: nginx' request id lands on it,
-    # which is what ties an access-log line to this trace.
     telemetry.annotate(**{attrs.REQUEST_ID: request.headers.get("x-request-id")})
     started = time.perf_counter()
     try:

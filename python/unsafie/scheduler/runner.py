@@ -33,7 +33,6 @@ class Runner(Loop):
 
     async def tick(self) -> None:
         now = datetime.now(UTC)
-        # Looking for due tasks every 20 seconds is not worth a span; firing one is.
         with telemetry.muted():
             async with SessionLocal() as session:
                 due = await ScheduleRepository(session).due(now, BATCH)

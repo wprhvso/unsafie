@@ -2,7 +2,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# /health is a probe, and the SSE stream would otherwise be one hour-long server span.
 EXCLUDED_URLS = "health,api/admin/events"
 
 _app_instrumented = False
@@ -30,7 +29,6 @@ def app(fastapi_app) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        # Without exclude_spans every request drags three "http send" spans along with it.
         FastAPIInstrumentor.instrument_app(
             fastapi_app, excluded_urls=EXCLUDED_URLS, exclude_spans=["receive", "send"]
         )
