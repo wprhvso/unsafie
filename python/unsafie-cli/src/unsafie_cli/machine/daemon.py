@@ -14,9 +14,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from unsafie_wire import channel as wire
-
 from unsafie_cli import config
+from unsafie_wire import channel as wire
 
 USER_AGENT = "unsafie-machine"
 FLUSH = 0.2

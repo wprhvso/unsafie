@@ -55,6 +55,35 @@ class Api:
             return raw.decode(errors="replace")
 
 
+    def raw(self, method: str, path: str, data: bytes, timeout: float = TIMEOUT) -> Any:
+        request = urllib.request.Request(
+            f"{self.base}/api/v1{path}", data=data, method=method.upper()
+        )
+        request.add_header("Authorization", f"Bearer {self.token}")
+        request.add_header("User-Agent", USER_AGENT)
+        request.add_header("Content-Type", "application/octet-stream")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as answer:
+                body = answer.read()
+        except urllib.error.HTTPError as refused:
+            raise _refusal(refused) from None
+        except urllib.error.URLError as unreachable:
+            raise CliError(f"{self.base} is not answering: {unreachable.reason}") from None
+        return json.loads(body) if body else None
+
+    def download(self, path: str, timeout: float = TIMEOUT) -> bytes:
+        request = urllib.request.Request(f"{self.base}/api/v1{path}", method="GET")
+        request.add_header("Authorization", f"Bearer {self.token}")
+        request.add_header("User-Agent", USER_AGENT)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as answer:
+                return answer.read()
+        except urllib.error.HTTPError as refused:
+            raise _refusal(refused) from None
+        except urllib.error.URLError as unreachable:
+            raise CliError(f"{self.base} is not answering: {unreachable.reason}") from None
+
+
 def _refusal(error: urllib.error.HTTPError) -> CliError:
     try:
         parsed = json.loads(error.read() or b"{}")

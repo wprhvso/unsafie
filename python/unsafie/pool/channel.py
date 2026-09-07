@@ -8,13 +8,13 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
-from unsafie_wire import channel as wire
 
 from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.pool import CommandStatus, PoolCommand
 from unsafie.pool import keys, registry
 from unsafie.settings import settings
+from unsafie_wire import channel as wire
 
 logger = logging.getLogger(__name__)
 

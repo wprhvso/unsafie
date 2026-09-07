@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 EMPTY_RESULT = [{"type": "text", "text": "(no output)"}]
 MAX_REMINDERS = 2
 NOT_DELIVERED = (
-    "Your plain text goes nowhere: the user never sees it. Say it with send_message, or publish "
-    "it with create_artifact and send the link."
+    "Your plain text goes nowhere: the user never sees it. Say it from the machine with "
+    "`unsafie say`, or publish it with `unsafie page create` and send the link."
 )
 
 
@@ -95,6 +95,8 @@ async def _invoke(
     result = {"type": "tool_result", "tool_use_id": call_id, "content": _content(payload)}
     if payload.get("is_error"):
         result["is_error"] = True
+    if payload.get("replied"):
+        result["_replied"] = True
     return result
 
 
@@ -201,9 +203,10 @@ async def run(
         if calls:
             content: list[dict] = []
             for call in calls:
-                content.append(await _call(ctx, tools, call, recorder))
-                if call.get("name") in replying:
+                answer = await _call(ctx, tools, call, recorder)
+                if answer.pop("_replied", False) or call.get("name") in replying:
                     result.replied = True
+                content.append(answer)
             extra = await queue.drain(ctx.turn_id)
             if extra is not None:
                 recorder.note("unsafie.messages_injected")

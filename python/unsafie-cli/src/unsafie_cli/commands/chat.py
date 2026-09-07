@@ -6,6 +6,7 @@ from unsafie_cli import api
 from unsafie_cli.errors import NOT_FOUND, CliError, Usage
 from unsafie_cli.output import Out
 from unsafie_cli.parser import Call
+from unsafie_wire import markers
 
 MEDIA = ("document", "photo", "video", "audio", "voice", "animation", "sticker")
 
@@ -30,6 +31,7 @@ def say(call: Call, out: Out) -> int:
     }
     answer = api.client(call).call("POST", "/chat/messages", body)
     ids = answer.get("message_ids", [])
+    out.line(markers.emit(markers.BlockKind.SENT, message_ids=ids))
     out.send(answer, [f"sent {' '.join(str(i) for i in ids)}"])
     return 0
 
@@ -51,6 +53,7 @@ def file(call: Call, out: Out) -> int:
         "turn": api.turn_of(),
     }
     answer = api.client(call).call("POST", "/chat/files", body)
+    out.line(markers.emit(markers.BlockKind.SENT, message_ids=answer.get("message_ids") or []))
     out.send(answer, [f"sent {answer.get('sent_as')} {path.name} ({answer.get('bytes')} bytes)"])
     return 0
 
