@@ -133,7 +133,6 @@ class Settings(BaseSettings):
     claude_fallbacks: str = "default"
     cache_ttl: str = "1h"
     agent_max_steps: int = 6400
-    agent_max_nudges: int = 200
     agent_tool_timeout: float = 600.0
 
     public_base_url: str = "https://unsafie.com"

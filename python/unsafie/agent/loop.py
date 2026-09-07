@@ -4,17 +4,20 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from aiogram.exceptions import TelegramAPIError
+
 from unsafie.agent import client, credentials, pricing, queue, request
 from unsafie.agent.client import ApiError
-from unsafie.agent.tools.base import ToolContext
+from unsafie.agent.tools.base import ToolContext, current_turn
 from unsafie.agent.tools.registry import ToolSpec
 from unsafie.agent.trace import Recorder
+from unsafie.database.models.response import ResponseKind
 from unsafie.log import short
 from unsafie.settings import settings
+from unsafie.telegram import sender
 
 logger = logging.getLogger(__name__)
 
-NO_REPLY = "The user has not received a reply. Call send_message."
 EMPTY_RESULT = [{"type": "text", "text": "(no output)"}]
 
 
@@ -107,6 +110,24 @@ async def _call(
     return result
 
 
+async def _speak(ctx: ToolContext, value: str) -> str | None:
+    turn = await current_turn(ctx)
+    try:
+        response = await sender.send(
+            ctx.bot,
+            bot_id=ctx.bot_id,
+            chat_id=ctx.chat_id,
+            markdown=value,
+            kind=ResponseKind.AGENT,
+            turn=turn,
+        )
+    except TelegramAPIError as e:
+        logger.error("%s text not delivered error=%s", ctx.prefix, e)
+        return f"Telegram rejected your text: {e}. Rewrite it and say it again."
+    logger.info("%s text delivered messages=%s", ctx.prefix, response.message_ids)
+    return None
+
+
 async def run(
     ctx: ToolContext,
     *,
@@ -125,7 +146,6 @@ async def run(
     replying = {name for name, spec in tools.items() if spec.replies}
     catalogue = request.tools(definitions)
     marked = -1
-    nudges = 0
 
     while result.steps < settings.agent_max_steps:
         if result.cost_usd >= budget_usd:
@@ -175,8 +195,14 @@ async def run(
         recorder.reply(reply)
         messages.append(reply.as_message())
         text = reply.text.strip()
+        rejected: str | None = None
         if text:
             result.text = text
+            rejected = await _speak(ctx, text)
+            if rejected is None:
+                result.replied = True
+            else:
+                recorder.note("unsafie.text_rejected", {"error": short(rejected, 300)})
 
         calls = reply.calls
         if calls:
@@ -185,6 +211,8 @@ async def run(
                 content.append(await _call(ctx, tools, call, recorder))
                 if call.get("name") in replying:
                     result.replied = True
+            if rejected is not None:
+                content.append({"type": "text", "text": rejected})
             extra = await queue.drain(ctx.turn_id)
             if extra is not None:
                 recorder.note("unsafie.messages_injected")
@@ -202,11 +230,8 @@ async def run(
             messages.append({"role": "user", "content": [{"type": "text", "text": extra}]})
             continue
 
-        if not result.replied and nudges < settings.agent_max_nudges:
-            nudges += 1
-            recorder.note("unsafie.stop_blocked", {"reason": "no reply"})
-            logger.warning("%s finished without a reply, nudging", ctx.prefix)
-            messages.append({"role": "user", "content": [{"type": "text", "text": NO_REPLY}]})
+        if rejected is not None:
+            messages.append({"role": "user", "content": [{"type": "text", "text": rejected}]})
             continue
 
         return result
