@@ -133,7 +133,7 @@ def c(
     )
 
 
-READY_THROUGH = 3
+READY_THROUGH = 5
 
 GLOBAL_FLAGS: tuple[Flag, ...] = (
     _flag("--json # machine readable output"),
@@ -260,7 +260,7 @@ COMMANDS: tuple[Cmd, ...] = (
         phase=5,
     ),
     c("github token", "github", "a short lived token for git, gh or curl", "", "--repo=REF --minutes=N|60", phase=5),
-    c("github api", "github", "call the GitHub API as me", "path", "-X/--method=METHOD|GET -f/--field=K=V", phase=5),
+    c("github api", "github", "call the GitHub API as me", "path", "-X/--method=METHOD|GET; -f/--field=K=V", phase=5),
     c("gh", "github", "run gh with the token already set", "", "", ("unsafie gh -- pr create --fill",), phase=5, passthrough=True),
     c("git-credential", "github", "git credential helper", "action", phase=5, internal=True),
     c(

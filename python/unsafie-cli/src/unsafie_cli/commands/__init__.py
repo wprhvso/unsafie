@@ -1,6 +1,17 @@
 from collections.abc import Callable
 
-from unsafie_cli.commands import account, auth, chat, meta, pages, pool, settings, store
+from unsafie_cli.commands import (
+    account,
+    auth,
+    chat,
+    files,
+    github,
+    meta,
+    pages,
+    pool,
+    settings,
+    store,
+)
 from unsafie_cli.errors import NotReady
 from unsafie_cli.output import Out
 from unsafie_cli.parser import Call
@@ -38,6 +49,7 @@ HANDLERS: dict[tuple[str, ...], Handler] = {
     ("rename",): pool.rename,
     ("run",): pool.run,
     ("fan",): pool.fan,
+    ("cp",): pool.cp,
     ("job", "submit"): pool.submit,
     ("job", "list"): pool.jobs,
     ("job", "logs"): pool.logs,
@@ -57,6 +69,24 @@ HANDLERS: dict[tuple[str, ...], Handler] = {
     ("secret", "ls"): store.secret_ls,
     ("secret", "rm"): store.secret_rm,
     ("secret", "env"): store.secret_env,
+    ("account", "add"): github.account_add,
+    ("account", "list"): github.account_list,
+    ("account", "rm"): github.account_rm,
+    ("repo", "list"): github.repo_list,
+    ("repo", "add"): github.repo_add,
+    ("repo", "rm"): github.repo_rm,
+    ("repo", "info"): github.repo_info,
+    ("repo", "sync"): github.repo_sync,
+    ("repo", "clone"): github.clone,
+    ("github", "token"): github.token,
+    ("github", "api"): github.api_call,
+    ("gh",): github.gh,
+    ("git-credential",): github.credential,
+    ("fs", "read"): files.read,
+    ("fs", "write"): files.write,
+    ("fs", "patch"): files.patch,
+    ("fs", "replace"): files.replace,
+    ("fs", "tree"): files.tree,
 }
 
 

@@ -165,6 +165,44 @@ def fan(call: Call, out: Out) -> int:
     return worst
 
 
+def _split(reference: str) -> tuple[str | None, str]:
+    machine, sep, path = reference.partition(":")
+    if not sep or "/" in machine:
+        return None, reference
+    return machine, path
+
+
+def cp(call: Call, out: Out) -> int:
+    source_machine, source_path = _split(call.arg("source"))
+    target_machine, target_path = _split(call.arg("target"))
+    if source_machine is None and target_machine is None:
+        raise Usage("at least one side must be a machine", "unsafie cp box-1:/tmp/a box-2:/tmp/a")
+    key = f"cp/{int(time.time())}-{os.getpid()}"
+    if source_machine is not None:
+        answer = _run_once(call, f"unsafie blob put {key} {source_path}", source_machine, 300.0)
+        _fail_if(answer, f"cannot read {source_path} on {source_machine}")
+    else:
+        client = api.client(call)
+        client.raw("PUT", f"/blobs/{key}", open(source_path, "rb").read())
+    if target_machine is not None:
+        answer = _run_once(
+            call, f"unsafie blob get {key} -o {target_path}", target_machine, 300.0
+        )
+        _fail_if(answer, f"cannot write {target_path} on {target_machine}")
+    else:
+        data = api.client(call).download(f"/blobs/{key}")
+        with open(target_path, "wb") as handle:
+            handle.write(data)
+    api.client(call).call("DELETE", f"/blobs/{key}")
+    out.send({"from": call.arg("source"), "to": call.arg("target")}, ["copied"])
+    return OK
+
+
+def _fail_if(answer: dict, message: str) -> None:
+    if answer.get("exit_code") not in (0, None):
+        raise CliError(f"{message}: {str(answer.get('output') or '').strip()[:200]}", FAILED)
+
+
 def submit(call: Call, out: Out) -> int:
     command = call.arg("command")
     count = int(call.flag("count") or "1")
