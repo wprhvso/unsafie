@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from unsafie import artifacts
 from unsafie.agent import live
 from unsafie.api.dependencies.paging import paging
 from unsafie.api.schemas.common import Page, PageParams
@@ -38,7 +39,7 @@ async def live_link(turn_id: UUID):
     except Exception as e:
         logger.warning("turn=%s live token unreadable: %s", turn_id, e)
         token = None
-    return {"token": token, "url": live.url(token) if token else None}
+    return {"token": token, "url": artifacts.url(token) if token else None}
 
 
 @router.get("/{turn_id}", response_model=TurnDetail)

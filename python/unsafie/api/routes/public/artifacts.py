@@ -5,12 +5,13 @@ from fastapi.responses import HTMLResponse
 
 from unsafie.api import static
 from unsafie.database import SessionLocal
-from unsafie.database.repositories.share import ShareRepository
+from unsafie.database.models.artifact import ArtifactKind
+from unsafie.database.repositories.artifact import ArtifactRepository
 from unsafie.slugs import is_slug
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["share"])
+router = APIRouter(tags=["artifacts"])
 
 RESERVED = ("api/", "gh/", "_app/", "health", "docs", "redoc", "openapi.json")
 
@@ -28,7 +29,10 @@ async def spa(path: str):
     if not is_slug(slug):
         return HTMLResponse(static.render(None))
     async with SessionLocal() as session:
-        content = await ShareRepository(session).content(slug)
-    if content is None:
+        artifact = await ArtifactRepository(session).by_slug(slug)
+    if artifact is None:
         return HTMLResponse(static.not_found(slug), status_code=404)
-    return HTMLResponse(static.render({"slug": slug, "content": content}))
+    payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
+    if artifact.kind == ArtifactKind.MARKDOWN:
+        payload["content"] = artifact.content or ""
+    return HTMLResponse(static.render(payload))

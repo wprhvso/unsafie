@@ -1,3 +1,4 @@
+from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.bot import Bot
 from unsafie.database.models.chat import Chat
 from unsafie.database.models.commit_log import CommitLog
@@ -9,7 +10,6 @@ from unsafie.database.models.installation import Installation, InstallationAccou
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.scheduled_task import ScheduledTask, TaskKind
-from unsafie.database.models.share import Share
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch, WatchMode
 from unsafie.database.models.subscription import GithubSubscription
@@ -23,6 +23,8 @@ from unsafie.database.models.worktree import Worktree
 
 __all__ = [
     "AnthropicCredential",
+    "Artifact",
+    "ArtifactKind",
     "Bot",
     "Chat",
     "CommitLog",
@@ -37,7 +39,6 @@ __all__ = [
     "Response",
     "ResponseKind",
     "ScheduledTask",
-    "Share",
     "SshHost",
     "SshWatch",
     "TaskKind",

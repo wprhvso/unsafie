@@ -269,11 +269,15 @@ class SshHostRead(Base):
     connected: bool = False
 
 
-class ShareRead(Base):
+class ArtifactRead(Base):
     id: int
     slug: str
-    response_id: UUID
+    kind: str
+    title: str | None = None
     url: str
+    bytes: int = 0
+    chat_id: int | None = None
+    turn_id: UUID | None = None
     created_at: datetime
 
 

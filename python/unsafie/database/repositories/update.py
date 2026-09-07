@@ -57,6 +57,19 @@ class UpdateRepository:
         await self.session.commit()
         return int(ordinal)
 
+    async def turn_of(self, bot_id: int, chat_id: int, message_id: int) -> UUID | None:
+        return await self.session.scalar(
+            select(Update.turn_id)
+            .where(
+                Update.bot_id == bot_id,
+                Update.chat_id == chat_id,
+                Update.message_id == message_id,
+                Update.turn_id.is_not(None),
+            )
+            .order_by(Update.created_at.desc(), Update.id.desc())
+            .limit(1)
+        )
+
     async def last_message_id(self, turn_id: UUID) -> int | None:
         value = await self.session.scalar(
             select(Update.message_id)

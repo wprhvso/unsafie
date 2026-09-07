@@ -10,16 +10,15 @@ from uuid import UUID
 
 from redis.exceptions import RedisError
 
-from unsafie import cluster
+from unsafie import artifacts, cluster
+from unsafie.database.models.turn import Turn
 from unsafie.settings import settings
-from unsafie.slugs import generate_slug
 
 logger = logging.getLogger(__name__)
 
 BODY = "b"
 STREAM = "live"
 GAP = "gap"
-ATTEMPTS = 16
 TRUNCATED = "live.truncated"
 
 
@@ -33,10 +32,6 @@ def token_key(token: str) -> str:
 
 def link_key(turn_id: UUID | str) -> str:
     return cluster.key(STREAM, "link", turn_id)
-
-
-def url(token: str) -> str:
-    return f"{settings.live_origin}/turn/{token}"
 
 
 def _now() -> str:
@@ -68,10 +63,6 @@ class Live:
         self._wake = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._full = False
-
-    @property
-    def url(self) -> str:
-        return url(self.token)
 
     def emit(self, kind: str, /, **data: Any) -> None:
         self._push(Frame(kind, _now(), data))
@@ -169,32 +160,32 @@ class Live:
 _streams: dict[UUID, Live] = {}
 
 
-async def _allocate(turn_id: UUID) -> str | None:
+async def _allocate(turn: Turn) -> str | None:
+    token = await artifacts.for_turn(turn)
+    if token is None:
+        return None
     client = cluster.client()
     ttl = int(settings.live_ttl * 1000)
-    for _ in range(ATTEMPTS):
-        token = generate_slug()
-        if await client.set(token_key(token), str(turn_id), px=ttl, nx=True):
-            await client.set(link_key(turn_id), token, px=ttl)
-            return token
-    return None
+    await client.set(token_key(token), str(turn.id), px=ttl)
+    await client.set(link_key(turn.id), token, px=ttl)
+    return token
 
 
-async def begin(turn_id: UUID) -> Live | None:
+async def begin(turn: Turn) -> Live | None:
     if not settings.live_enabled:
         return None
     try:
-        token = await _allocate(turn_id)
+        token = await _allocate(turn)
     except (cluster.Unavailable, RedisError, OSError):
-        logger.warning("live: turn=%s got no token", turn_id, exc_info=True)
+        logger.warning("live: turn=%s got no token", turn.id, exc_info=True)
         return None
     if token is None:
-        logger.error("live: turn=%s found no free token in %s tries", turn_id, ATTEMPTS)
+        logger.error("live: turn=%s got no artifact slug", turn.id)
         return None
-    stream = Live(turn_id, token)
+    stream = Live(turn.id, token)
     stream.start()
-    _streams[turn_id] = stream
-    logger.info("live: turn=%s streams to %s", turn_id, url(token))
+    _streams[turn.id] = stream
+    logger.info("live: turn=%s streams to %s", turn.id, artifacts.url(token))
     return stream
 
 

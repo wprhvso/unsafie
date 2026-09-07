@@ -20,7 +20,7 @@ background:#fff}pre{background:#f6f6f6;padding:.8rem;border-radius:6px;overflow-
 <script>
 const el = document.getElementById("payload");
 const data = el ? JSON.parse(el.textContent) : null;
-document.getElementById("raw").textContent = data ? data.content : "not found";
+document.getElementById("raw").textContent = (data && data.content) || "not found";
 </script>
 </html>"""
 

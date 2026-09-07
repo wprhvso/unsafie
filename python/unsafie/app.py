@@ -10,7 +10,7 @@ from unsafie.agent import turns
 from unsafie.agent.client import close_session as close_anthropic
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
-from unsafie.api.routes.public import public_router, share_router
+from unsafie.api.routes.public import artifact_router, public_router
 from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
 from unsafie.github.cache import sweeper
@@ -115,5 +115,5 @@ if (assets := static.assets_dir()) is not None:
 else:
     logger.warning("no frontend bundle at %s; nginx must serve it", settings.static_dir)
 
-app.include_router(share_router)
+app.include_router(artifact_router)
 telemetry.instrument_app(app)

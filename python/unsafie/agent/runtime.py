@@ -337,24 +337,6 @@ async def _execute(
     return Outcome("failed", error="attempts exhausted", cost_usd=spent)
 
 
-async def announce(bot: Bot, turn: Turn, locale: str, stream: live.Live) -> None:
-    if not settings.live_link:
-        return
-    try:
-        await sender.send(
-            bot,
-            bot_id=turn.bot_id,
-            chat_id=turn.chat_id,
-            markdown=t("agent-live", locale, url=stream.url),
-            kind=ResponseKind.SYSTEM,
-            turn=turn,
-            silent=True,
-            preview=False,
-        )
-    except Exception:
-        logger.warning("turn=%s live link not delivered", turn.id, exc_info=True)
-
-
 async def notify(bot: Bot, turn: Turn, text: str) -> None:
     try:
         await sender.send(
@@ -398,7 +380,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         prompt = LOST_CONTEXT + "\n\n" + prompt
     status = TurnStatus.FAILED
     note: str | None = None
-    stream = await live.begin(turn.id)
+    stream = await live.begin(turn)
     if stream is not None:
         stream.emit(
             "turn.start",
@@ -408,7 +390,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             resumed=len(messages),
             prompt=live.clip(prompt)[0],
         )
-        await announce(bot, turn, locale, stream)
     events.publish(
         "turn.started",
         turn_id=str(turn.id),
