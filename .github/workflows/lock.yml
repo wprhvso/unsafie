@@ -1,6 +1,9 @@
 name: lock
 
 on:
+  push:
+    branches: [pool]
+    paths: ["python/**"]
   workflow_dispatch:
 
 permissions:
