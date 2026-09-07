@@ -10,6 +10,7 @@ from unsafie.agent import turns
 from unsafie.agent.client import close_session as close_anthropic
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
+from unsafie.api.routes.cli import cli_router
 from unsafie.api.routes.public import artifact_router, public_router
 from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
@@ -94,6 +95,7 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(public_router)
 app.include_router(admin_router)
+app.include_router(cli_router)
 
 
 @app.get("/health")

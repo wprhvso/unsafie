@@ -1,3 +1,4 @@
+from unsafie.database.models.api_token import ApiToken, TokenKind
 from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.bot import Bot
 from unsafie.database.models.chat import Chat
@@ -23,6 +24,7 @@ from unsafie.database.models.worktree import Worktree
 
 __all__ = [
     "AnthropicCredential",
+    "ApiToken",
     "Artifact",
     "ArtifactKind",
     "Bot",
@@ -42,6 +44,7 @@ __all__ = [
     "SshHost",
     "SshWatch",
     "TaskKind",
+    "TokenKind",
     "Transaction",
     "Turn",
     "TurnMessages",

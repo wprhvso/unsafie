@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from unsafie_cli.commands import auth, meta, settings
+from unsafie_cli.commands import account, auth, chat, meta, pages, settings
 from unsafie_cli.errors import NotReady
 from unsafie_cli.output import Out
 from unsafie_cli.parser import Call
@@ -20,6 +20,18 @@ HANDLERS: dict[tuple[str, ...], Handler] = {
     ("auth", "status"): auth.status,
     ("auth", "logout"): auth.logout,
     ("auth", "token"): auth.token,
+    ("me",): account.me,
+    ("say",): chat.say,
+    ("file",): chat.file,
+    ("edit",): chat.edit,
+    ("rm",): chat.remove,
+    ("note",): chat.note,
+    ("progress",): chat.progress,
+    ("typing",): chat.typing,
+    ("page", "create"): pages.create,
+    ("page", "list"): pages.listing,
+    ("page", "update"): pages.update,
+    ("page", "rm"): pages.remove,
 }
 
 
