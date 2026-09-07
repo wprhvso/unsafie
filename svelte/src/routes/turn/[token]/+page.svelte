@@ -73,6 +73,7 @@
   );
 
   const cost = $derived(feed.cost || meta?.cost_usd || 0);
+  const spent = $derived(feed.spent || cost * (feed.ratio ?? 1));
 
   const LABEL = {
     loading: 'connecting',
@@ -146,7 +147,7 @@
   <div class="stats">
     <span title="elapsed"><b>{clock(elapsed)}</b></span>
     <span title="model requests">{feed.steps} steps</span>
-    <span title="tool calls">{feed.calls} calls</span>
+    <span class="calls" title="tool calls">{feed.calls} calls</span>
     {#if feed.model}<span class="mono model" title="model">{feed.model}</span>{/if}
   </div>
 
@@ -171,8 +172,11 @@
 </header>
 
 <Meters
+  {spent}
   {cost}
+  ratio={feed.ratio}
   budget={feed.budget}
+  balance={feed.balance}
   context={feed.context}
   limit={feed.contextLimit}
   {tokens}
@@ -273,6 +277,8 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex: 1 1 auto;
+    min-width: 0;
     color: var(--muted);
     overflow: hidden;
     white-space: nowrap;
@@ -430,6 +436,7 @@
     }
 
     .model,
+    .calls,
     .what {
       display: none;
     }
