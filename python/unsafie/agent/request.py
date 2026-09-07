@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_EFFORT = "low"
 UNCACHEABLE = frozenset({"thinking", "redacted_thinking"})
-DOWNGRADABLE = ("thinking", "effort", "output_config")
+DOWNGRADABLE = ("thinking", "effort", "output_config", "context_management", "fallbacks")
 
 _unsupported: dict[str, set[str]] = {}
 
@@ -18,7 +18,14 @@ def cache_control() -> dict:
 
 
 def system() -> list[dict]:
-    return [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": cache_control()}]
+    return [
+        {
+            "type": "text",
+            "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+            "cache_control": cache_control(),
+        },
+        {"type": "text", "text": SYSTEM_PROMPT, "cache_control": cache_control()},
+    ]
 
 
 def reminder(text: str) -> dict:
@@ -47,15 +54,33 @@ def tools(definitions: list[dict]) -> list[dict]:
 
 
 def thinking() -> dict | None:
-    mode = (settings.claude_thinking or "off").strip().lower()
+    mode = (settings.claude_thinking or "adaptive").strip().lower()
     if mode in ("", "off", "none", "0"):
         return None
     if mode == "adaptive":
-        return {"type": "adaptive"}
+        config: dict = {"type": "adaptive"}
+        if settings.claude_thinking_display:
+            config["display"] = settings.claude_thinking_display
+        return config
     if mode.isdigit():
         return {"type": "enabled", "budget_tokens": int(mode)}
-    logger.warning("CLAUDE_THINKING=%r is not understood, thinking is off", settings.claude_thinking)
-    return None
+    logger.warning(
+        "CLAUDE_THINKING=%r is not understood, falling back to adaptive", settings.claude_thinking
+    )
+    return {"type": "adaptive", "display": settings.claude_thinking_display}
+
+
+def context_management() -> dict | None:
+    if not settings.claude_clear_thinking:
+        return None
+    return {
+        "edits": [{"type": "clear_thinking_20251015", "keep": settings.claude_clear_thinking_keep}]
+    }
+
+
+def fallbacks() -> str | None:
+    value = (settings.claude_fallbacks or "").strip()
+    return value or None
 
 
 def anchors(messages: list[dict], previous: int) -> set[int]:
@@ -108,13 +133,18 @@ def build(
         "system": system(),
         "messages": cached(messages, marks),
     }
-    if definitions:
-        body["tools"] = definitions
+    body["tools"] = definitions if definitions else []
     if effort and not ({"effort", "output_config"} & blocked):
         body["output_config"] = {"effort": effort}
     config = thinking()
     if config is not None and "thinking" not in blocked:
         body["thinking"] = config
+        edits = context_management()
+        if edits is not None and "context_management" not in blocked:
+            body["context_management"] = edits
+    mode = fallbacks()
+    if mode is not None and "fallbacks" not in blocked:
+        body["fallbacks"] = mode
     return body
 
 

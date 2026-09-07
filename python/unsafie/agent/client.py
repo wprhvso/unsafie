@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import shlex
 import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from urllib.parse import urlparse
 import aiohttp
 
 from unsafie import telemetry
+from unsafie.agent.credentials import mask
 from unsafie.database.models.credential import AnthropicCredential, CredentialKind
 from unsafie.log import short
 from unsafie.settings import settings
@@ -20,6 +22,7 @@ PATH = "/v1/messages"
 RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, 529})
 RETRYABLE_KINDS = frozenset({"overloaded_error", "api_error", "timeout_error", "network_error"})
 JSON_BLOCKS = frozenset({"tool_use", "server_tool_use", "mcp_tool_use"})
+SECRET_HEADERS = frozenset({"authorization", "x-api-key"})
 
 _session: aiohttp.ClientSession | None = None
 _lock = asyncio.Lock()
@@ -105,9 +108,7 @@ def betas(credential: AnthropicCredential) -> list[str]:
 def headers(credential: AnthropicCredential) -> dict[str, str]:
     out = {
         "content-type": "application/json",
-        "accept": "text/event-stream",
         "anthropic-version": settings.anthropic_version,
-        "user-agent": f"unsafie/{settings.service_version or 'dev'}",
     }
     if credential.kind == CredentialKind.OAUTH:
         out["authorization"] = f"Bearer {credential.secret}"
@@ -117,6 +118,38 @@ def headers(credential: AnthropicCredential) -> dict[str, str]:
     if marks:
         out["anthropic-beta"] = ",".join(marks)
     return out
+
+
+def _safe_header(name: str, value: str) -> str:
+    if name.lower() not in SECRET_HEADERS:
+        return value
+    prefix, _, secret = value.partition(" ")
+    if secret:
+        return f"{prefix} {mask(secret)}"
+    return mask(value)
+
+
+def as_curl(url: str, sent: dict[str, str], body: dict) -> str:
+    parts = ["curl"]
+    for name, value in sent.items():
+        parts += ["-H", shlex.quote(f"{name}: {_safe_header(name, value)}")]
+    parts += ["--compressed", "-X", "POST", shlex.quote(url)]
+    payload = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+    limit = settings.anthropic_log_body_limit
+    if limit and len(payload) > limit:
+        payload = payload[:limit] + f"…(+{len(payload) - limit} chars)"
+    parts += ["-d", shlex.quote(payload)]
+    return " ".join(parts)
+
+
+def log_request(url: str, sent: dict[str, str], body: dict) -> None:
+    if not settings.anthropic_log_curl:
+        return
+    line = as_curl(url, sent, body)
+    if settings.anthropic_log_curl_level.upper() == "INFO":
+        logger.info("anthropic request:\n%s", line)
+    else:
+        logger.debug("anthropic request:\n%s", line)
 
 
 class Builder:
@@ -260,6 +293,7 @@ async def _once(
 ) -> Reply:
     http = await session()
     url = settings.anthropic_api_url.rstrip("/") + PATH
+    sent = headers(credential)
     timeout = aiohttp.ClientTimeout(
         total=settings.anthropic_timeout,
         connect=settings.anthropic_connect_timeout,
@@ -278,18 +312,22 @@ async def _once(
             attrs.ATTEMPT: attempt if attempt > 1 else None,
         },
     ) as span:
+        log_request(url, sent, body)
         try:
-            async with http.post(
-                url, headers=headers(credential), json=body, timeout=timeout
-            ) as response:
+            async with http.post(url, headers=sent, json=body, timeout=timeout) as response:
                 request_id = response.headers.get("request-id")
                 telemetry.set_attrs(
                     span, {attrs.HTTP_STATUS: response.status, attrs.REQUEST_ID: request_id}
                 )
                 if response.status >= 400:
+                    raw = await response.read()
+                    if not settings.anthropic_log_curl:
+                        logger.warning(
+                            "anthropic rejected this request:\n%s", as_curl(url, sent, body)
+                        )
                     raise _failure(
                         response.status,
-                        await response.read(),
+                        raw,
                         request_id,
                         response.headers.get("retry-after"),
                     )

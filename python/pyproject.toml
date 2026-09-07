@@ -25,6 +25,7 @@ dependencies = [
     "redis[hiredis]>=8.1.0",
     "sqlalchemy>=2.0.52",
     "uvicorn>=0.52.4",
+    "claude-agent-sdk>=0.2.152",
 ]
 
 [project.scripts]

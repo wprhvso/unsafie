@@ -108,7 +108,7 @@ class Settings(BaseSettings):
 
     anthropic_api_url: str = "https://api.anthropic.com"
     anthropic_version: str = "2023-06-01"
-    anthropic_beta: str = ""
+    anthropic_beta: str = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,advisor-tool-2026-03-01,effort-2025-11-24,server-side-fallback-2026-07-01,fallback-credit-2026-06-01,thinking-display-updates-2026-08-18,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07"
     anthropic_oauth_beta: str = "oauth-2025-04-20"
     anthropic_connections: int = 16
     anthropic_timeout: float = 900.0
@@ -117,15 +117,22 @@ class Settings(BaseSettings):
     anthropic_retries: int = 3
     anthropic_retry_base: float = 2.0
     anthropic_retry_max: float = 60.0
+    anthropic_log_curl: bool = True
+    anthropic_log_curl_level: str = "INFO"
+    anthropic_log_body_limit: int = 0
 
     claude_model: str = "claude-opus-5"
-    claude_max_tokens: int = 32000
+    claude_max_tokens: int = 128000
     claude_thinking: str = "adaptive"
     claude_web_search: bool = True
-    claude_web_search_max_uses: int = 8
+    claude_web_search_max_uses: int = 800
+    claude_thinking_display: str = "updates"
+    claude_clear_thinking: bool = True
+    claude_clear_thinking_keep: str = "all"
+    claude_fallbacks: str = "default"
     cache_ttl: str = "1h"
-    agent_max_steps: int = 64
-    agent_max_nudges: int = 2
+    agent_max_steps: int = 6400
+    agent_max_nudges: int = 200
     agent_tool_timeout: float = 600.0
 
     chats_dir: Path = Path("chats")
@@ -242,6 +249,14 @@ class Settings(BaseSettings):
                 f"vs {self.turn_heartbeat})"
             )
         return self
+
+    @field_validator("claude_thinking_display", mode="before")
+    @classmethod
+    def _display(cls, v):
+        value = str(v or "").strip().lower()
+        if value and value not in ("updates", "raw", "off"):
+            raise ValueError(f"CLAUDE_THINKING_DISPLAY must be updates | raw | off, got '{v}'")
+        return "" if value == "off" else value
 
     @property
     def runs_web(self) -> bool:
