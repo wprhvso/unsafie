@@ -1,11 +1,3 @@
-"""transcripts hold anthropic messages now
-
-Revision ID: 0008
-Revises: 0007
-Create Date: 2026-09-07 12:00:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

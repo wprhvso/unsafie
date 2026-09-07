@@ -43,7 +43,6 @@ def log_reply(reply, prefix: str) -> None:
 
 
 def shrink(value, limit: int):
-    """Keep the shape of a tool argument tree, cut the strings inside it."""
     if isinstance(value, str):
         body, cut = stream.clip(value, limit)
         return f"{body}…(+{cut} chars)" if cut else body
@@ -91,8 +90,6 @@ def _block(block: dict) -> dict:
         item["chars"] = len(block.get("text") or "")
     elif kind == "thinking":
         item["chars"] = len(block.get("thinking") or "")
-        # display=updates gives back an empty thinking field; say so instead of
-        # showing an empty card.
         item["hidden"] = not item["chars"]
     elif kind == "redacted_thinking":
         item["hidden"] = True
@@ -100,8 +97,6 @@ def _block(block: dict) -> dict:
 
 
 class Recorder:
-    """Writes a step into the log, the trace and — when someone is watching — the live stream."""
-
     def __init__(self, prefix: str, live: Live | None = None) -> None:
         self.prefix = prefix
         self.live = live
@@ -114,7 +109,6 @@ class Recorder:
             self.live.emit("step.start", step=step, messages=messages, tools=tools)
 
     def raw(self, name: str, data: dict) -> None:
-        """Every server-sent event of the model stream, as it arrives."""
         if self.live is None:
             return
         kind = name or str(data.get("type") or "")
@@ -137,9 +131,6 @@ class Recorder:
                 "name": block.get("name"),
             }
             if block.get("type") not in KNOWN_BLOCKS:
-                # Server-side tool results and anything the API grows later arrive
-                # whole, with no deltas: carry the block itself so the page can
-                # still show what came back.
                 payload["block"] = shrink(block, settings.live_max_text)
             self.live.emit("block.open", **payload)
         elif kind == "content_block_delta":

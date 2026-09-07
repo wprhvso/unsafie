@@ -49,7 +49,6 @@ class Janitor(Loop):
                 user_id=turn.user_id,
                 instance=turn.instance_id,
             )
-            # Whoever is watching this turn should see it stop, not spin forever.
             await live.seal(
                 turn.id,
                 status=str(TurnStatus.FAILED),

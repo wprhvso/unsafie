@@ -191,7 +191,6 @@ class Settings(BaseSettings):
     events_batch: int = 100
     events_block: float = 20.0
 
-    # live view of a running turn: one redis stream per turn, kept for LIVE_TTL
     live_enabled: bool = True
     live_link: bool = True
     live_base_url: str = ""

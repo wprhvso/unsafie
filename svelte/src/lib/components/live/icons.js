@@ -1,4 +1,3 @@
-// Stroked 24×24 glyphs, drawn with the same pen as the rest of the page.
 export const ICONS = {
   prompt: ['M20 21v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1', 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
   think: ['M13 2 3 14h9l-1 8 10-12h-9l1-8z'],

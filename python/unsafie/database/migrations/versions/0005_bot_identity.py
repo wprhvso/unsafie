@@ -1,11 +1,3 @@
-"""bot identity
-
-Revision ID: 0005
-Revises: 0004
-Create Date: 2026-09-07 08:00:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

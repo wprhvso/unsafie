@@ -22,10 +22,6 @@ function spread(touches) {
   );
 }
 
-/**
- * Pinch on touch, ctrl+wheel on a desktop, and a handle for buttons to pull.
- * The level lives in localStorage, the value itself in a CSS variable.
- */
 export function zoomer({ key = KEY, variable = VARIABLE, onchange } = {}) {
   let zoom = restore(key);
   let anchor = zoom;
@@ -43,7 +39,7 @@ export function zoomer({ key = KEY, variable = VARIABLE, onchange } = {}) {
     try {
       localStorage.setItem(key, String(zoom));
     } catch {
-      /* empty */
+      void 0;
     }
   };
 

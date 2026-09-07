@@ -82,9 +82,6 @@ REPLY_QUERY = text("""
         ) AS in_lineage
 """)
 
-# Reserving the per-turn budget: the user row is locked, what live turns already hold is
-# subtracted from the balance, and the rest (capped by the per-turn limit, NULL = no limit)
-# is written onto this turn. One statement, so two turns cannot reserve the same money.
 HOLD_QUERY = text("""
     WITH me AS (
         SELECT id, balance FROM users WHERE id = :user FOR UPDATE
@@ -189,7 +186,6 @@ class TurnRepository:
         await self.session.commit()
 
     async def hold(self, turn_id: UUID, user_id: int, limit: int) -> Reserved:
-        """Reserve the per-turn budget on the balance. Returns what got locked and the balance."""
         row = (
             await self.session.execute(
                 HOLD_QUERY,
@@ -210,7 +206,6 @@ class TurnRepository:
         return Reserved(int(row.held), int(row.balance))
 
     async def unhold(self, turn_id: UUID, amount: int) -> None:
-        """Give reserved money back: either it was spent for real, or the turn is done."""
         if amount <= 0:
             return
         await self.session.execute(
@@ -221,7 +216,6 @@ class TurnRepository:
         await self.session.commit()
 
     async def locked(self, user_ids: Sequence[int]) -> dict[int, int]:
-        """What live turns keep reserved, per user. Dead turns stop counting by themselves."""
         if not user_ids:
             return {}
         cutoff = datetime.now(UTC) - timedelta(seconds=settings.turn_stale_after)

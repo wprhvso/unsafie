@@ -4,7 +4,6 @@
 
   let { blocks = [] } = $props();
 
-  // base64 inflates by 4/3; close enough to name a size on screen
   const weigh = (n) => bytes(Math.round((n ?? 0) * 0.75));
 </script>
 

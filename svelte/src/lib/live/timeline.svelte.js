@@ -15,13 +15,6 @@ function merge(into, usage) {
   }
 }
 
-/**
- * Turns the flat frame stream into something a human reads top to bottom.
- *
- * Blocks are addressed by step and index, tool calls additionally by their call
- * id, so a result that arrives long after the request still lands on the card it
- * belongs to.
- */
 export function timeline() {
   const state = $state({
     items: [],
@@ -48,8 +41,6 @@ export function timeline() {
   const at = (frame) => frame.at ?? null;
   const key = (data) => `${data.step ?? 0}:${data.index ?? 0}`;
 
-  // Always keep the value the array hands back, never the literal that went in:
-  // only the proxy notifies the page when a block grows.
   function push(item) {
     state.items.push(item);
     return state.items[state.items.length - 1];
@@ -85,7 +76,6 @@ export function timeline() {
     } else if (kind === 'text' || !kind) {
       item = { ...base, type: 'text', text: '' };
     } else {
-      // Something the API returns whole — a server-side tool result, say.
       item = { ...base, type: 'raw', name: kind, block: data.block ?? null };
     }
     const stored = push(item);

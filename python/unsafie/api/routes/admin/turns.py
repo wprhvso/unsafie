@@ -33,7 +33,6 @@ async def list_turns(
 
 @router.get("/{turn_id}/live")
 async def live_link(turn_id: UUID):
-    """The watch link, while the stream behind it is still in redis."""
     try:
         token = await live.token_of(turn_id)
     except Exception as e:

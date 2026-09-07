@@ -4,13 +4,6 @@ const RETRY_MIN = 800;
 const RETRY_MAX = 15000;
 const OVER = ['done', 'failed'];
 
-/**
- * Follow one turn: replay what already happened, then stay on the wire.
- *
- * The snapshot comes over plain HTTP, the tail over SSE. Frames carry their
- * stream id, so a dropped connection resumes exactly where it stopped instead of
- * replaying the whole turn. A turn that is already over is never followed.
- */
 export function watch(token, { onSnapshot, onFrame, onStatus, onGap } = {}) {
   let source = null;
   let stopped = false;
@@ -65,7 +58,6 @@ export function watch(token, { onSnapshot, onFrame, onStatus, onGap } = {}) {
 
   async function recover() {
     drop();
-    // EventSource hides the status code, so ask the plain endpoint what happened.
     let data;
     try {
       data = await snapshot();
@@ -90,7 +82,7 @@ export function watch(token, { onSnapshot, onFrame, onStatus, onGap } = {}) {
       try {
         feed(JSON.parse(event.data));
       } catch {
-        /* a half-written frame; the next one will do */
+        void 0;
       }
       if (finished) halt('done');
     };

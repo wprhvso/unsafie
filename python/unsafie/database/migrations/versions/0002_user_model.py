@@ -1,11 +1,3 @@
-"""per-user claude model
-
-Revision ID: 0002
-Revises: 0001
-Create Date: 2026-09-05 07:00:00
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op
