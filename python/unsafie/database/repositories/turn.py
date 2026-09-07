@@ -247,6 +247,12 @@ class TurnRepository:
         )
         return list(rows)
 
+    async def set_transcript_lines(self, turn_id: UUID, lines: int) -> None:
+        await self.session.execute(
+            update(Turn).where(Turn.id == turn_id).values(transcript_lines=lines)
+        )
+        await self.session.commit()
+
     async def beat(self, turn_id: UUID) -> None:
         await self.session.execute(
             update(Turn)

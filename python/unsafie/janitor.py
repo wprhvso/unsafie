@@ -2,6 +2,7 @@ import logging
 
 from unsafie import events
 from unsafie.database import SessionLocal
+from unsafie.database.repositories.transcript import TranscriptRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.loop import Loop
 from unsafie.settings import settings
@@ -22,6 +23,10 @@ class Janitor(Loop):
         return settings.janitor_interval
 
     async def tick(self) -> None:
+        await self._reap()
+        await self._purge()
+
+    async def _reap(self) -> None:
         async with SessionLocal() as session:
             reaped = await TurnRepository(session).reap_stale(settings.turn_stale_after)
         for turn in reaped:
@@ -38,6 +43,16 @@ class Janitor(Loop):
                 chat_id=turn.chat_id,
                 user_id=turn.user_id,
                 instance=turn.instance_id,
+            )
+
+    async def _purge(self) -> None:
+        async with SessionLocal() as session:
+            gone = await TranscriptRepository(session).purge(settings.transcript_keep_days)
+        if gone:
+            logger.info(
+                "purged %s transcript(s) untouched for %s days",
+                gone,
+                settings.transcript_keep_days,
             )
 
 

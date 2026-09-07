@@ -25,6 +25,7 @@ class Plan:
     session_id: str | None
     inject: bool
     in_context: bool
+    fork_at: int | None = None
 
 
 def chat_lock(bot_id: int, chat_id: int) -> str:
@@ -81,6 +82,7 @@ async def route(
                 )
                 return Plan(owner, None, False, None, inject=True, in_context=True)
 
+            fork_at = None
             if owner is None or owner.session_id is None:
                 session_id = str(uuid.uuid4())
                 resume, fork = None, False
@@ -90,7 +92,8 @@ async def route(
                 why = "continue"
             else:
                 session_id, resume, fork = None, owner.session_id, True
-                why = "fork"
+                fork_at = owner.transcript_lines
+                why = f"fork at line {fork_at}" if fork_at else "fork"
 
             turn = await turns.create(
                 bot_id=bot_id,
@@ -113,7 +116,15 @@ async def route(
                 why,
                 resume,
             )
-            return Plan(turn, resume, fork, session_id, inject=False, in_context=owner is not None)
+            return Plan(
+                turn,
+                resume,
+                fork,
+                session_id,
+                inject=False,
+                in_context=owner is not None,
+                fork_at=fork_at,
+            )
 
 
 async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | None:
