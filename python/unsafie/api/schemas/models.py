@@ -12,6 +12,7 @@ class BotRead(Base):
     id: int
     token_masked: str
     running: bool
+    polled_by: str | None = None
     username: str | None = None
     chats: int = 0
 

@@ -3,7 +3,7 @@ import contextlib
 import logging
 import secrets
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
@@ -146,10 +146,42 @@ async def acquire(name: str, *, ttl: float | None = None, wait: float = 0.0) -> 
         await asyncio.sleep(settings.lock_retry)
 
 
+def holder(token: str | None) -> str | None:
+    return token.split(":", 1)[0] if token else None
+
+
+async def owner(name: str) -> str | None:
+    return holder(await client().get(key("lock", name)))
+
+
+async def owners(names: Iterable[str]) -> dict[str, str | None]:
+    wanted = list(names)
+    if not wanted:
+        return {}
+    values = await client().mget([key("lock", n) for n in wanted])
+    return {name: holder(value) for name, value in zip(wanted, values, strict=True)}
+
+
+async def mark(name: str, value: str, ttl: float) -> None:
+    await client().set(key("mark", name), value, px=int(ttl * 1000))
+
+
+async def marks(names: Iterable[str]) -> dict[str, str | None]:
+    wanted = list(names)
+    if not wanted:
+        return {}
+    values = await client().mget([key("mark", n) for n in wanted])
+    return dict(zip(wanted, values, strict=True))
+
+
 async def lease(name: str, ttl: float) -> bool:
     return bool(
         await client().set(key("lease", name), settings.instance_id, nx=True, px=int(ttl * 1000))
     )
+
+
+async def leased(name: str) -> bool:
+    return bool(await client().exists(key("lease", name)))
 
 
 async def _keep(held: Held) -> None:

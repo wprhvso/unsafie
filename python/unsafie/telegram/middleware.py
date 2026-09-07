@@ -53,7 +53,16 @@ class UpdateMiddleware(BaseMiddleware):
             logger.debug(
                 "bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload)
             )
-            data[UPDATE_DB_ID_KEY] = await self._store(event, payload)
+            stored, fresh = await self._store(event, payload)
+            if not fresh:
+                telemetry.annotate(**{attrs.DUPLICATE: True})
+                logger.warning(
+                    "bot=%s update=%s was already processed, skipped",
+                    self.bot_id,
+                    event.update_id,
+                )
+                return None
+            data[UPDATE_DB_ID_KEY] = stored
             try:
                 return await handler(event, data)
             except Exception:
@@ -72,7 +81,7 @@ class UpdateMiddleware(BaseMiddleware):
                     (time.perf_counter() - started) * 1000,
                 )
 
-    async def _store(self, event: Update, payload: Any) -> int | None:
+    async def _store(self, event: Update, payload: Any) -> tuple[int | None, bool]:
         chat: Chat | None = None
         message_id: int | None = None
         user_id: int | None = None
@@ -104,7 +113,7 @@ class UpdateMiddleware(BaseMiddleware):
                     await ChatRepository(session).touch(
                         self.bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username
                     )
-                stored = await UpdateRepository(session).save(
+                stored, fresh = await UpdateRepository(session).save(
                     bot_id=self.bot_id,
                     update_id=event.update_id,
                     chat_id=chat.id if chat else None,
@@ -114,7 +123,9 @@ class UpdateMiddleware(BaseMiddleware):
                 )
         except Exception:
             logger.exception("bot=%s update=%s not persisted", self.bot_id, event.update_id)
-            return None
+            return None, True
+        if not fresh:
+            return stored, False
         if event.message is not None and chat is not None:
             events.publish(
                 "message.in",
@@ -124,4 +135,4 @@ class UpdateMiddleware(BaseMiddleware):
                 user_id=user_id,
                 text=_preview(event.message.text or event.message.caption),
             )
-        return stored
+        return stored, True

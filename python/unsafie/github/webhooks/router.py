@@ -18,8 +18,7 @@ from unsafie.github import subscriptions
 from unsafie.github.app import auth, install
 from unsafie.github.webhooks import deliveries
 from unsafie.github.webhooks import events as fmt
-from unsafie.telegram import sender
-from unsafie.telegram.manager import manager
+from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
@@ -162,7 +161,7 @@ async def _notify(event: str, payload: dict) -> int:
             text = fmt.render(event, payload)
         if not text:
             continue
-        bot = manager.bot(sub.bot_id)
+        bot = await bots.bot_for(sub.bot_id)
         if bot is None:
             logger.warning("sub=%s: bot %s is not running", sub.id, sub.bot_id)
             continue

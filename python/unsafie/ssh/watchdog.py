@@ -11,8 +11,7 @@ from unsafie.loop import Loop
 from unsafie.settings import settings
 from unsafie.ssh import pool, watches
 from unsafie.ssh.errors import SshError
-from unsafie.telegram import sender
-from unsafie.telegram.manager import manager
+from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
@@ -92,7 +91,7 @@ class Watchdog(Loop):
             await repo.save()
 
     async def _one(self, watch, host) -> None:
-        bot = manager.bot(watch.bot_id)
+        bot = await bots.bot_for(watch.bot_id)
         if bot is None:
             logger.warning("watch=%s: bot %s is not running", watch.id, watch.bot_id)
             await self._reschedule(watch, failed=False)

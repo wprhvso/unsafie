@@ -21,7 +21,8 @@ from unsafie.scheduler.runner import runner
 from unsafie.settings import settings
 from unsafie.ssh.pool import pool
 from unsafie.ssh.watchdog import watchdog
-from unsafie.telegram.lifecycle import start_all, stop_all
+from unsafie.telegram import bots
+from unsafie.telegram.poller import supervisor
 from unsafie.telemetry import attrs
 
 setup()
@@ -44,18 +45,17 @@ async def lifespan(app: FastAPI):
             logger.warning(
                 "%s webhook delivery(ies) were unprocessed at shutdown", stale_deliveries
             )
-        await start_all()
         with telemetry.detached():
-            for loop in (cleanup, runner, watchdog, sweeper):
+            for loop in (cleanup, runner, watchdog, sweeper, supervisor):
                 loop.start()
         logger.info("lifespan ready")
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
         logger.info("lifespan shutdown")
-        for loop in (sweeper, watchdog, runner, cleanup):
+        for loop in (supervisor, sweeper, watchdog, runner, cleanup):
             await loop.stop()
         await pool.close_all()
-        await stop_all()
+        await bots.close_all()
         await close_session()
         await engine.dispose()
         await cluster.close()

@@ -2,13 +2,14 @@ import socket
 import uuid
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, computed_field, field_validator
+from pydantic import AliasChoices, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS_DIR = Path("/run/secrets")
 
 ROLES = ("all", "web", "worker", "poller")
+POLL_TTL_MARGIN = 10.0
 
 
 def _instance_id() -> str:
@@ -44,6 +45,11 @@ class Settings(BaseSettings):
     lock_ttl: float = 30.0
     lock_wait: float = 10.0
     lock_retry: float = 0.05
+
+    poll_timeout: int = 20
+    poll_lock_ttl: float = 45.0
+    poll_claim_interval: float = 10.0
+    poll_failure_cooldown: float = 60.0
 
     log_level: str = "INFO"
     log_truncate: int = 2000
@@ -159,6 +165,23 @@ class Settings(BaseSettings):
         if value not in ROLES:
             raise ValueError(f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'")
         return value
+
+    @model_validator(mode="after")
+    def _polling_handover(self):
+        if self.poll_lock_ttl <= self.poll_timeout + POLL_TTL_MARGIN:
+            raise ValueError(
+                f"POLL_LOCK_TTL must exceed POLL_TIMEOUT by more than {POLL_TTL_MARGIN}s: a dead "
+                f"instance leaves a getUpdates call hanging for up to POLL_TIMEOUT seconds, and "
+                f"the next instance must not start polling before telegram has dropped it "
+                f"(got {self.poll_lock_ttl} vs {self.poll_timeout})"
+            )
+        if self.poll_claim_interval * 3 > self.poll_lock_ttl:
+            raise ValueError(
+                "POLL_CLAIM_INTERVAL must be at most a third of POLL_LOCK_TTL, so that a lock "
+                f"survives two missed renewals (got {self.poll_claim_interval} "
+                f"vs {self.poll_lock_ttl})"
+            )
+        return self
 
     @property
     def runs_web(self) -> bool:

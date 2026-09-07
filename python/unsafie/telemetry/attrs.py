@@ -26,6 +26,7 @@ LOCK = "unsafie.lock"
 LOCK_WAIT_MS = "unsafie.lock.wait_ms"
 LOCK_TAKEN = "unsafie.lock.taken"
 
+DUPLICATE = "unsafie.duplicate"
 REFUSED = "unsafie.refused"
 REFUSAL = "unsafie.refusal"
 CANCELLED = "unsafie.cancelled"

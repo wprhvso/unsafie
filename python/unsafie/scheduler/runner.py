@@ -10,8 +10,7 @@ from unsafie.fluent import t
 from unsafie.loop import Loop
 from unsafie.scheduler import service
 from unsafie.settings import settings
-from unsafie.telegram import sender
-from unsafie.telegram.manager import manager
+from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ class Runner(Loop):
                 await repo.fired(row, run_at)
 
     async def _fire(self, task) -> None:
-        bot = manager.bot(task.bot_id)
+        bot = await bots.bot_for(task.bot_id)
         if bot is None:
             logger.warning("task=%s: bot %s is not running", task.id, task.bot_id)
             await self._advance(task)

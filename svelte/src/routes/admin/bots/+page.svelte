@@ -46,7 +46,7 @@
     <Loader state={bots} empty="No bots yet.">
       <table>
         <thead>
-          <tr><th>id</th><th>token</th><th>username</th><th>chats</th><th>state</th><th></th></tr>
+          <tr><th>id</th><th>token</th><th>username</th><th>chats</th><th>state</th><th>polled by</th><th></th></tr>
         </thead>
         <tbody>
           {#each bots.data as b (b.id)}
@@ -56,8 +56,9 @@
               <td>{b.username ? `@${b.username}` : '—'}</td>
               <td>{b.chats}</td>
               <td>
-                <Badge tone={b.running ? 'ok' : 'bad'}>{b.running ? 'running' : 'stopped'}</Badge>
+                <Badge tone={b.running ? 'ok' : 'bad'}>{b.running ? 'polling' : 'idle'}</Badge>
               </td>
+              <td class="mono muted">{b.polled_by ?? '—'}</td>
               <td class="row nowrap">
                 <button disabled={busy} onclick={() => run(() => admin.post(`/bots/${b.id}/restart`))}>Restart</button>
                 <Confirm label="Delete" question="Delete bot {b.id}?" onconfirm={() => run(() => admin.del(`/bots/${b.id}`))} />
