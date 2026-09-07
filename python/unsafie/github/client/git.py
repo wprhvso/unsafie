@@ -8,7 +8,6 @@ from unsafie.github.client.base import RAW, run_limited
 
 
 def _envelope(body: bytes) -> bytes:
-    """The API answered with the JSON wrapper instead of the raw blob — unwrap it."""
     try:
         data = json.loads(body)
     except ValueError:
@@ -56,7 +55,6 @@ class GitMixin:
         return data
 
     async def blob(self, sha: str) -> bytes:
-        """A blob by its sha. The sha is the content hash, so the cache never goes stale."""
         cached = await cache.blobs.get(sha)
         if cached is not None:
             return cached
@@ -68,7 +66,6 @@ class GitMixin:
         return data
 
     async def blobs(self, shas: Iterable[str]) -> dict[str, bytes]:
-        """Many blobs at once: deduplicated and fetched in parallel instead of one by one."""
         unique = list(dict.fromkeys(sha for sha in shas if sha))
         if not unique:
             return {}

@@ -1,9 +1,3 @@
-"""The App side of GitHub: a JWT and installation tokens.
-
-The App exists for what a personal access token cannot do — receiving webhooks and the Checks
-API — so these tokens are a fallback for repository calls, never the first choice.
-"""
-
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -87,7 +81,6 @@ def installation_provider(installation_id: int):
 
 
 async def app_installations() -> list[dict]:
-    """Every installation of the App — the only listing available without a user token."""
     status, data = await _as_app("GET", "/app/installations?per_page=100")
     if status >= 400 or not isinstance(data, list):
         message = data.get("message") if isinstance(data, dict) else data

@@ -7,8 +7,6 @@ from unsafie.database import Base
 
 
 class GithubAccount(Base):
-    """A GitHub identity of a user, held by their personal access token."""
-
     __tablename__ = "github_accounts"
     __table_args__ = (UniqueConstraint("user_id", "github_id", name="uq_github_accounts_user_gh"),)
 

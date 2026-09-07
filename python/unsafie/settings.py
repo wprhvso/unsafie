@@ -12,7 +12,6 @@ ROLES = ("all", "web", "worker", "poller")
 
 
 def _instance_id() -> str:
-    """Unique per process, not per host: two instances on one machine must not share a lock."""
     return f"{socket.gethostname().split('.')[0]}-{uuid.uuid4().hex[:8]}"
 
 
@@ -156,7 +155,6 @@ class Settings(BaseSettings):
     @field_validator("role", mode="before")
     @classmethod
     def _role(cls, v):
-        """A typo in UNSAFIE_ROLE must not silently turn a worker into a no-op process."""
         value = str(v or "all").strip().lower()
         if value not in ROLES:
             raise ValueError(f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'")

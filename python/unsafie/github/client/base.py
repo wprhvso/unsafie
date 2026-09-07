@@ -33,7 +33,6 @@ _session_lock = asyncio.Lock()
 
 
 async def session() -> aiohttp.ClientSession:
-    """One connection pool for the whole process: no TCP+TLS handshake per request."""
     global _session
     if _session is not None and not _session.closed:
         return _session
@@ -58,7 +57,6 @@ async def close_session() -> None:
 
 
 def _operation(url: str) -> str:
-    """A span name has to stay countable: /repos, /search, /graphql — never the full path."""
     parts = [p for p in urlsplit(url).path.split("/") if p]
     return "/" + parts[0] if parts else "/"
 
@@ -68,7 +66,6 @@ def _host(url: str) -> str | None:
 
 
 async def run_limited(coros: Iterable[Awaitable], limit: int | None = None) -> list:
-    """Run awaitables in parallel, no more than `limit` of them in flight."""
     sem = asyncio.Semaphore(limit or settings.github_concurrency)
 
     async def run(coro):
@@ -127,7 +124,6 @@ class GithubHTTP:
         return await token()
 
     async def _auth(self) -> tuple[str | None, bool]:
-        """The token to start with and whether the fallback one is still worth trying."""
         if self._fallback is None:
             return await self._resolve(self._token), False
         try:
@@ -212,7 +208,6 @@ class GithubHTTP:
             raise GithubError("github: retries exhausted")
 
     async def stream(self, path: str, dest: Path, *, limit: int) -> int | None:
-        """Download a big response straight to a file. None means it is over `limit`."""
         url = path if path.startswith("http") else f"{settings.github_api_url}{path}"
         headers = {"Accept": ACCEPT, "X-GitHub-Api-Version": API_VERSION, "User-Agent": "unsafie"}
         token, _ = await self._auth()

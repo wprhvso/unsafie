@@ -22,10 +22,6 @@ async def root():
 
 @router.get("/{path:path}", response_class=HTMLResponse, include_in_schema=False)
 async def spa(path: str):
-    """A share link, or any client-side route of the admin app.
-
-    nginx normally serves the bundle itself; this keeps the app usable without it.
-    """
     if path.startswith(RESERVED):
         raise HTTPException(404, "Not Found")
     slug = path.rstrip("/")

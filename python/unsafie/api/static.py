@@ -28,7 +28,6 @@ _cache: tuple[float, str] | None = None
 
 
 def assets_dir() -> Path | None:
-    """The immutable bundle directory, when the frontend has been built."""
     path = settings.static_dir / "_app"
     return path if path.is_dir() else None
 

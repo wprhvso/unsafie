@@ -1,11 +1,3 @@
-"""Attribute names in one place, and everything that must never reach a span.
-
-Span *names* stay low-cardinality — anything variable (an id, a repo, a command) is an
-attribute. Payloads (prompts, tool arguments, command output) are optional: a trace store is
-neither a log nor a place for secrets, so content is off by default, always truncated and
-always scrubbed.
-"""
-
 import json
 import re
 from typing import Any
@@ -156,7 +148,6 @@ def stringify(value: Any) -> str:
 
 
 def clip(value: Any, limit: int | None = None) -> str:
-    """Truncate and scrub. Used for everything that goes into an attribute as text."""
     limit = limit or settings.otel_max_attr_len
     text = scrub(stringify(value))
     if len(text) <= limit:
@@ -165,7 +156,6 @@ def clip(value: Any, limit: int | None = None) -> str:
 
 
 def content(value: Any, limit: int | None = None) -> str | None:
-    """A payload attribute: None (and therefore dropped) unless content capture is on."""
     if value is None or not settings.otel_capture_content:
         return None
     return clip(value, limit)

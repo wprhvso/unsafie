@@ -289,7 +289,6 @@ async def _execute(
 
 
 def _usage(span, result: ResultMessage | None) -> None:
-    """Token counts, when the SDK reports them."""
     usage = getattr(result, "usage", None)
     if not isinstance(usage, dict):
         return

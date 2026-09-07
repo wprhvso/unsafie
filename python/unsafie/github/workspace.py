@@ -44,7 +44,6 @@ class Session:
 
 
 def client_for(repo: Repo, user_id: int) -> RepoClient:
-    """The user's token does the work; the installation token stands by for what it cannot reach."""
     return RepoClient(repo.owner, repo.name, pat.provider(user_id), pat.app_provider(repo))
 
 
@@ -131,7 +130,6 @@ async def read(state: Session, path: str) -> bytes | None:
 
 
 async def read_many(state: Session, paths: Iterable[str]) -> dict[str, bytes | None]:
-    """Read a set of files in one go: the overlay first, everything else as one batch."""
     out: dict[str, bytes | None] = {}
     wanted: dict[str, str] = {}
     for path in dict.fromkeys(paths):

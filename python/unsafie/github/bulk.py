@@ -1,13 +1,3 @@
-"""One request instead of N: the whole repository at a commit, as a tarball.
-
-Reading files through the blobs API costs a request per file. The same content is available as a
-single archive, and the blob sha of every file can be computed locally — so one download fills
-the content-addressed cache for the entire snapshot, and everything after it is a local read.
-
-Anything the archive does not carry (export-ignore, LFS pointers, files over the limit) simply
-stays missing and is fetched the usual way.
-"""
-
 import asyncio
 import logging
 import tarfile
@@ -35,11 +25,6 @@ def _skipped(path: str) -> bool:
 
 
 def _extract(archive: Path) -> tuple[int, int]:
-    """Put every reasonable file of the archive into the blob cache. Runs in a worker thread.
-
-    Nothing is written to the paths from the archive: members are read into memory and stored
-    under their own sha, so a crafted archive cannot escape anywhere.
-    """
     files = 0
     total = 0
     with tarfile.open(archive, "r:gz") as tar:
@@ -106,7 +91,6 @@ def _refuse(key: tuple[str, str]) -> None:
 
 
 async def hydrate(client: RepoClient, commit_sha: str) -> int:
-    """Fill the cache from one snapshot. Never fatal: on any trouble we just fetch blobs later."""
     key = (client.full, commit_sha)
     if key in _refused:
         return 0

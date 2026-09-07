@@ -1,8 +1,3 @@
-"""Creating the App and keeping track of where it is installed.
-
-Installations matter for webhooks and checks only — repository work runs on personal tokens.
-"""
-
 import logging
 import secrets
 

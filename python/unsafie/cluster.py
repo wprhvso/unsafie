@@ -1,24 +1,3 @@
-"""Redis: what several unsafie processes have to agree on right now.
-
-Postgres stays the source of truth — turns, updates, credentials, worktrees, tasks live there
-and outlive everything. This is the other half of a stateless deployment: the state that only
-exists while it is happening and that a second instance must see immediately. Who is routing a
-message in this chat, which turn is running and where, an installation token with a ttl, a
-snapshot somebody is already downloading.
-
-Nothing here degrades quietly. A lock that turns into a no-op when redis is unreachable is worse
-than no lock at all, so the pool is opened in the lifespan and a failure there stops the process.
-
-    from unsafie import cluster
-
-    async with cluster.lock(f"chat:{bot_id}:{chat_id}"):
-        ...
-
-    async with cluster.try_lock(f"snapshot:{repo}:{sha}", renew=True) as held:
-        if held is None:
-            return  # somebody else is already downloading it
-"""
-
 import asyncio
 import contextlib
 import logging
@@ -59,20 +38,18 @@ _extend = None
 
 
 class Unavailable(RuntimeError):
-    """Redis was never connected — connect() runs in the lifespan, before anything needs it."""
+    pass
 
 
 class Busy(RuntimeError):
-    """Somebody else holds the lock and waiting did not help."""
+    pass
 
 
 def key(*parts: str | int) -> str:
-    """Every key of this deployment lives under one prefix, so one redis can serve several."""
     return ":".join([settings.redis_prefix, *(str(p) for p in parts)])
 
 
 def safe_url(url: str) -> str:
-    """The url without the password: it ends up in logs and in /health."""
     parsed = urlsplit(url)
     if not parsed.password:
         return url
@@ -83,7 +60,6 @@ def safe_url(url: str) -> str:
 
 
 async def connect() -> Redis:
-    """Open the pool. Idempotent, and fatal on failure — see the module docstring."""
     global _client, _release, _extend
     if _client is not None:
         return _client
@@ -129,7 +105,6 @@ async def close() -> None:
 
 
 async def health() -> dict:
-    """One PING. Cheap enough to sit on the /health probe, honest enough to fail it."""
     started = time.perf_counter()
     try:
         await client().ping()
@@ -140,8 +115,6 @@ async def health() -> dict:
 
 @dataclass
 class Held:
-    """A lock in hand. `token` is what makes releasing it safe: only the owner may unlock."""
-
     name: str
     key: str
     token: str
@@ -153,7 +126,6 @@ class Held:
         return time.monotonic() - self.taken_at
 
     async def extend(self, ttl: float | None = None) -> bool:
-        """Push the expiry away. False means it is gone and somebody else may hold it now."""
         ms = int((ttl or self.ttl) * 1000)
         return bool(await _extend(keys=[self.key], args=[self.token, ms]))
 
@@ -162,12 +134,6 @@ class Held:
 
 
 async def acquire(name: str, *, ttl: float | None = None, wait: float = 0.0) -> Held | None:
-    """Take the lock, retrying for up to `wait` seconds. None means somebody else has it.
-
-    Polling rather than a notification on purpose: the critical sections here are short (routing
-    a message, claiming a task) and a `SET NX PX` every 50 ms is cheaper than the plumbing a
-    pub/sub wakeup would need.
-    """
     ttl = ttl or settings.lock_ttl
     full = key("lock", name)
     token = f"{settings.instance_id}:{secrets.token_hex(4)}"
@@ -181,18 +147,12 @@ async def acquire(name: str, *, ttl: float | None = None, wait: float = 0.0) -> 
 
 
 async def lease(name: str, ttl: float) -> bool:
-    """Claim something once: True for the first caller, False for the rest until the ttl runs out.
-
-    Unlike a lock this is never released. It is a marker — "this task has already fired", "this
-    snapshot was refused" — not a critical section.
-    """
     return bool(
         await client().set(key("lease", name), settings.instance_id, nx=True, px=int(ttl * 1000))
     )
 
 
 async def _keep(held: Held) -> None:
-    """Hold the lock for as long as the block runs: a slow rebase must not lose it mid-flight."""
     while True:
         await asyncio.sleep(held.ttl / 3)
         try:
@@ -220,7 +180,6 @@ async def _holding(held: Held, renew: bool) -> AsyncIterator[None]:
 
 
 def _note(name: str, waited: float, taken: bool) -> None:
-    """Contention is the interesting part of a lock: it is the only thing worth a log line."""
     if waited < settings.lock_retry:
         return
     logger.info("lock %s %s after %.0fms", name, "taken" if taken else "refused", waited * 1000)
@@ -234,7 +193,6 @@ def _note(name: str, waited: float, taken: bool) -> None:
 async def lock(
     name: str, *, ttl: float | None = None, wait: float | None = None, renew: bool = False
 ) -> AsyncIterator[Held]:
-    """Hold a lock for the block. Raises Busy when it cannot be taken within `wait`."""
     started = time.perf_counter()
     held = await acquire(name, ttl=ttl, wait=settings.lock_wait if wait is None else wait)
     _note(name, time.perf_counter() - started, held is not None)
@@ -248,7 +206,6 @@ async def lock(
 async def try_lock(
     name: str, *, ttl: float | None = None, renew: bool = False
 ) -> AsyncIterator[Held | None]:
-    """The same, but a taken lock is an answer and not an error: the block gets None."""
     held = await acquire(name, ttl=ttl)
     if held is None:
         yield None

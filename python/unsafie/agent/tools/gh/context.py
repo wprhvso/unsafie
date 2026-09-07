@@ -42,7 +42,6 @@ async def user_client(user_id: int, login: str | None = None) -> UserClient:
 
 
 async def each_user_client(user_id: int):
-    """Yield (client, error) for every connected account; a tokenless one does not kill the rest."""
     for account in await accounts_of(user_id):
         if not account.token:
             yield None, (account.login, str(UserAuthRequired(account.login)))

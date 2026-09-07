@@ -1,11 +1,3 @@
-"""Content-addressed cache for immutable git objects.
-
-A blob sha is the hash of its content and a tree sha is the hash of the tree, so nothing here
-ever needs invalidation: a key is only ever written once. Two levels — an LRU in memory for the
-small and hot objects, and a directory keyed by sha, which survives restarts and is shared by
-every branch, worktree and user of the same repository.
-"""
-
 import asyncio
 import hashlib
 import json
@@ -30,7 +22,6 @@ SWEEP_TARGET = 0.8
 
 
 def git_sha(data: bytes) -> str:
-    """The object id git gives this content — exactly what a tree entry carries."""
     return hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()
 
 
@@ -63,7 +54,6 @@ def _write(path: Path, data: bytes) -> None:
 
 
 def _sweep(root: Path, cap: int) -> tuple[int, int]:
-    """Drop the coldest files until the directory is back under the cap."""
     files: list[tuple[float, int, Path]] = []
     total = 0
     for path in root.rglob("*"):
@@ -129,7 +119,6 @@ class Store:
             self._bytes -= len(evicted)
 
     def cached(self, key: str) -> bool:
-        """Is the object here? Cheap: memory lookup or one stat, no payload read."""
         if key in self._memory:
             return True
         path = self._path(key)
@@ -160,7 +149,6 @@ class Store:
             await asyncio.to_thread(_write, path, data)
 
     def store(self, key: str, data: bytes) -> None:
-        """Blocking write for worker threads (bulk hydration runs off the loop)."""
         path = self._path(key)
         if path is not None:
             _write(path, data)

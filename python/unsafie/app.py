@@ -99,7 +99,6 @@ app.include_router(admin_router)
 
 @app.get("/health")
 async def health(response: Response) -> dict[str, object]:
-    """The probe a load balancer reads: an instance without redis cannot take traffic."""
     redis = await cluster.health()
     if redis["status"] != "ok":
         response.status_code = 503

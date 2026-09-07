@@ -74,7 +74,6 @@ def handle_errors(exc_type: type[Exception], formatter: Callable[[Exception], st
 
 
 def guarded(fn: Handler) -> Handler:
-    """Logs, refusals and the span: every one of the 108 tools passes through here."""
 
     @functools.wraps(fn)
     async def wrapper(ctx: ToolContext, args: dict) -> dict:

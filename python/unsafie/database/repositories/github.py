@@ -245,7 +245,6 @@ class RepoRepository:
         default_branch: str,
         private: bool,
     ) -> Repo:
-        """installation_id=None means the repository is known from a token, not from an installation."""
         row = await self.by_github_id(github_id)
         if row is None:
             row = Repo(
