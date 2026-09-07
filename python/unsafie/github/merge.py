@@ -50,7 +50,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
     out: list[str] = []
     conflicted = False
     i = 0
-    while i < len(base) + 1:
+    while i <= len(base):
         a = ours_ops.get(i)
         b = theirs_ops.get(i)
         if a and b and a != b:
@@ -60,16 +60,18 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
             out.append(MARK_SPLIT + "\n")
             out.extend(b[1])
             out.append(MARK_THEIRS + "\n")
-            i = max(a[0], b[0])
-            continue
-        chosen = a or b
-        if chosen:
-            out.extend(chosen[1])
-            i = chosen[0]
-            continue
-        if i < len(base):
-            out.append(base[i])
-        i += 1
+            end = max(a[0], b[0])
+        else:
+            chosen = a or b
+            end = chosen[0] if chosen else i
+            if chosen:
+                out.extend(chosen[1])
+        if end > i:
+            i = end
+        else:
+            if i < len(base):
+                out.append(base[i])
+            i += 1
     return out, conflicted
 
 
