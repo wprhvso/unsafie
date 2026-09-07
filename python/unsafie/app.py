@@ -20,6 +20,7 @@ from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.worker import worker
 from unsafie.janitor import janitor
 from unsafie.log import setup
+from unsafie.pool.ci.supervisor import ci_supervisor
 from unsafie.pool.keeper import keeper
 from unsafie.presence import presence
 from unsafie.scheduler.runner import runner
@@ -34,7 +35,7 @@ setup()
 telemetry.setup()
 logger = logging.getLogger(__name__)
 
-LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper)
+LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor)
 
 
 @asynccontextmanager

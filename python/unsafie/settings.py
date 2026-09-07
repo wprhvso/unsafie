@@ -212,6 +212,13 @@ class Settings(BaseSettings):
     pool_vnc_port: int = 8444
     pool_desktop_ttl: float = 7_200.0
     pool_tunnel_wait: float = 30.0
+    pool_ci_enabled: bool = True
+    pool_ci_interval: float = 30.0
+    pool_ci_jobs: int = 5
+    pool_ci_max_jobs: int = 20
+    pool_ci_idle: int = 300
+    pool_ci_lifetime: int = 3600
+    pool_ci_borrow: int = 2
 
     default_timezone: str = "UTC"
     schedule_enabled: bool = True

@@ -399,7 +399,15 @@ COMMANDS: tuple[Cmd, ...] = (
     c("admin ci", "admin", "pause or block the CI of a repository", "action repo", phase=8),
     c("admin users", "admin", "who uses the pool and how much", "", "--busy", phase=7),
     c("serve", "internal", "become a machine of the pool", "", "--token=TOKEN --profile=NAME", phase=3, internal=True),
-    c("ci-runner", "internal", "become a GitHub runner for exactly one job", "", "--jit=CONFIG", phase=8, internal=True),
+    c(
+        "ci-runner",
+        "internal",
+        "become a GitHub runner for exactly one job",
+        "",
+        "--jit=CONFIG --name=NAME --repo=SLUG --idle=SEC --lifetime=SEC",
+        phase=8,
+        internal=True,
+    ),
 )
 
 TOPICS: dict[str, tuple[str, ...]] = {
