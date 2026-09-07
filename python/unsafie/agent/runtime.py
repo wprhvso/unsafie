@@ -4,6 +4,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import UUID
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
@@ -70,13 +71,48 @@ def _usage(span, result: loop.Result) -> None:
     )
 
 
-async def _bill(
-    ctx: ToolContext, credential, ratio: float, result: loop.Result, held: billing.Hold
-) -> int:
-    charge = billing.charge_units(result.cost_usd, ratio)
+class Meter:
+    def __init__(self, held: billing.Hold, turn_id: UUID) -> None:
+        self.held = held
+        self.turn_id = turn_id
+        self.ratio = 1.0
+        self.base = 0
+        self.charged = 0
+        self.cost = 0.0
+        self.segment = 0.0
+
+    def begin(self, ratio: float) -> None:
+        self.base = self.charged
+        self.segment = 0.0
+        self.ratio = ratio
+
+    async def take(self, cost_usd: float) -> int:
+        self.cost += cost_usd
+        self.segment += cost_usd
+        target = self.base + billing.charge_units(self.segment, self.ratio)
+        delta = target - self.charged
+        if delta <= 0:
+            return 0
+        self.charged = target
+        balance = await self.held.spend(delta)
+        live.emit(
+            self.turn_id,
+            "charge",
+            units=delta,
+            total=self.charged,
+            balance=balance,
+            cost_usd=self.cost,
+        )
+        return delta
+
+
+async def _bill(ctx: ToolContext, credential, result: loop.Result, meter: Meter) -> int:
+    leftover = result.cost_usd - meter.segment
+    if leftover > 0:
+        await meter.take(leftover)
+    charge = meter.charged - meter.base
     if charge:
-        balance = await held.spend(charge)
-        logger.info("%s charged %s, balance now %s", ctx.prefix, charge, balance)
+        logger.info("%s charged %s for this attempt", ctx.prefix, charge)
     async with SessionLocal() as session:
         await TurnRepository(session).record(
             ctx.turn_id,
@@ -120,6 +156,7 @@ async def _execute(
     prefix = ctx.prefix
     tried: set[int] = set()
     spent = 0.0
+    meter = Meter(held, ctx.turn_id)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         with telemetry.span(
             "agent.attempt",
@@ -139,6 +176,7 @@ async def _execute(
                 model = user.model or settings.claude_model
                 effort = user.effort or DEFAULT_EFFORT
 
+            meter.begin(ratio)
             left = held.usd(ratio)
             if left <= 0:
                 empty = "busy" if held.balance > 0 else "empty_balance"
@@ -213,6 +251,7 @@ async def _execute(
                     definitions=definitions,
                     tools=tools,
                     recorder=Recorder(prefix, live.of(ctx.turn_id)),
+                    on_cost=meter.take,
                 )
                 elapsed = (time.perf_counter() - started) * 1000
                 spent += result.cost_usd
@@ -234,7 +273,7 @@ async def _execute(
                         query_span, RuntimeError(short(result.error or result.status, 300))
                     )
 
-            charge = await _bill(ctx, credential, ratio, result, held)
+            charge = await _bill(ctx, credential, result, meter)
             telemetry.set_attrs(
                 attempt_span,
                 {
@@ -264,6 +303,8 @@ async def _execute(
                 steps=result.steps,
                 cost_usd=result.cost_usd,
                 charge=charge,
+                total_cost=meter.cost,
+                total_charge=meter.charged,
                 usage=result.usage,
                 stop_reason=result.stop_reason,
                 error=short(result.error, 300) if result.error else None,

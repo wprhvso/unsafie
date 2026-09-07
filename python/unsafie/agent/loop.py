@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from unsafie.agent import client, credentials, pricing, queue, request
@@ -118,6 +119,7 @@ async def run(
     definitions: list[dict],
     tools: dict[str, ToolSpec],
     recorder: Recorder,
+    on_cost: Callable[[float], Awaitable[int]] | None = None,
 ) -> Result:
     result = Result()
     replying = {name for name, spec in tools.items() if spec.replies}
@@ -164,7 +166,10 @@ async def run(
             logger.warning("%s step=%s %s", ctx.prefix, result.steps, short(result.error, 600))
             return result
 
-        result.cost_usd += pricing.cost(reply.model or model, reply.usage)
+        step_cost = pricing.cost(reply.model or model, reply.usage)
+        result.cost_usd += step_cost
+        if on_cost is not None:
+            await on_cost(step_cost)
         pricing.merge(result.usage, reply.usage)
         result.stop_reason = reply.stop_reason
         recorder.reply(reply)

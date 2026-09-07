@@ -165,9 +165,15 @@ export function timeline() {
           item.stop = data.stop_reason;
           item.error = data.error;
         }
-        state.settled += data.cost_usd ?? 0;
+        state.settled =
+          typeof data.total_cost === 'number'
+            ? data.total_cost
+            : state.settled + (data.cost_usd ?? 0);
+        state.charge =
+          typeof data.total_charge === 'number'
+            ? data.total_charge
+            : state.charge + (data.charge ?? 0);
         state.pending = 0;
-        state.charge += data.charge ?? 0;
         total();
         break;
       }
@@ -189,7 +195,19 @@ export function timeline() {
       case 'step.model': {
         const item = steps.get(data.step);
         if (item) item.model = data.model;
+        state.model = data.model ?? state.model;
+        state.contextLimit = contextLimit(state.model);
         seeContext(data.usage, data.model);
+        break;
+      }
+
+      case 'charge': {
+        if (typeof data.total === 'number') state.charge = data.total;
+        if (typeof data.cost_usd === 'number') state.settled = data.cost_usd;
+        state.pending = 0;
+        if (typeof data.balance === 'number')
+          balanceStart = (data.balance + state.charge) / UNITS_PER_USD;
+        total();
         break;
       }
 
