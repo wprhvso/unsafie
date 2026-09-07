@@ -25,6 +25,7 @@ export function timeline() {
     model: null,
     effort: null,
     display: null,
+    configured: null,
     thinking: null,
     steps: 0,
     calls: 0,
@@ -99,7 +100,14 @@ export function timeline() {
       };
       state.calls += 1;
     } else if (THINK_BLOCKS.includes(kind)) {
-      item = { ...base, type: 'think', text: '', redacted: kind === 'redacted_thinking' };
+      item = {
+        ...base,
+        type: 'think',
+        text: '',
+        redacted: kind === 'redacted_thinking',
+        display: state.display,
+        configured: state.configured
+      };
     } else if (kind === 'text' || !kind) {
       item = { ...base, type: 'text', text: '' };
     } else {
@@ -118,6 +126,12 @@ export function timeline() {
     if (data.cut) item.cut = (item.cut ?? 0) + data.cut;
   }
 
+  function downgraded(dropped) {
+    const fields = Array.isArray(dropped) ? dropped : [dropped];
+    if (fields.includes('thinking')) state.thinking = 'off';
+    if (fields.includes('thinking') || fields.includes('thinking.display')) state.display = 'off';
+  }
+
   function apply(frame) {
     const data = frame.data ?? {};
     const when = at(frame);
@@ -132,6 +146,7 @@ export function timeline() {
         state.model = data.model ?? state.model;
         state.effort = data.effort ?? state.effort;
         state.display = data.display ?? state.display;
+        state.configured = data.configured ?? state.configured;
         state.thinking = data.thinking ?? state.thinking;
         state.ratio = typeof data.ratio === 'number' ? data.ratio : state.ratio;
         if (typeof data.budget_units === 'number')
@@ -151,7 +166,8 @@ export function timeline() {
           tools: data.tools,
           servers: data.servers ?? [],
           thinking: data.thinking,
-          display: data.display
+          display: data.display,
+          configured: data.configured
         });
         attempts.push(item);
         break;
@@ -286,6 +302,7 @@ export function timeline() {
         break;
 
       case 'note':
+        if (data.name === 'unsafie.downgraded') downgraded(data.attributes?.dropped);
         push({ id: frame.id, at: when, type: 'note', name: data.name, attributes: data.attributes });
         break;
 

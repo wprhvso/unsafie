@@ -8,6 +8,7 @@ EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 DEFAULT_EFFORT = "low"
 UNCACHEABLE = frozenset({"thinking", "redacted_thinking"})
 DOWNGRADABLE = ("thinking", "effort", "output_config", "context_management", "fallbacks")
+THINKING_DISPLAY = "thinking.display"
 PREAMBLE = "You are a Claude agent, built on Anthropic's Claude Agent SDK."
 
 _unsupported: dict[str, set[str]] = {}
@@ -53,17 +54,28 @@ def thinking() -> dict | None:
     mode = (settings.claude_thinking or "adaptive").strip().lower()
     if mode in ("", "off", "none", "0"):
         return None
-    if mode == "adaptive":
-        config: dict = {"type": "adaptive"}
-        if settings.claude_thinking_display:
-            config["display"] = settings.claude_thinking_display
-        return config
     if mode.isdigit():
-        return {"type": "enabled", "budget_tokens": int(mode)}
-    logger.warning(
-        "CLAUDE_THINKING=%r is not understood, falling back to adaptive", settings.claude_thinking
-    )
-    return {"type": "adaptive", "display": settings.claude_thinking_display}
+        config: dict = {"type": "enabled", "budget_tokens": int(mode)}
+    else:
+        if mode != "adaptive":
+            logger.warning(
+                "CLAUDE_THINKING=%r is not understood, falling back to adaptive",
+                settings.claude_thinking,
+            )
+        config = {"type": "adaptive"}
+    if settings.claude_thinking_display:
+        config["display"] = settings.claude_thinking_display
+    return config
+
+
+def applied_thinking(model: str) -> dict | None:
+    blocked = _unsupported.get(model, frozenset())
+    if "thinking" in blocked:
+        return None
+    config = thinking()
+    if config is not None and THINKING_DISPLAY in blocked:
+        config.pop("display", None)
+    return config
 
 
 def context_management() -> dict | None:
@@ -133,29 +145,32 @@ def build(
     body["tools"] = definitions if definitions else []
     if effort and not ({"effort", "output_config"} & blocked):
         body["output_config"] = {"effort": effort}
-    config = thinking()
-    if config is not None and "thinking" not in blocked:
+    config = applied_thinking(model)
+    if config is not None:
         body["thinking"] = config
-        edits = context_management()
-        if edits is not None and "context_management" not in blocked:
-            body["context_management"] = edits
+    edits = context_management()
+    if edits is not None and "context_management" not in blocked:
+        body["context_management"] = edits
     mode = fallbacks()
     if mode is not None and "fallbacks" not in blocked:
         body["fallbacks"] = mode
     return body
 
 
-def downgrade(model: str, error) -> bool:
+def downgrade(model: str, error) -> list[str]:
     if error.status != 400:
-        return False
+        return []
     text = (error.message or "").lower()
-    hit = {field for field in DOWNGRADABLE if field in text}
+    if "display" in text:
+        hit = {THINKING_DISPLAY}
+    else:
+        hit = {field for field in DOWNGRADABLE if field in text}
     if not hit:
-        return False
+        return []
     known = _unsupported.setdefault(model, set())
-    fresh = hit - known
+    fresh = sorted(hit - known)
     if not fresh:
-        return False
-    known |= fresh
-    logger.warning("%s rejects %s, retrying without it", model, ", ".join(sorted(fresh)))
-    return True
+        return []
+    known.update(fresh)
+    logger.warning("%s rejects %s, retrying without it", model, ", ".join(fresh))
+    return fresh

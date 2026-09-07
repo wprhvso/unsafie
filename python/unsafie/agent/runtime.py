@@ -185,6 +185,7 @@ async def _execute(
                 return Outcome("ok" if spent else empty, cost_usd=spent)
 
             definitions, tools = build_tools(ctx, servers)
+            applied = request.applied_thinking(model) or {}
             telemetry.set_attrs(
                 attempt_span,
                 {
@@ -192,19 +193,23 @@ async def _execute(
                     attrs.CREDENTIAL_KIND: str(credential.kind),
                     attrs.GEN_AI_MODEL: model,
                     attrs.EFFORT: effort,
+                    attrs.THINKING: applied.get("type", "off"),
+                    attrs.THINKING_DISPLAY: applied.get("display", "off"),
                     attrs.BUDGET_USD: left,
                     attrs.SERVERS: servers or None,
                 },
             )
             logger.info(
-                "%s attempt=%s credential=%s(%s) model=%s effort=%s ratio=%s budget=%.6f "
-                "messages=%s tools=%s servers=%s",
+                "%s attempt=%s credential=%s(%s) model=%s effort=%s thinking=%s/%s ratio=%s "
+                "budget=%.6f messages=%s tools=%s servers=%s",
                 prefix,
                 attempt,
                 credential.id,
                 credential.kind,
                 model,
                 effort,
+                applied.get("type", "off"),
+                applied.get("display", "off"),
                 ratio,
                 left,
                 len(messages),
@@ -224,8 +229,9 @@ async def _execute(
                 balance_units=held.balance,
                 tools=len(definitions),
                 servers=servers,
-                thinking=settings.claude_thinking,
-                display=settings.claude_thinking_display or "off",
+                thinking=applied.get("type", "off"),
+                display=applied.get("display", "off"),
+                configured=settings.claude_thinking_display or "off",
             )
             started = time.perf_counter()
             with telemetry.span(

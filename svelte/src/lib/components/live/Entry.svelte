@@ -20,6 +20,15 @@
     end: 'Finished'
   };
 
+  const HINT = 'Set CLAUDE_THINKING_DISPLAY=summarized to read summaries here.';
+
+  const BLANK = {
+    summarized: 'The API returned no summary for this block.',
+    updates: `Empty by design: display = updates returns progress notes, not the reasoning. ${HINT}`,
+    omitted: `Empty by design: display = omitted drops the reasoning. ${HINT}`,
+    off: `The request carries no thinking.display, so the reasoning comes back empty. ${HINT}`
+  };
+
   const HEADLINE = [
     'path',
     'query',
@@ -91,6 +100,17 @@
         return '';
     }
   });
+  const sent = $derived(item.display || 'off');
+  const wanted = $derived(item.configured || 'off');
+  const refused = $derived(wanted !== 'off' && wanted !== sent);
+  const blank = $derived(
+    refused
+      ? `display = ${wanted} is configured, but the API refused it: the request went without it and the block comes back empty.`
+      : (BLANK[sent] ?? BLANK.off)
+  );
+  const mode = $derived(
+    item.thinking === 'off' ? 'thinking off' : `thinking ${item.thinking} · display ${sent}`
+  );
   const tone = $derived(
     item.type === 'error' || item.ok === false || item.status === 'failed'
       ? 'bad'
@@ -116,7 +136,8 @@
     <span class="label">Attempt {item.attempt}</span>
     {#if item.model}<span class="chip mono">{item.model}</span>{/if}
     {#if item.effort}<span class="chip">effort {item.effort}</span>{/if}
-    {#if item.thinking}<span class="chip">thinking {item.thinking}/{item.display}</span>{/if}
+    {#if item.thinking}<span class="chip">{mode}</span>{/if}
+    {#if refused}<span class="chip warn">display {wanted} refused</span>{/if}
     {#if item.tools}<span class="muted tiny">{item.tools} tools</span>{/if}
     <span class="line"></span>
     <time class="muted tiny">{clock(item.at)}</time>
@@ -156,11 +177,7 @@
             <div class="foot"><Copy text={item.text} label="Copy the reasoning" /></div>
           {/if}
         {:else if item.hidden || !item.streaming}
-          <p class="muted small pad">
-            Reasoning was not returned: the request runs with
-            <code>thinking.display = updates</code>, which sends back progress notes instead of the
-            raw dump. Set <code>CLAUDE_THINKING_DISPLAY=raw</code> to see it here.
-          </p>
+          <p class="muted small pad">{blank}</p>
         {:else}
           <p class="muted small pad">Thinking…</p>
         {/if}
@@ -280,6 +297,11 @@
     border-radius: 999px;
     font-size: 0.72rem;
     background: var(--panel);
+  }
+
+  .chip.warn {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
   }
 
   .entry {

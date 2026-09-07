@@ -1,3 +1,4 @@
+import logging
 import socket
 import uuid
 from pathlib import Path
@@ -5,11 +6,15 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS_DIR = Path("/run/secrets")
 
 ROLES = ("all", "web", "worker", "poller")
 CACHE_TTLS = ("5m", "1h")
+THINKING_DISPLAYS = ("summarized", "updates", "omitted")
+THINKING_DISPLAY_OFF = ("", "off", "none", "0")
 POLL_TTL_MARGIN = 10.0
 
 
@@ -127,7 +132,7 @@ class Settings(BaseSettings):
     claude_thinking: str = "adaptive"
     claude_web_search: bool = True
     claude_web_search_max_uses: int = 800
-    claude_thinking_display: str = "raw"
+    claude_thinking_display: str = "updates"
     claude_clear_thinking: bool = True
     claude_clear_thinking_keep: str = "all"
     claude_fallbacks: str = "default"
@@ -255,9 +260,18 @@ class Settings(BaseSettings):
     @classmethod
     def _display(cls, v):
         value = str(v or "").strip().lower()
-        if value and value not in ("updates", "raw", "off"):
-            raise ValueError(f"CLAUDE_THINKING_DISPLAY must be updates | raw | off, got '{v}'")
-        return "" if value == "off" else value
+        if value in THINKING_DISPLAY_OFF:
+            return ""
+        if value == "raw":
+            logger.warning(
+                "CLAUDE_THINKING_DISPLAY=raw is not accepted by the API, using summarized instead"
+            )
+            return "summarized"
+        if value not in THINKING_DISPLAYS:
+            raise ValueError(
+                f"CLAUDE_THINKING_DISPLAY must be {' | '.join(THINKING_DISPLAYS)} | off, got '{v}'"
+            )
+        return value
 
     @property
     def runs_web(self) -> bool:
