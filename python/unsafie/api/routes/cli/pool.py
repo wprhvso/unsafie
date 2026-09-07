@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -7,7 +8,8 @@ from sqlalchemy import select
 
 from unsafie.api.routes.cli.deps import Pool
 from unsafie.database import SessionLocal
-from unsafie.database.models.pool import CommandStatus, PoolCommand, PoolMachine
+from unsafie.database.models.pool import CommandStatus, PoolCommand, PoolMachine, PoolUsage
+from unsafie.database.models.user import User
 from unsafie.errors import OpsError
 from unsafie.pool import channel, leases, registry
 from unsafie.settings import settings
@@ -131,6 +133,34 @@ async def run(body: Run, who: Pool) -> dict:
         "seconds": round(result.seconds, 2),
         "truncated": result.truncated,
         "timed_out": result.timed_out,
+    }
+
+
+@router.get("/quota")
+async def quota(who: Pool) -> dict:
+    async with SessionLocal() as session:
+        user = await session.get(User, who.user_id)
+    mine = await registry.of_user(who.user_id)
+    limits = {
+        "machines": user.pool_max_machines if user else 3,
+        "background": user.pool_max_background if user else 10,
+        "minutes_day": user.pool_max_minutes_day if user else 600,
+        "priority": user.pool_priority if user else 0,
+        "blocked": bool(user.pool_blocked) if user else False,
+    }
+    today = date.today()
+    async with SessionLocal() as session:
+        usage = await session.scalar(
+            select(PoolUsage).where(PoolUsage.user_id == who.user_id, PoolUsage.day == today)
+        )
+    return {
+        "limits": limits,
+        "held": len(mine),
+        "used_today": {
+            "machine_minutes": round((usage.machine_seconds if usage else 0) / 60, 1),
+            "commands": usage.commands if usage else 0,
+        },
+        "capacity": await registry.counted(),
     }
 
 
