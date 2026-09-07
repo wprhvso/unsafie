@@ -70,12 +70,15 @@ def _usage(span, result: loop.Result) -> None:
     )
 
 
-async def _bill(ctx: ToolContext, credential, ratio: float, result: loop.Result) -> int:
+async def _bill(
+    ctx: ToolContext, credential, ratio: float, result: loop.Result, held: billing.Hold
+) -> int:
     charge = billing.charge_units(result.cost_usd, ratio)
+    if charge:
+        # The reservation shrinks by exactly what left the balance, so the rest stays locked.
+        balance = await held.spend(charge)
+        logger.info("%s charged %s, balance now %s", ctx.prefix, charge, balance)
     async with SessionLocal() as session:
-        if charge:
-            updated = await UserRepository(session).charge(ctx.user_id, charge)
-            logger.info("%s charged %s, balance now %s", ctx.prefix, charge, updated.balance)
         await TurnRepository(session).record(
             ctx.turn_id,
             credential_id=credential.id,
@@ -109,7 +112,11 @@ async def _punish(credential, result: loop.Result) -> None:
 
 
 async def _execute(
-    ctx: ToolContext, messages: list[dict], servers: list[str], system_prompt: str
+    ctx: ToolContext,
+    messages: list[dict],
+    servers: list[str],
+    system_prompt: str,
+    held: billing.Hold,
 ) -> Outcome:
     prefix = ctx.prefix
     tried: set[int] = set()
@@ -130,15 +137,16 @@ async def _execute(
                 config = await ConfigRepository(session).get()
                 ratio = billing.ratio_for(config, credential.kind)
                 user = await UserRepository(session).get_or_create(ctx.user_id)
-                budget = billing.budget_usd(user.balance, user.budget, ratio)
                 model = user.model or settings.claude_model
                 effort = user.effort or DEFAULT_EFFORT
 
-            left = budget - spent
+            # Only what is locked can be spent, and it shrinks as the money actually goes.
+            left = held.usd(ratio)
             if left <= 0:
-                telemetry.refused(attempt_span, "empty balance")
-                logger.warning("%s stopped: budget %.6f is spent", prefix, budget)
-                return Outcome("ok" if spent else "empty_balance", cost_usd=spent)
+                empty = "busy" if held.balance > 0 else "empty_balance"
+                telemetry.refused(attempt_span, empty)
+                logger.warning("%s stopped: nothing left to spend (%s)", prefix, empty)
+                return Outcome("ok" if spent else empty, cost_usd=spent)
 
             definitions, tools = build_tools(ctx, servers)
             telemetry.set_attrs(
@@ -213,7 +221,7 @@ async def _execute(
                         query_span, RuntimeError(short(result.error or result.status, 300))
                     )
 
-            charge = await _bill(ctx, credential, ratio, result)
+            charge = await _bill(ctx, credential, ratio, result, held)
             telemetry.set_attrs(
                 attempt_span,
                 {
@@ -275,6 +283,8 @@ async def notify(bot: Bot, turn: Turn, text: str) -> None:
 def _failure_text(locale: str, outcome: Outcome) -> str:
     if outcome.status == "empty_balance":
         return t("agent-empty-balance", locale)
+    if outcome.status == "busy":
+        return t("agent-budget-busy", locale)
     if outcome.status == "no_credentials":
         when = ""
         if outcome.next_at is not None:
@@ -326,23 +336,32 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                         servers = await enabled(session, ctx)
                         context = await build_context(session, ctx, servers)
                 messages.append(request.user(prompt, context))
-                while True:
-                    outcome = await _execute(ctx, messages, servers, system_prompt)
-                    if outcome.status != "ok":
-                        await queue.clear(turn.id)
-                        note = (
-                            outcome.status if outcome.error is None else short(outcome.error, 1000)
+                # The whole per-turn budget is locked on the balance until the turn is over.
+                async with billing.hold(turn.user_id, turn.id) as held:
+                    telemetry.annotate(**{attrs.LOCKED: held.units})
+                    while True:
+                        outcome = await _execute(ctx, messages, servers, system_prompt, held)
+                        if outcome.status != "ok":
+                            await queue.clear(turn.id)
+                            note = (
+                                outcome.status
+                                if outcome.error is None
+                                else short(outcome.error, 1000)
+                            )
+                            logger.info("%s finished with %s", prefix, outcome.status)
+                            await notify(bot, turn, _failure_text(locale, outcome))
+                            return
+                        leftover = await turns.finish_or_continue(
+                            turn.id, turn.bot_id, turn.chat_id
                         )
-                        logger.info("%s finished with %s", prefix, outcome.status)
-                        await notify(bot, turn, _failure_text(locale, outcome))
-                        return
-                    leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
-                    if leftover is None:
-                        status = TurnStatus.DONE
-                        return
-                    messages.append(request.user(leftover))
-                    telemetry.event("unsafie.turn_rerun")
-                    logger.info("%s re-running with messages that arrived after the reply", prefix)
+                        if leftover is None:
+                            status = TurnStatus.DONE
+                            return
+                        messages.append(request.user(leftover))
+                        telemetry.event("unsafie.turn_rerun")
+                        logger.info(
+                            "%s re-running with messages that arrived after the reply", prefix
+                        )
         except Exception as e:
             telemetry.fail(turn_span, e)
             logger.exception("%s turn crashed", prefix)

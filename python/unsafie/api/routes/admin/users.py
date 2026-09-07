@@ -5,13 +5,16 @@ from unsafie.api.schemas.common import Page, PageParams
 from unsafie.api.schemas.models import BudgetWrite, DepositWrite, TransactionRead, UserRead
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.github import GithubAccountRepository
+from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.user import UserRepository
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-async def read(session, user) -> UserRead:
+async def read(session, user, locked: int | None = None) -> UserRead:
     logins = [a.login for a in await GithubAccountRepository(session).for_user(user.id)]
+    if locked is None:
+        locked = await TurnRepository(session).locked_for(user.id)
     return UserRead(
         **{
             k: getattr(user, k)
@@ -27,6 +30,7 @@ async def read(session, user) -> UserRead:
                 "git_email",
             )
         },
+        locked=locked,
         has_ssh_key=bool(user.ssh_public_key),
         github_logins=logins,
     )
@@ -36,7 +40,8 @@ async def read(session, user) -> UserRead:
 async def list_users(params: PageParams = Depends(paging)):
     async with SessionLocal() as session:
         rows, total = await UserRepository(session).page(params.offset, params.limit)
-        items = [await read(session, u) for u in rows]
+        locked = await TurnRepository(session).locked([u.id for u in rows])
+        items = [await read(session, u, locked.get(u.id, 0)) for u in rows]
     return Page.of(items, total, params)
 
 

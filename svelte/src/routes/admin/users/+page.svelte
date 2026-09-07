@@ -17,12 +17,13 @@
 <Panel>
   <Loader state={users} empty="No users yet.">
     <table>
-      <thead><tr><th>id</th><th>balance</th><th>budget</th><th>locale</th><th>tz</th><th>github</th><th>ssh</th></tr></thead>
+      <thead><tr><th>id</th><th>balance</th><th>locked</th><th>budget</th><th>locale</th><th>tz</th><th>github</th><th>ssh</th></tr></thead>
       <tbody>
         {#each users.data.items as u (u.id)}
           <tr>
             <td class="mono"><a href="/admin/users/{u.id}">{u.id}</a></td>
-            <td class:bad={u.balance <= 0}>{money(u.balance)}</td>
+            <td class:bad={u.balance - u.locked <= 0}>{money(u.balance)}</td>
+            <td>{u.locked ? money(u.locked) : '—'}</td>
             <td>{u.budget < 0 ? '∞' : money(u.budget)}</td>
             <td>{u.locale ?? '—'}</td>
             <td>{u.timezone ?? '—'}</td>

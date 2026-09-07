@@ -1,6 +1,8 @@
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
 from uuid import UUID
 
 from sqlalchemy import func, select, text, update
@@ -80,6 +82,38 @@ REPLY_QUERY = text("""
         ) AS in_lineage
 """)
 
+# Reserving the per-turn budget: the user row is locked, what live turns already hold is
+# subtracted from the balance, and the rest (capped by the per-turn limit, NULL = no limit)
+# is written onto this turn. One statement, so two turns cannot reserve the same money.
+HOLD_QUERY = text("""
+    WITH me AS (
+        SELECT id, balance FROM users WHERE id = :user FOR UPDATE
+    ),
+    free AS (
+        SELECT
+            me.balance AS balance,
+            GREATEST(me.balance - COALESCE((
+                SELECT SUM(t.locked)
+                FROM turns t
+                WHERE t.user_id = me.id
+                  AND t.status = 'running'
+                  AND COALESCE(t.heartbeat_at, t.created_at)
+                      > now() - make_interval(secs => CAST(:stale AS double precision))
+            ), 0), 0) AS units
+        FROM me
+    )
+    UPDATE turns
+       SET locked = turns.locked + LEAST(free.units, COALESCE(CAST(:limit AS bigint), free.units))
+      FROM free
+     WHERE turns.id = CAST(:turn AS uuid)
+ RETURNING LEAST(free.units, COALESCE(CAST(:limit AS bigint), free.units)) AS held, free.balance
+""")
+
+
+class Reserved(NamedTuple):
+    units: int
+    balance: int
+
 
 class TurnRepository:
     def __init__(self, session: AsyncSession):
@@ -153,6 +187,58 @@ class TurnRepository:
         if result:
             turn.result = result
         await self.session.commit()
+
+    async def hold(self, turn_id: UUID, user_id: int, limit: int) -> Reserved:
+        """Reserve the per-turn budget on the balance. Returns what got locked and the balance."""
+        row = (
+            await self.session.execute(
+                HOLD_QUERY,
+                {
+                    "turn": str(turn_id),
+                    "user": user_id,
+                    "limit": None if limit < 0 else max(limit, 0),
+                    "stale": settings.turn_stale_after,
+                },
+            )
+        ).first()
+        await self.session.commit()
+        if row is None:
+            return Reserved(0, 0)
+        logger.info(
+            "turn=%s user=%s locked %s of balance %s", turn_id, user_id, row.held, row.balance
+        )
+        return Reserved(int(row.held), int(row.balance))
+
+    async def unhold(self, turn_id: UUID, amount: int) -> None:
+        """Give reserved money back: either it was spent for real, or the turn is done."""
+        if amount <= 0:
+            return
+        await self.session.execute(
+            update(Turn)
+            .where(Turn.id == turn_id)
+            .values(locked=func.greatest(Turn.locked - amount, 0))
+        )
+        await self.session.commit()
+
+    async def locked(self, user_ids: Sequence[int]) -> dict[int, int]:
+        """What live turns keep reserved, per user. Dead turns stop counting by themselves."""
+        if not user_ids:
+            return {}
+        cutoff = datetime.now(UTC) - timedelta(seconds=settings.turn_stale_after)
+        rows = await self.session.execute(
+            select(Turn.user_id, func.sum(Turn.locked))
+            .where(
+                Turn.user_id.in_(list(user_ids)),
+                Turn.status == TurnStatus.RUNNING,
+                Turn.locked > 0,
+                func.coalesce(Turn.heartbeat_at, Turn.created_at) > cutoff,
+            )
+            .group_by(Turn.user_id)
+        )
+        return {int(user_id): int(total or 0) for user_id, total in rows}
+
+    async def locked_for(self, user_id: int) -> int:
+        return (await self.locked([user_id])).get(user_id, 0)
 
     async def finish(self, turn_id: UUID, status: TurnStatus, note: str | None = None) -> None:
         turn = await self.session.get(Turn, turn_id)

@@ -40,6 +40,8 @@
       <div class="pad stack">
         <div class="row wide">
           <span><span class="muted">balance</span> <b>{money(u.balance)}</b></span>
+          <span><span class="muted">locked</span> <b>{money(u.locked)}</b></span>
+          <span><span class="muted">available</span> <b>{money(u.balance - u.locked)}</b></span>
           <span><span class="muted">per-turn budget</span> <b>{u.budget < 0 ? '∞' : money(u.budget)}</b></span>
           <span><span class="muted">locale</span> {u.locale ?? '—'}</span>
           <span><span class="muted">timezone</span> {u.timezone ?? '—'}</span>
@@ -59,7 +61,7 @@
           <button onclick={() => run(() => admin.put(`/users/${id}/budget`, { budget: Number(budget) }))} disabled={busy}>
             Set budget
           </button>
-          <span class="muted small">−1 for unlimited</span>
+          <span class="muted small">{budget < 0 ? '−1 = unlimited' : `= ${money(budget)}`}</span>
         </div>
         {#if error}<p class="err">{error}</p>{/if}
       </div>

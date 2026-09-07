@@ -24,6 +24,7 @@ class BotWrite(BaseModel):
 class UserRead(Base):
     id: int
     balance: int
+    locked: int = 0
     budget: int
     locale: str | None = None
     timezone: str | None = None

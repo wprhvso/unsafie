@@ -10,14 +10,15 @@ commands-start =
     /subs — repository event subscriptions
     /tasks — reminders and scheduled jobs
     /tz — timezone
-commands-budget-status =
-    Balance: { $balance }
-    Per-turn limit: { $limit }
+commands-budget-balance = Balance: { $amount }
+commands-budget-locked = Locked for the turn: { $amount }
+commands-budget-available = Available: { $amount }
+commands-budget-limit = Per-turn limit: { $limit }
 commands-budget-amount = ${ NUMBER($amount, minimumFractionDigits: 4, maximumFractionDigits: 4) }
 commands-budget-unlimited = unlimited
 commands-budget-usage =
-    /budget — show balance and limit
-    /budget N — per-turn limit (in hundredths of a cent, { $units } = $1)
+    /budget — balance, what is locked and the limit
+    /budget 0.5 — per-turn limit in dollars (0,5 works too)
     /budget -1 — no limit (default)
     /budget 0 — maximum savings
 commands-model-status =

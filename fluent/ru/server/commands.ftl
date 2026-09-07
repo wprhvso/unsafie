@@ -10,14 +10,15 @@ commands-start =
     /subs — подписки на события репо
     /tasks — напоминания и поручения по расписанию
     /tz — таймзона
-commands-budget-status =
-    Баланс: { $balance }
-    Лимит на ход: { $limit }
+commands-budget-balance = Баланс: { $amount }
+commands-budget-locked = Залочено под ход: { $amount }
+commands-budget-available = Доступно: { $amount }
+commands-budget-limit = Лимит на ход: { $limit }
 commands-budget-amount = { NUMBER($amount, minimumFractionDigits: 4, maximumFractionDigits: 4) }$
 commands-budget-unlimited = без лимита
 commands-budget-usage =
-    /budget — показать баланс и лимит
-    /budget N — лимит на ход (в сотых долях цента, { $units } = $1)
+    /budget — баланс, залоченное и лимит
+    /budget 0.5 — лимит на ход в долларах (можно и 0,5)
     /budget -1 — без лимита (по умолчанию)
     /budget 0 — экономия по-максимуму
 commands-model-status =
