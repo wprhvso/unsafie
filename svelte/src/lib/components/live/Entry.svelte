@@ -8,6 +8,8 @@
 
   let { item, open = false, ontoggle } = $props();
 
+  const NOTABLE_STOP = new Set(['max_tokens', 'refusal', 'model_context_window_exceeded']);
+
   const TITLES = {
     prompt: 'Request',
     think: 'Reasoning',
@@ -103,9 +105,7 @@
   <div class="divider step">
     <Icon name="step" size={13} />
     <span class="label">Step {item.step}</span>
-    {#if item.model}<span class="chip mono">{item.model}</span>{/if}
-    {#if item.messages}<span class="muted tiny">{item.messages} messages</span>{/if}
-    {#if item.stop}<span class="muted tiny">stop: {item.stop}</span>{/if}
+    {#if NOTABLE_STOP.has(item.stop)}<span class="muted tiny">stop: {item.stop}</span>{/if}
     {#if item.usage}<span class="muted tiny">{tokens(item.usage)}</span>{/if}
     <span class="line"></span>
     <time class="muted tiny">{clock(item.at)}</time>
