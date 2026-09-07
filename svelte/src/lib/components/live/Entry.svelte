@@ -1,5 +1,5 @@
 <script>
-  import { short } from '$lib/format.js';
+  import { UNITS_PER_USD, short } from '$lib/format.js';
   import Copy from './Copy.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
@@ -234,9 +234,9 @@
       {:else if item.type === 'end'}
         <div class="body">
           <p class="small">
-            {item.status}{item.steps ? ` · ${item.steps} steps` : ''}{item.cost
-              ? ` · $${Number(item.cost).toFixed(4)}`
-              : ''}
+            {item.status}{item.steps ? ` · ${item.steps} steps` : ''}{item.charge
+              ? ` · $${(Number(item.charge) / UNITS_PER_USD).toFixed(4)} charged`
+              : ''}{item.cost ? ` · $${Number(item.cost).toFixed(4)} api` : ''}
           </p>
           {#if item.note}<pre class="source">{item.note}</pre>{/if}
         </div>

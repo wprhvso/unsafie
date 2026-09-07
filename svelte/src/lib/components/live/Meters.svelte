@@ -1,18 +1,30 @@
 <script>
   import { onMount } from 'svelte';
 
-  let { cost = 0, budget = null, context = 0, limit = 200000, tokens = 0, live = false } = $props();
+  let {
+    spent = 0,
+    cost = 0,
+    ratio = null,
+    budget = null,
+    balance = null,
+    context = 0,
+    limit = 200000,
+    tokens = 0,
+    live = false
+  } = $props();
 
   const EASE = 0.18;
   const EPS = 0.00002;
 
-  let shown = $state(0);
+  let shownSpent = $state(0);
+  let shownCost = $state(0);
   let frame;
 
   onMount(() => {
+    const step = (from, to) => (Math.abs(to - from) < EPS ? to : from + (to - from) * EASE);
     const tick = () => {
-      const gap = cost - shown;
-      shown = Math.abs(gap) < EPS ? cost : shown + gap * EASE;
+      shownSpent = step(shownSpent, spent);
+      shownCost = step(shownCost, cost);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -22,8 +34,7 @@
   const pct = (value, max) => (max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0);
 
   const contextPct = $derived(pct(context, limit));
-  const budgetPct = $derived(budget ? pct(cost, budget) : 0);
-  const left = $derived(budget === null ? null : Math.max(budget - cost, 0));
+  const budgetPct = $derived(budget ? pct(spent, budget) : 0);
 
   const tone = (value) => (value >= 90 ? 'bad' : value >= 70 ? 'warn' : 'ok');
 
@@ -39,13 +50,13 @@
 
 <section class="meters">
   <div class="money">
-    <div class="spent">
+    <div class="cell">
       <span class="label">spent</span>
-      <span class="value mono" class:live>{money(shown)}</span>
+      <span class="value mono" class:live>{money(shownSpent)}</span>
     </div>
-    <div class="rest">
-      <span class="label">left</span>
-      <span class="value small mono">{left === null ? '—' : money(left, 2)}</span>
+    <div class="cell">
+      <span class="label">api cost{ratio ? ` ×${ratio}` : ''}</span>
+      <span class="value small mono">{money(shownCost)}</span>
     </div>
   </div>
 
@@ -85,9 +96,15 @@
     </div>
   </div>
 
-  <div class="tok">
-    <span class="label">tokens</span>
-    <span class="value small mono">{compact(tokens)}</span>
+  <div class="side">
+    <div class="cell right">
+      <span class="label">balance</span>
+      <span class="value small mono">{balance === null ? '—' : money(balance, 2)}</span>
+    </div>
+    <div class="cell right tok">
+      <span class="label">tokens</span>
+      <span class="value small mono">{compact(tokens)}</span>
+    </div>
   </div>
 </section>
 
@@ -102,24 +119,22 @@
     backdrop-filter: saturate(140%) blur(10px);
   }
 
-  .money {
+  .money,
+  .side {
     flex: 0 0 auto;
     display: flex;
     align-items: baseline;
-    gap: 0.7rem;
+    gap: 0.75rem;
   }
 
-  .spent,
-  .rest,
-  .tok {
+  .cell {
     display: flex;
     flex-direction: column;
     gap: 0.05rem;
     line-height: 1.15;
   }
 
-  .tok {
-    flex: 0 0 auto;
+  .cell.right {
     align-items: flex-end;
   }
 
@@ -128,6 +143,7 @@
     letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--muted);
+    white-space: nowrap;
   }
 
   .value {
@@ -225,12 +241,11 @@
     }
 
     .money {
-      flex: 1 1 100%;
-      justify-content: space-between;
+      flex: 1 1 auto;
     }
 
-    .rest {
-      align-items: flex-end;
+    .side {
+      margin-left: auto;
     }
 
     .bars {

@@ -1,3 +1,4 @@
+import { UNITS_PER_USD } from '../format.js';
 import { contextLimit, contextOf, costOf } from './pricing.js';
 
 const CALL_BLOCKS = ['tool_use', 'server_tool_use'];
@@ -31,7 +32,10 @@ export function timeline() {
     settled: 0,
     pending: 0,
     charge: 0,
+    spent: 0,
+    ratio: null,
     budget: null,
+    balance: null,
     usage: {},
     context: 0,
     contextPeak: 0,
@@ -45,6 +49,7 @@ export function timeline() {
   let calls = new Map();
   let steps = new Map();
   let attempts = [];
+  let balanceStart = null;
 
   const at = (frame) => frame.at ?? null;
 
@@ -58,6 +63,8 @@ export function timeline() {
 
   function total() {
     state.cost = state.settled + state.pending;
+    state.spent = state.charge / UNITS_PER_USD + state.pending * (state.ratio ?? 1);
+    if (balanceStart !== null) state.balance = Math.max(balanceStart - state.spent, 0);
   }
   const key = (data) => `${data.step ?? 0}:${data.index ?? 0}`;
 
@@ -126,8 +133,13 @@ export function timeline() {
         state.effort = data.effort ?? state.effort;
         state.display = data.display ?? state.display;
         state.thinking = data.thinking ?? state.thinking;
-        state.budget = typeof data.budget_usd === 'number' ? data.budget_usd + state.settled : state.budget;
+        state.ratio = typeof data.ratio === 'number' ? data.ratio : state.ratio;
+        if (typeof data.budget_units === 'number')
+          state.budget = data.budget_units / UNITS_PER_USD + state.spent;
+        if (typeof data.balance_units === 'number')
+          balanceStart = data.balance_units / UNITS_PER_USD;
         state.contextLimit = contextLimit(state.model);
+        total();
         const item = push({
           id: frame.id,
           at: when,
@@ -266,12 +278,10 @@ export function timeline() {
       case 'turn.end':
         state.endedAt = when;
         state.outcome = data.status;
-        if (typeof data.cost_usd === 'number') {
-          state.settled = data.cost_usd;
-          state.pending = 0;
-          total();
-        }
         if (typeof data.charge === 'number') state.charge = data.charge;
+        if (typeof data.cost_usd === 'number') state.settled = data.cost_usd;
+        state.pending = 0;
+        total();
         push({
           id: frame.id,
           at: when,
@@ -298,6 +308,9 @@ export function timeline() {
     state.settled = 0;
     state.pending = 0;
     state.charge = 0;
+    state.spent = 0;
+    state.balance = null;
+    balanceStart = null;
     state.context = 0;
     state.contextPeak = 0;
     state.outcome = null;

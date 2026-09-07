@@ -73,6 +73,7 @@
   );
 
   const cost = $derived(feed.cost || meta?.cost_usd || 0);
+  const spent = $derived(feed.spent || cost * (feed.ratio ?? 1));
 
   const LABEL = {
     loading: 'connecting',
@@ -171,8 +172,11 @@
 </header>
 
 <Meters
+  {spent}
   {cost}
+  ratio={feed.ratio}
   budget={feed.budget}
+  balance={feed.balance}
   context={feed.context}
   limit={feed.contextLimit}
   {tokens}
