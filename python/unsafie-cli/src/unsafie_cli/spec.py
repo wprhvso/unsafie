@@ -133,7 +133,7 @@ def c(
     )
 
 
-READY_THROUGH = 5
+READY_THROUGH = 6
 
 GLOBAL_FLAGS: tuple[Flag, ...] = (
     _flag("--json # machine readable output"),
@@ -342,7 +342,7 @@ COMMANDS: tuple[Cmd, ...] = (
         "chrome",
         "screenshot; comes back to the model as a picture",
         "",
-        "-o/--out=FILE --full --send",
+        "-o/--out=FILE; --full; --send; --caption=TEXT",
         ("unsafie chrome shot", "unsafie chrome shot --send --caption 'вот так'"),
         phase=6,
     ),
@@ -362,6 +362,7 @@ COMMANDS: tuple[Cmd, ...] = (
     c("chrome download", "chrome", "fetch a downloaded file", "name", "-o/--out=FILE --send", phase=6),
     c("chrome cookies", "chrome", "export or import cookies", "", "--export=FILE --import=FILE", phase=6),
     c("chrome profile", "chrome", "list, delete, export or import profiles", "action name?", "--file=PATH", phase=6),
+    c("setup", "meta", "install a toolchain on this machine", "what...", "--yes", phase=6),
     c("chrome tap add", "chrome", "intercept requests of the page", "name", "--url=PATTERN --action=WHAT --status=CODE", phase=6),
     c("chrome tap take", "chrome", "take an intercepted request", "name", "--timeout=SEC", phase=6),
     c("chrome tap replay", "chrome", "replay a request from inside the page", "name", "--body=FILE --timeout=SEC", phase=6),

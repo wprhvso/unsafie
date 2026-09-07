@@ -12,7 +12,7 @@ from aiogram.types import (
     ReactionTypeEmoji,
 )
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from unsafie.agent import live
 from unsafie.api.routes.cli.deps import Chat
@@ -97,8 +97,10 @@ class Pin(BaseModel):
 
 
 class Forward(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     to: str
-    copy: bool = False
+    duplicate: bool = Field(default=False, alias="copy")
     caption: str | None = None
     silent: bool = False
     from_chat_id: int | None = None
@@ -322,7 +324,7 @@ async def forward(message_id: int, body: Forward, who: Chat) -> dict:
     if isinstance(target, str) and target.lstrip("-").isdigit():
         target = int(target)
     try:
-        if body.copy:
+        if body.duplicate:
             sent = await bot.copy_message(
                 target, source, message_id, caption=body.caption, disable_notification=body.silent
             )
