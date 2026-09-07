@@ -8,6 +8,7 @@
 
   import Entry from '$lib/components/live/Entry.svelte';
   import Icon from '$lib/components/live/Icon.svelte';
+  import Meters from '$lib/components/live/Meters.svelte';
   import { watch } from '$lib/live/stream.js';
   import { timeline } from '$lib/live/timeline.svelte.js';
   import { zoomer } from '$lib/zoom.js';
@@ -71,7 +72,7 @@
       (feed.usage.output_tokens ?? 0)
   );
 
-  const cost = $derived(feed.cost ?? meta?.cost_usd ?? 0);
+  const cost = $derived(feed.cost || meta?.cost_usd || 0);
 
   const LABEL = {
     loading: 'connecting',
@@ -132,6 +133,7 @@
   <link rel="icon" href="data:," />
 </svelte:head>
 
+<div class="top">
 <header class="bar">
   <div class="side">
     <span class="dot {status}" aria-hidden="true"></span>
@@ -145,8 +147,6 @@
     <span title="elapsed"><b>{clock(elapsed)}</b></span>
     <span title="model requests">{feed.steps} steps</span>
     <span title="tool calls">{feed.calls} calls</span>
-    {#if tokens}<span title="tokens">{tokens.toLocaleString()} tok</span>{/if}
-    {#if cost}<span title="cost">${Number(cost).toFixed(4)}</span>{/if}
     {#if feed.model}<span class="mono model" title="model">{feed.model}</span>{/if}
   </div>
 
@@ -169,6 +169,16 @@
     </button>
   </div>
 </header>
+
+<Meters
+  {cost}
+  budget={feed.budget}
+  context={feed.context}
+  limit={feed.contextLimit}
+  {tokens}
+  live={running}
+/>
+</div>
 
 <main>
   {#if status === 'gone'}
@@ -231,10 +241,13 @@
     }
   }
 
-  .bar {
+  .top {
     position: sticky;
     top: 0;
     z-index: 20;
+  }
+
+  .bar {
     display: flex;
     align-items: center;
     gap: 0.8rem;
