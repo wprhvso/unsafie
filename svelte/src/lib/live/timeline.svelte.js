@@ -1,3 +1,5 @@
+import { contextLimit, contextOf, costOf } from './pricing.js';
+
 const CALL_BLOCKS = ['tool_use', 'server_tool_use'];
 const THINK_BLOCKS = ['thinking', 'redacted_thinking'];
 
@@ -26,8 +28,14 @@ export function timeline() {
     steps: 0,
     calls: 0,
     cost: 0,
+    settled: 0,
+    pending: 0,
     charge: 0,
+    budget: null,
     usage: {},
+    context: 0,
+    contextPeak: 0,
+    contextLimit: contextLimit(null),
     startedAt: null,
     endedAt: null,
     outcome: null
@@ -39,6 +47,18 @@ export function timeline() {
   let attempts = [];
 
   const at = (frame) => frame.at ?? null;
+
+  function seeContext(usage, model) {
+    const size = contextOf(usage);
+    if (!size) return;
+    state.context = size;
+    state.contextPeak = Math.max(state.contextPeak, size);
+    state.contextLimit = contextLimit(model ?? state.model);
+  }
+
+  function total() {
+    state.cost = state.settled + state.pending;
+  }
   const key = (data) => `${data.step ?? 0}:${data.index ?? 0}`;
 
   function push(item) {
@@ -106,6 +126,8 @@ export function timeline() {
         state.effort = data.effort ?? state.effort;
         state.display = data.display ?? state.display;
         state.thinking = data.thinking ?? state.thinking;
+        state.budget = typeof data.budget_usd === 'number' ? data.budget_usd + state.settled : state.budget;
+        state.contextLimit = contextLimit(state.model);
         const item = push({
           id: frame.id,
           at: when,
@@ -131,8 +153,10 @@ export function timeline() {
           item.stop = data.stop_reason;
           item.error = data.error;
         }
-        state.cost += data.cost_usd ?? 0;
+        state.settled += data.cost_usd ?? 0;
+        state.pending = 0;
         state.charge += data.charge ?? 0;
+        total();
         break;
       }
 
@@ -153,6 +177,7 @@ export function timeline() {
       case 'step.model': {
         const item = steps.get(data.step);
         if (item) item.model = data.model;
+        seeContext(data.usage, data.model);
         break;
       }
 
@@ -165,6 +190,9 @@ export function timeline() {
           item.endedAt = when;
         }
         merge(state.usage, data.usage);
+        state.pending += costOf(data.usage, data.model ?? state.model);
+        seeContext(data.usage, data.model);
+        total();
         (data.blocks ?? []).forEach((block, index) => {
           const target = blocks.get(`${data.step}:${index}`);
           if (!target) return;
@@ -238,7 +266,11 @@ export function timeline() {
       case 'turn.end':
         state.endedAt = when;
         state.outcome = data.status;
-        if (typeof data.cost_usd === 'number') state.cost = data.cost_usd;
+        if (typeof data.cost_usd === 'number') {
+          state.settled = data.cost_usd;
+          state.pending = 0;
+          total();
+        }
         if (typeof data.charge === 'number') state.charge = data.charge;
         push({
           id: frame.id,
@@ -263,7 +295,11 @@ export function timeline() {
     state.steps = 0;
     state.calls = 0;
     state.cost = 0;
+    state.settled = 0;
+    state.pending = 0;
     state.charge = 0;
+    state.context = 0;
+    state.contextPeak = 0;
     state.outcome = null;
     state.endedAt = null;
     blocks = new Map();
