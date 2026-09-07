@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from unsafie_cli.commands import account, auth, chat, meta, pages, settings
+from unsafie_cli.commands import account, auth, chat, meta, pages, pool, settings
 from unsafie_cli.errors import NotReady
 from unsafie_cli.output import Out
 from unsafie_cli.parser import Call
@@ -32,6 +32,17 @@ HANDLERS: dict[tuple[str, ...], Handler] = {
     ("page", "list"): pages.listing,
     ("page", "update"): pages.update,
     ("page", "rm"): pages.remove,
+    ("machines",): pool.machines,
+    ("take",): pool.take,
+    ("release",): pool.release,
+    ("rename",): pool.rename,
+    ("run",): pool.run,
+    ("fan",): pool.fan,
+    ("job", "submit"): pool.submit,
+    ("job", "list"): pool.jobs,
+    ("job", "logs"): pool.logs,
+    ("job", "cancel"): pool.cancel,
+    ("serve",): pool.serve,
 }
 
 

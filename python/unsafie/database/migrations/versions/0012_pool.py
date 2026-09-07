@@ -26,7 +26,7 @@ def upgrade() -> None:
     op.execute("""
         CREATE TABLE IF NOT EXISTS api_tokens (
             id SERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            user_id BIGINT REFERENCES users (id) ON DELETE CASCADE,
             bot_id INTEGER REFERENCES bots (id) ON DELETE CASCADE,
             chat_id BIGINT,
             name VARCHAR(64) NOT NULL,
@@ -66,6 +66,7 @@ def upgrade() -> None:
         CREATE TABLE IF NOT EXISTS pool_machines (
             id SERIAL PRIMARY KEY,
             name VARCHAR(64) NOT NULL UNIQUE,
+            alias VARCHAR(32),
             donor_id INTEGER REFERENCES pool_donors (id) ON DELETE SET NULL,
             run_id BIGINT,
             profile VARCHAR(16) NOT NULL DEFAULT 'fast',

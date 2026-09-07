@@ -14,6 +14,8 @@ class FrameKind(StrEnum):
     OUTPUT = "output"
     EXIT = "exit"
     PING = "ping"
+    ASSIGN = "assign"
+    SHUTDOWN = "shutdown"
 
 
 class Stream(StrEnum):
@@ -85,3 +87,26 @@ def exited(command_id: str, code: int, seconds: float) -> Frame:
 
 def cancel(command_id: str) -> Frame:
     return Frame(FrameKind.CANCEL, command_id)
+
+
+def assign(
+    token: str,
+    chat_id: int | None = None,
+    user_id: int | None = None,
+    alias: str | None = None,
+    turn: str | None = None,
+) -> Frame:
+    body: dict[str, Any] = {"token": token}
+    if chat_id is not None:
+        body["chat"] = chat_id
+    if user_id is not None:
+        body["user"] = user_id
+    if alias:
+        body["alias"] = alias
+    if turn:
+        body["turn"] = turn
+    return Frame(FrameKind.ASSIGN, "", body)
+
+
+def shutdown(reason: str = "released") -> Frame:
+    return Frame(FrameKind.SHUTDOWN, "", {"reason": reason})

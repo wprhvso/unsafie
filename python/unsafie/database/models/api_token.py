@@ -17,7 +17,9 @@ class ApiToken(Base):
     __table_args__ = (Index("ix_api_tokens_user", "user_id", "revoked_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"))
+    user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     bot_id: Mapped[int | None] = mapped_column(
         ForeignKey("bots.id", ondelete="CASCADE"), nullable=True
     )

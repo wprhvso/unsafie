@@ -8,6 +8,20 @@ from unsafie.database.models.credential import AnthropicCredential, CredentialKi
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.models.installation import Installation, InstallationAccount
+from unsafie.database.models.pool import (
+    CommandStatus,
+    MachineState,
+    PoolBlob,
+    PoolCiJob,
+    PoolCiRepo,
+    PoolCommand,
+    PoolDonor,
+    PoolLease,
+    PoolMachine,
+    PoolUsage,
+    UserKv,
+    UserSecret,
+)
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.scheduled_task import ScheduledTask, TaskKind
@@ -29,6 +43,7 @@ __all__ = [
     "ArtifactKind",
     "Bot",
     "Chat",
+    "CommandStatus",
     "CommitLog",
     "Config",
     "CredentialKind",
@@ -37,6 +52,15 @@ __all__ = [
     "GithubSubscription",
     "Installation",
     "InstallationAccount",
+    "MachineState",
+    "PoolBlob",
+    "PoolCiJob",
+    "PoolCiRepo",
+    "PoolCommand",
+    "PoolDonor",
+    "PoolLease",
+    "PoolMachine",
+    "PoolUsage",
     "Repo",
     "Response",
     "ResponseKind",
@@ -51,7 +75,9 @@ __all__ = [
     "TurnStatus",
     "Update",
     "User",
+    "UserKv",
     "UserRepo",
+    "UserSecret",
     "WatchMode",
     "WebhookDelivery",
     "Worktree",

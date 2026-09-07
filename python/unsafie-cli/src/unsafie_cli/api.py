@@ -57,13 +57,16 @@ class Api:
 
 def _refusal(error: urllib.error.HTTPError) -> CliError:
     try:
-        body = json.loads(error.read() or b"{}")
-        detail = body.get("detail") if isinstance(body, dict) else None
+        parsed = json.loads(error.read() or b"{}")
     except ValueError:
-        detail = None
-    message = str(detail or error.reason or "refused")
-    if isinstance(message, list):
-        message = "; ".join(str(item.get("msg", item)) for item in message)
+        parsed = None
+    detail = parsed.get("detail") if isinstance(parsed, dict) else None
+    if isinstance(detail, list):
+        message = "; ".join(
+            str(item.get("msg", item)) if isinstance(item, dict) else str(item) for item in detail
+        )
+    else:
+        message = str(detail or error.reason or "refused")
     if error.code in (401, 403):
         return NoAuth(message, "unsafie auth status shows which token is in play")
     if error.code == 404:

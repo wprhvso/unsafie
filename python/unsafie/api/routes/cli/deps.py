@@ -22,6 +22,8 @@ class Caller:
 
     @property
     def user_id(self) -> int:
+        if self.token.user_id is None:
+            raise HTTPException(403, "this token belongs to no user yet")
         return self.token.user_id
 
     @property

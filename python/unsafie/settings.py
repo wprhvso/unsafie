@@ -182,6 +182,32 @@ class Settings(BaseSettings):
     ssh_max_output: int = 60_000
     ssh_max_file_bytes: int = 5_242_880
 
+    pool_enabled: bool = True
+    pool_blob_dir: Path = ROOT / "pool-blobs"
+    pool_machine_ttl: float = 90.0
+    pool_poll_timeout: float = 25.0
+    pool_heartbeat: float = 20.0
+    pool_take_wait: float = 180.0
+    pool_lease_idle: float = 900.0
+    pool_command_timeout: float = 600.0
+    pool_max_command_timeout: float = 21600.0
+    pool_max_output: int = 60_000
+    pool_output_ttl: float = 3600.0
+    pool_job_ttl: float = 19_800.0
+    pool_keeper_interval: float = 30.0
+    pool_launch_burst: int = 5
+    pool_workflow: str = "unsafie.yml"
+    pool_repo_name: str = "unsafie-pool"
+    pool_cli_spec: str = (
+        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-cli"
+    )
+    pool_wire_spec: str = (
+        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-wire"
+    )
+    pool_max_blob_bytes: int = 536_870_912
+    pool_max_blob_item: int = 134_217_728
+    pool_boot_grace: float = 900.0
+
     default_timezone: str = "UTC"
     schedule_enabled: bool = True
     schedule_tick: int = 20
@@ -213,7 +239,7 @@ class Settings(BaseSettings):
     live_image_bytes: int = 262_144
     live_stream_seconds: float = 3_600.0
 
-    @field_validator("fluent_dir", "static_dir", "github_cache_dir", mode="before")
+    @field_validator("fluent_dir", "static_dir", "github_cache_dir", "pool_blob_dir", mode="before")
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v

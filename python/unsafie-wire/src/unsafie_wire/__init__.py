@@ -3,6 +3,7 @@ from unsafie_wire.channel import (
     Frame,
     FrameKind,
     Stream,
+    assign,
     cancel,
     command,
     decode,
@@ -10,6 +11,7 @@ from unsafie_wire.channel import (
     exited,
     hello,
     output,
+    shutdown,
 )
 from unsafie_wire.markers import (
     MARKER,
@@ -36,6 +38,7 @@ __all__ = [
     "Frame",
     "FrameKind",
     "Stream",
+    "assign",
     "cancel",
     "command",
     "decode",
@@ -50,5 +53,6 @@ __all__ = [
     "output",
     "parse_line",
     "result",
+    "shutdown",
     "split",
 ]

@@ -30,7 +30,7 @@ def mask(raw: str) -> str:
 
 async def issue(
     *,
-    user_id: int,
+    user_id: int | None,
     bot_id: int | None = None,
     chat_id: int | None = None,
     name: str = "telegram",
@@ -43,7 +43,8 @@ async def issue(
     granted = scopes or (HUMAN_SCOPES if kind == TokenKind.HUMAN else MACHINE_SCOPES)
     expires = datetime.now(UTC) + timedelta(hours=hours) if hours else None
     async with SessionLocal() as session:
-        await UserRepository(session).get_or_create(user_id)
+        if user_id is not None:
+            await UserRepository(session).get_or_create(user_id)
         token = await TokenRepository(session).add(
             user_id=user_id,
             bot_id=bot_id,
