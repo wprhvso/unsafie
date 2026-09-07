@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 
 from unsafie.agent import client, credentials, pricing, queue, request
@@ -61,10 +62,9 @@ def _failed(call_id: str, message: str) -> dict:
     }
 
 
-async def _call(ctx: ToolContext, tools: dict[str, ToolSpec], block: dict) -> dict:
-    name = block.get("name") or ""
-    call_id = block.get("id") or ""
-    args = block.get("input") if isinstance(block.get("input"), dict) else {}
+async def _invoke(
+    ctx: ToolContext, tools: dict[str, ToolSpec], name: str, call_id: str, args: dict
+) -> dict:
     spec = tools.get(name)
     if spec is None:
         logger.warning("%s tool=%s does not exist", ctx.prefix, name)
@@ -90,6 +90,19 @@ async def _call(ctx: ToolContext, tools: dict[str, ToolSpec], block: dict) -> di
     result = {"type": "tool_result", "tool_use_id": call_id, "content": _content(payload)}
     if payload.get("is_error"):
         result["is_error"] = True
+    return result
+
+
+async def _call(
+    ctx: ToolContext, tools: dict[str, ToolSpec], block: dict, recorder: Recorder
+) -> dict:
+    name = block.get("name") or ""
+    call_id = block.get("id") or ""
+    args = block.get("input") if isinstance(block.get("input"), dict) else {}
+    recorder.tool_started(call_id, name, args)
+    started = time.perf_counter()
+    result = await _invoke(ctx, tools, name, call_id, args)
+    recorder.tool_finished(call_id, name, result, (time.perf_counter() - started) * 1000)
     return result
 
 
@@ -138,14 +151,16 @@ async def run(
         result.steps += 1
         recorder.request(result.steps, len(messages), len(catalogue))
         try:
-            reply = await client.send(credential, body)
+            reply = await client.send(credential, body, on_event=recorder.raw)
         except ApiError as e:
             if request.downgrade(model, e):
                 result.steps -= 1
+                recorder.note("unsafie.downgraded", {"reason": short(e.message, 200)})
                 continue
             result.status = "failed"
             result.failure = credentials.classify_api(e.status, e.kind, e.message)
             result.error = e.describe()
+            recorder.failed(short(result.error, 600), e.kind)
             logger.warning("%s step=%s %s", ctx.prefix, result.steps, short(result.error, 600))
             return result
 
@@ -162,7 +177,7 @@ async def run(
         if calls:
             content: list[dict] = []
             for call in calls:
-                content.append(await _call(ctx, tools, call))
+                content.append(await _call(ctx, tools, call, recorder))
                 if call.get("name") in replying:
                     result.replied = True
             extra = await queue.drain(ctx.turn_id)

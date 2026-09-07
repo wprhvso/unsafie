@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import (
     BufferedInputFile,
     InlineKeyboardMarkup,
+    LinkPreviewOptions,
     Message,
     MessageEntity,
     ReplyParameters,
@@ -14,6 +15,7 @@ from aiogram.types import (
 from llmmd import process_markdown
 
 from unsafie import events, telemetry
+from unsafie.agent import live
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.turn import Turn
@@ -45,6 +47,10 @@ def _reply_params(reply_to: int | None) -> ReplyParameters | None:
     if reply_to is None:
         return None
     return ReplyParameters(message_id=reply_to, allow_sending_without_reply=True)
+
+
+def _preview_options(preview: bool) -> LinkPreviewOptions | None:
+    return None if preview else LinkPreviewOptions(is_disabled=True)
 
 
 def _preview(text: str, limit: int = 120) -> str:
@@ -82,6 +88,14 @@ async def _record(
         turn_id=str(turn_id) if turn_id else None,
         text=_preview(content),
     )
+    live.emit(
+        turn_id,
+        "reply.sent",
+        kind=str(kind),
+        message_ids=ids,
+        reply_to=reply_to,
+        text=live.clip(content)[0],
+    )
     logger.info(
         "bot=%s chat=%s turn=%s sent kind=%s messages=%s reply_to=%s",
         bot_id,
@@ -102,6 +116,7 @@ async def _send_chunks(
     reply_to: int | None,
     reply_markup: InlineKeyboardMarkup | None,
     silent: bool = False,
+    preview: bool = True,
 ) -> list[int]:
     ids: list[int] = []
     last = len(chunks) - 1
@@ -115,6 +130,7 @@ async def _send_chunks(
                 reply_parameters=_reply_params(reply_to) if i == 0 else None,
                 reply_markup=reply_markup if i == last else None,
                 disable_notification=silent or None,
+                link_preview_options=_preview_options(preview),
             ),
             f"{prefix} send chunk {i + 1}/{len(chunks)}",
         )
@@ -133,6 +149,7 @@ async def send(
     reply_to: int | None = None,
     reply_markup: InlineKeyboardMarkup | None = None,
     silent: bool = False,
+    preview: bool = True,
 ) -> Response:
     prefix = f"bot={bot_id} chat={chat_id} turn={turn.id if turn else None}"
     with telemetry.span(
@@ -150,7 +167,9 @@ async def send(
         chunks = chunks_of(markdown)
         if turn is not None and reply_to is None:
             reply_to = await reply_target(turn)
-        ids = await _send_chunks(bot, prefix, chat_id, chunks, reply_to, reply_markup, silent)
+        ids = await _send_chunks(
+            bot, prefix, chat_id, chunks, reply_to, reply_markup, silent, preview
+        )
         telemetry.set_attrs(
             span,
             {attrs.TG_CHUNKS: len(chunks), attrs.TG_MESSAGE_IDS: ids, attrs.MESSAGE_ID: reply_to},

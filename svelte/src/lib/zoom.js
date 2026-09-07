@@ -1,12 +1,14 @@
 const KEY = 'answer-zoom';
+const VARIABLE = '--answer-zoom';
 const MIN = 0.2;
 const MAX = 5;
 const DEFAULT = 1;
 const SAVE_MS = 250;
+const STEP = 1.15;
 
-function restore() {
+function restore(key) {
   try {
-    const value = parseFloat(localStorage.getItem(KEY));
+    const value = parseFloat(localStorage.getItem(key));
     return value >= MIN && value <= MAX ? value : DEFAULT;
   } catch {
     return DEFAULT;
@@ -20,21 +22,26 @@ function spread(touches) {
   );
 }
 
-export function zoomable() {
-  let zoom = restore();
+/**
+ * Pinch on touch, ctrl+wheel on a desktop, and a handle for buttons to pull.
+ * The level lives in localStorage, the value itself in a CSS variable.
+ */
+export function zoomer({ key = KEY, variable = VARIABLE, onchange } = {}) {
+  let zoom = restore(key);
   let anchor = zoom;
   let start = 0;
   let timer = 0;
 
   const apply = (value) => {
     zoom = Math.min(MAX, Math.max(MIN, value));
-    document.documentElement.style.setProperty('--answer-zoom', zoom.toFixed(4));
+    document.documentElement.style.setProperty(variable, zoom.toFixed(4));
+    onchange?.(zoom);
   };
 
   const write = () => {
     timer = 0;
     try {
-      localStorage.setItem(KEY, String(zoom));
+      localStorage.setItem(key, String(zoom));
     } catch {
       /* empty */
     }
@@ -80,16 +87,38 @@ export function zoomable() {
   document.addEventListener('touchcancel', onEnd);
   document.addEventListener('wheel', onWheel, { passive: false });
 
-  return () => {
-    document.removeEventListener('touchstart', onStart);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onEnd);
-    document.removeEventListener('touchcancel', onEnd);
-    document.removeEventListener('wheel', onWheel);
-    if (timer) {
-      clearTimeout(timer);
-      write();
+  return {
+    get value() {
+      return zoom;
+    },
+    in: () => {
+      apply(zoom * STEP);
+      save();
+    },
+    out: () => {
+      apply(zoom / STEP);
+      save();
+    },
+    reset: () => {
+      apply(DEFAULT);
+      save();
+    },
+    stop: () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+      document.removeEventListener('wheel', onWheel);
+      if (timer) {
+        clearTimeout(timer);
+        write();
+      }
+      document.documentElement.style.removeProperty(variable);
     }
-    document.documentElement.style.removeProperty('--answer-zoom');
   };
+}
+
+export function zoomable(options) {
+  const control = zoomer(options);
+  return () => control.stop();
 }

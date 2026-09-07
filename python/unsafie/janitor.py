@@ -1,7 +1,9 @@
 import logging
 
 from unsafie import events, telemetry
+from unsafie.agent import live
 from unsafie.database import SessionLocal
+from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.delivery import DeliveryRepository
 from unsafie.database.repositories.segment import SegmentRepository
 from unsafie.database.repositories.turn import TurnRepository
@@ -46,6 +48,12 @@ class Janitor(Loop):
                 chat_id=turn.chat_id,
                 user_id=turn.user_id,
                 instance=turn.instance_id,
+            )
+            # Whoever is watching this turn should see it stop, not spin forever.
+            await live.seal(
+                turn.id,
+                status=str(TurnStatus.FAILED),
+                note=f"instance {turn.instance_id or 'unknown'} stopped beating",
             )
 
     async def _purge(self) -> None:

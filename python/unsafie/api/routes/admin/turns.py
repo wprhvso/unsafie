@@ -1,13 +1,17 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from unsafie.agent import live
 from unsafie.api.dependencies.paging import paging
 from unsafie.api.schemas.common import Page, PageParams
 from unsafie.api.schemas.models import ResponseRead, TurnDetail, TurnRead
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn_message import TurnMessages
 from unsafie.database.repositories.turn import TurnRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/turns", tags=["turns"])
 
@@ -25,6 +29,17 @@ async def list_turns(
             params.offset, params.limit, bot_id, chat_id, user_id, status
         )
     return Page.of([TurnRead.model_validate(r) for r in rows], total, params)
+
+
+@router.get("/{turn_id}/live")
+async def live_link(turn_id: UUID):
+    """The watch link, while the stream behind it is still in redis."""
+    try:
+        token = await live.token_of(turn_id)
+    except Exception as e:
+        logger.warning("turn=%s live token unreadable: %s", turn_id, e)
+        token = None
+    return {"token": token, "url": live.url(token) if token else None}
 
 
 @router.get("/{turn_id}", response_model=TurnDetail)

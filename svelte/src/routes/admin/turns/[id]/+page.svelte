@@ -9,6 +9,7 @@
 
   const id = page.params.id;
   const detail = resource(() => admin.get(`/turns/${id}`));
+  const live = resource(() => admin.get(`/turns/${id}/live`));
 </script>
 
 <svelte:head><title>unsafie — turn</title></svelte:head>
@@ -29,6 +30,9 @@
         <span><span class="muted">session</span> <span class="mono small">{t.session_id ?? '—'}</span></span>
         <span><span class="muted">started</span> {when(t.created_at)}</span>
         <span><span class="muted">finished</span> {when(t.finished_at)}</span>
+        {#if live.data?.url}
+          <span><span class="muted">live</span> <a href={live.data.url}>{live.data.token}</a></span>
+        {/if}
       </div>
       {#if t.result}<pre class="result">{t.result}</pre>{/if}
     </Panel>
