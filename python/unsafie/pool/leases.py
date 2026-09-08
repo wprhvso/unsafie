@@ -285,6 +285,7 @@ async def ensure(
 async def reap() -> int:
     released = 0
     idle_limit = settings.pool_lease_idle
+    await _close_stray_leases()
     async with SessionLocal() as session:
         rows = await session.scalars(
             select(PoolMachine).where(
@@ -304,6 +305,26 @@ async def reap() -> int:
             await release(machine.user_id, machine.name, "idle")
             released += 1
     return released
+
+
+async def _close_stray_leases() -> int:
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(PoolLease, PoolMachine.gone_reason)
+            .join(PoolMachine, PoolMachine.name == PoolLease.machine)
+            .where(PoolLease.released_at.is_(None), PoolMachine.gone_at.is_not(None))
+        )
+        closed = 0
+        now = datetime.now(UTC)
+        for lease, reason in rows:
+            lease.released_at = now
+            lease.reason = (reason or "machine gone")[:64]
+            lease.seconds = (now - lease.taken_at).total_seconds()
+            closed += 1
+        if closed:
+            await session.commit()
+            logger.info("pool: %s lease(s) closed behind machines that had gone", closed)
+        return closed
 
 
 async def _last_seen(machine: PoolMachine) -> datetime:

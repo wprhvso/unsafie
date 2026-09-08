@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 PREFIX = "uns_"
 
 HUMAN_SCOPES = ("chat", "pages", "pool", "github", "automation", "secrets", "accounts", "auth")
-MACHINE_SCOPES = ("chat", "pages", "pool", "github", "automation")
+MACHINE_SCOPES = ("chat", "pages", "pool", "github", "automation", "secrets")
 
 
 def generate() -> str:
