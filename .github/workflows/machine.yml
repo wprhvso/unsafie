@@ -30,21 +30,21 @@ jobs:
           } >>"$GITHUB_ENV"
           echo "cache: $CACHE_URL"
 
-      - name: install the sdk
+      - name: install unsafie
         env:
           SPEC: ${{ secrets.UNSAFIE_SDK_SPEC }}
           WIRE: ${{ secrets.UNSAFIE_WIRE_SPEC }}
         run: |
-          if [ -n "$WIRE" ]; then
-            uv tool install --with "$WIRE" "${SPEC:-unsafie-sdk}"
-          else
-            uv tool install "${SPEC:-unsafie-sdk}"
-          fi
+          TARGET="${SPEC:-git+https://github.com/wprhvso/unsafie@main#subdirectory=python}"
+          TARGET="${TARGET//python\/unsafie-sdk/python}"
+          TARGET="${TARGET//unsafie-sdk/unsafie}"
+          uv tool install "$TARGET" || uv tool install git+https://github.com/wprhvso/unsafie@main#subdirectory=python
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
       - name: bring the desktop along
         run: |
-          sudo -E env "PATH=$PATH" "$(command -v unsafie-machine)" setup xvfb kasmvnc tools
+          BIN="$(command -v unsafie-machine || command -v unsafie)"
+          sudo -E env "PATH=$PATH" "$BIN" setup xvfb kasmvnc tools
           for tool in Xvfb x11vnc openbox; do
             command -v "$tool" >/dev/null || {
               echo "::error::$tool is missing after setup, the desktop link would be dead"
@@ -60,5 +60,6 @@ jobs:
           UNSAFIE_WORKER_TOKEN: ${{ secrets.UNSAFIE_WORKER_TOKEN }}
           UNSAFIE_CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
         run: |
+          BIN="$(command -v unsafie-machine || command -v unsafie)"
           sudo -E env "PATH=$PATH" "UNSAFIE_BOOT_STARTED=$UNSAFIE_BOOT_STARTED" \
-            "$(command -v unsafie-machine)" serve
+            "$BIN" serve

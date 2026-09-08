@@ -1,6 +1,8 @@
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 from typing import Any
 
 
@@ -23,8 +25,27 @@ def main(argv: list[str] | None = None) -> int:
 
     subs.add_parser("me")
 
+    p_serve = subs.add_parser("serve")
+    p_serve.add_argument("--token", default=None)
+    p_serve.add_argument("--api", default=None)
+
     p_setup = subs.add_parser("setup")
     p_setup.add_argument("tools", nargs="*", default=[])
+
+    p_runner = subs.add_parser("ci-runner")
+    p_runner.add_argument("--jit", default="")
+    p_runner.add_argument("--name", default="")
+    p_runner.add_argument("--repo", default="")
+    p_runner.add_argument("--idle", type=float, default=300.0)
+    p_runner.add_argument("--lifetime", type=float, default=3600.0)
+
+    p_put = subs.add_parser("put")
+    p_put.add_argument("key")
+    p_put.add_argument("file")
+
+    p_get = subs.add_parser("get")
+    p_get.add_argument("key")
+    p_get.add_argument("file")
 
     p_stop = subs.add_parser("stop")
     p_stop.add_argument("message", nargs="?", default=None)
@@ -169,10 +190,36 @@ def main(argv: list[str] | None = None) -> int:
         return _out({"error": "subcommand required"}, ok=False)
 
     try:
+        if args.cmd == "serve":
+            token = args.token or os.environ.get("UNSAFIE_WORKER_TOKEN") or ""
+            api = args.api or os.environ.get("UNSAFIE_API") or os.environ.get("UNSAFIE_URL") or "http://127.0.0.1:8000"
+            if not token:
+                sys.stderr.write("no worker token: set UNSAFIE_WORKER_TOKEN\n")
+                return 0
+            from unsafie.machine.daemon import serve
+            return serve(api, token)
+
         if args.cmd == "setup":
             from unsafie.machine.toolchains import TOOLCHAINS, setup
             wanted = args.tools or list(TOOLCHAINS)
-            return _out(setup(*wanted))
+            for name, outcome in setup(*wanted).items():
+                sys.stdout.write(f"{name}: {outcome}\n")
+            sys.stdout.flush()
+            return 0
+
+        if args.cmd == "ci-runner":
+            from unsafie.machine.runner import run_runner
+            return run_runner(args.jit, name=args.name, repo=args.repo, idle=args.idle, lifetime=args.lifetime)
+
+        if args.cmd == "put":
+            from unsafie.cli import blobs
+            return _out(blobs.put(args.key, Path(args.file)))
+
+        if args.cmd == "get":
+            from unsafie.cli import blobs
+            data = blobs.get(args.key)
+            Path(args.file).write_bytes(data)
+            return _out({"downloaded": args.key, "bytes": len(data)})
 
         if args.cmd == "me":
             from unsafie.cli.client import client

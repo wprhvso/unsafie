@@ -5,7 +5,6 @@ import signal
 import subprocess
 import tarfile
 import tempfile
-import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -22,9 +21,6 @@ KEEP = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "LANG", "LC_ALL", "T
 TOOLS = "/opt/hostedtoolcache"
 LISTENER = "bin/Runner.Listener"
 CACHE = Path(os.environ.get("UNSAFIE_RUNNER_CACHE") or "/opt/unsafie/runner")
-POLL = 1.0
-GRACE = 20.0
-BUSY_GRACE = 400.0
 SMALL = 1 << 20
 
 

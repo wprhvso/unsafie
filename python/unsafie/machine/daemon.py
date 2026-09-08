@@ -3,7 +3,6 @@ import os
 import platform
 import queue
 import shutil
-import signal
 import subprocess
 import sys
 import threading
@@ -20,9 +19,6 @@ USER_AGENT = "unsafie-machine"
 FLUSH = 0.2
 READ_SIZE = 65536
 RETRY_MIN = 1.0
-RETRY_MAX = 15.0
-KILL_GRACE = 5.0
-TIMED_OUT = 124
 
 
 class Link:
@@ -67,7 +63,7 @@ class Daemon:
         self.beat = 20.0
         self.outbox: queue.Queue[dict] = queue.Queue()
         self.stop = threading.Event()
-        self.reason = "exited"
+        self.lease: dict[str, Any] = {}
 
     def facts(self) -> dict[str, Any]:
         total, _, free = shutil.disk_usage("/")
@@ -82,7 +78,12 @@ class Daemon:
 
     def register(self) -> None:
         started = os.environ.get("UNSAFIE_BOOT_STARTED")
-        boot = max(0.0, time.time() - float(started)) if started and started.isdigit() else None
+        boot = None
+        if started:
+            try:
+                boot = max(0.0, time.time() - float(started))
+            except ValueError:
+                pass
         run_id = os.environ.get("GITHUB_RUN_ID")
         answer = self.link.call(
             "POST",
@@ -103,7 +104,7 @@ class Daemon:
         try:
             self.register()
         except Exception as e:
-            sys.stderr.write(f"register failed: {e}\n")
+            sys.stderr.write(f"registration failed: {e}\n")
             return 0
         threading.Thread(target=self._sender, daemon=True).start()
         threading.Thread(target=self._heartbeat, daemon=True).start()
@@ -141,6 +142,21 @@ class Daemon:
                 threading.Thread(target=serve_tunnel, args=(url, kind_t, port), daemon=True).start()
                 return
             threading.Thread(target=self._execute, args=(raw,), daemon=True).start()
+        elif kind == wire.FrameKind.PYTHON:
+            threading.Thread(target=self._execute_nu, args=(raw,), daemon=True).start()
+        elif kind == wire.FrameKind.ASSIGN:
+            self.lease = {
+                "token": str(raw.get("token") or ""),
+                "chat": raw.get("chat"),
+                "turn": raw.get("turn") or "",
+            }
+            if self.lease["token"]:
+                os.environ["UNSAFIE_TOKEN"] = self.lease["token"]
+            if self.lease["chat"]:
+                os.environ["UNSAFIE_CHAT"] = str(self.lease["chat"])
+            if self.lease["turn"]:
+                os.environ["UNSAFIE_TURN"] = str(self.lease["turn"])
+            os.environ["UNSAFIE_API"] = self.link.base
         elif kind == wire.FrameKind.SHUTDOWN:
             self.stop.set()
 
@@ -153,6 +169,29 @@ class Daemon:
         try:
             proc = subprocess.Popen(
                 ["/bin/bash", "-lc", cmd],
+                cwd=str(self.workdir),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            out, _ = proc.communicate(timeout=float(raw.get("timeout") or 600.0))
+            text = out.decode(errors="replace")
+            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
+            self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
+        except Exception as e:
+            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
+            self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
+
+    def _execute_nu(self, raw: dict) -> None:
+        cmd_id = str(raw.get("id") or "")
+        code = str(raw.get("code") or "")
+        if not cmd_id or not code:
+            return
+        started = time.monotonic()
+        nu_bin = shutil.which("nu") or "nu"
+        try:
+            proc = subprocess.Popen(
+                [nu_bin, "-c", code],
                 cwd=str(self.workdir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
