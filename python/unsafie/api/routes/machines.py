@@ -24,6 +24,10 @@ class Output(BaseModel):
     frames: list[dict] = []
 
 
+class TunnelFailure(BaseModel):
+    error: str = ""
+
+
 async def _machine(token: str | None, name: str) -> str:
     resolved = await tokens.resolve(token)
     if resolved is None or resolved.kind != TokenKind.MACHINE or resolved.machine != name:
@@ -117,16 +121,34 @@ async def tunnel(websocket: WebSocket, name: str, channel_id: str) -> None:
     if resolved is None or resolved.kind != TokenKind.MACHINE or resolved.machine != name:
         await websocket.close(code=4401)
         return
-    waiting = tunnels.pending(channel_id)
-    if waiting is None or waiting.machine != name:
+    waiting = await tunnels.pending(channel_id)
+    if waiting is None or waiting.get("machine") != name:
         await websocket.close(code=4404)
         return
     await websocket.accept()
-    tunnels.attach(channel_id, websocket)
+    opened = await tunnels.bridge(channel_id, tunnels.MACHINE)
     try:
-        await waiting.closed.wait()
+        await tunnels.announce(channel_id)
+        await opened.pump(websocket)
+    except Exception:
+        logger.exception("machine %s: tunnel %s broke", name, channel_id)
     finally:
-        tunnels.forget(channel_id)
+        await opened.close()
+
+
+@router.post("/{name}/tunnel/{channel_id}/failed")
+async def tunnel_failed(
+    name: str,
+    channel_id: str,
+    body: TunnelFailure,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict:
+    await _machine(_bearer(authorization), name)
+    waiting = await tunnels.pending(channel_id)
+    if waiting is None or waiting.get("machine") != name:
+        raise HTTPException(404, "no such tunnel")
+    await tunnels.refuse(channel_id, body.error or "the machine could not open the tunnel")
+    return {"ok": True}
 
 
 @router.post("/{name}/gone")

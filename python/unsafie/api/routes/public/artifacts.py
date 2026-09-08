@@ -26,7 +26,14 @@ async def root():
 @router.api_route("/{path:path}", methods=METHODS, include_in_schema=False)
 async def spa(path: str, request: Request):
     if path.startswith(MACHINERY):
-        logger.info("no route %s /%s", request.method, path)
+        if (request.headers.get("upgrade") or "").lower() == "websocket":
+            logger.error(
+                "websocket upgrade for /%s arrived as plain http: uvicorn has no websocket "
+                "implementation, or a proxy dropped the Upgrade/Connection headers",
+                path,
+            )
+        else:
+            logger.warning("no route %s /%s", request.method, path)
         return JSONResponse({"detail": f"no route {request.method} /{path}"}, status_code=404)
     if request.method not in ("GET", "HEAD"):
         raise HTTPException(405, f"{request.method} is not accepted here")

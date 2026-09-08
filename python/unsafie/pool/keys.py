@@ -41,3 +41,23 @@ def ci(repo_id: int) -> str:
 
 def counter(name: str) -> str:
     return cluster.key(NAMESPACE, "seq", name)
+
+
+def desktop(slug: str) -> str:
+    return cluster.key(NAMESPACE, "desktop", slug)
+
+
+def tunnel(channel_id: str) -> str:
+    return cluster.key(NAMESPACE, "tun", channel_id)
+
+
+def tunnel_ready(channel_id: str) -> str:
+    return cluster.key(NAMESPACE, "tun", channel_id, "ready")
+
+
+def tunnel_up(channel_id: str) -> str:
+    return cluster.key(NAMESPACE, "tun", channel_id, "up")
+
+
+def tunnel_down(channel_id: str) -> str:
+    return cluster.key(NAMESPACE, "tun", channel_id, "down")

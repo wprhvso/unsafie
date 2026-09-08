@@ -446,6 +446,20 @@ class Daemon:
             serve_tunnel(url, kind, port)
         except Exception as broken:  # noqa: BLE001 - a broken tunnel must not kill the machine
             _log(f"tunnel {kind}: {broken}")
+            self._tunnel_failed(channel_id, f"{broken}")
+
+    def _tunnel_failed(self, channel_id: str, error: str) -> None:
+        if not channel_id:
+            return
+        try:
+            self.link.call(
+                "POST",
+                f"/machines/{self.name}/tunnel/{channel_id}/failed",
+                body={"error": error[:300]},
+                timeout=15.0,
+            )
+        except (urllib.error.URLError, TimeoutError, OSError) as quiet:
+            _log(f"could not report the broken tunnel: {quiet}")
 
     def _emit(self, frame: wire.Frame) -> None:
         self.outbox.put({"kind": str(frame.kind), "id": frame.id, **frame.body})

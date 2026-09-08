@@ -1,19 +1,40 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
+
+  const CODES = {
+    1006: 'the connection dropped before the handshake finished',
+    4401: 'the machine token was refused',
+    4404: 'this link has expired',
+    4408: 'the machine never dialled back',
+    4409: 'the machine refused the tunnel'
+  };
+
+  const NO_DESKTOP =
+    'The desktop never opened. A machine only has one once browser.start() has run — ' +
+    'start the browser, then ask for a fresh link.';
 
   let state = $state('connecting');
+  let note = $state('');
   let kind = $state('vnc');
   let machine = $state('');
   let screen;
   let terminal;
   let cleanup = null;
+  let opened = false;
 
-  const slug = $page.params.slug;
+  const slug = page.params.slug;
 
   function socketUrl() {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     return `${scheme}://${location.host}/api/m/${slug}/stream`;
+  }
+
+  function closed(event) {
+    state = 'closed';
+    if (event?.reason) note = event.reason;
+    else if (CODES[event?.code]) note = CODES[event.code];
+    else if (!opened) note = NO_DESKTOP;
   }
 
   async function boot() {
@@ -37,12 +58,25 @@
 
   async function startDesktop() {
     const { default: RFB } = await import('@novnc/novnc');
-    const client = new RFB(screen, socketUrl(), { wsProtocols: ['binary'] });
+    // Hand noVNC a socket we made ourselves: it hides the close code, and the code is the
+    // only place the server can say why nothing appeared.
+    const socket = new WebSocket(socketUrl(), ['binary']);
+    socket.binaryType = 'arraybuffer';
+    socket.addEventListener('close', closed);
+    const client = new RFB(screen, socket);
     client.scaleViewport = true;
     client.resizeSession = true;
-    client.addEventListener('connect', () => (state = 'live'));
-    client.addEventListener('disconnect', () => (state = 'closed'));
-    cleanup = () => client.disconnect();
+    client.addEventListener('connect', () => {
+      opened = true;
+      state = 'live';
+    });
+    client.addEventListener('disconnect', () => {
+      if (state !== 'closed') closed(null);
+    });
+    cleanup = () => {
+      socket.removeEventListener('close', closed);
+      client.disconnect();
+    };
   }
 
   async function startTerminal() {
@@ -65,10 +99,11 @@
       }
     };
     socket.onopen = () => {
+      opened = true;
       state = 'live';
       resize();
     };
-    socket.onclose = () => (state = 'closed');
+    socket.onclose = closed;
     socket.onmessage = (event) => term.write(new Uint8Array(event.data));
     term.onData((data) => socket.readyState === 1 && socket.send(new TextEncoder().encode(data)));
     window.addEventListener('resize', resize);
@@ -95,6 +130,8 @@
     <p class="note">This link has expired. Ask for a new one.</p>
   {:else if state === 'failed'}
     <p class="note">The machine is not answering.</p>
+  {:else if note}
+    <p class="note">{note}</p>
   {/if}
   <div class="screen" bind:this={screen} hidden={kind === 'term'}></div>
   <div class="terminal" bind:this={terminal} hidden={kind !== 'term'}></div>
@@ -135,6 +172,7 @@
   }
   .note {
     padding: 1rem;
+    margin: 0;
     color: #8b949e;
   }
   .screen,

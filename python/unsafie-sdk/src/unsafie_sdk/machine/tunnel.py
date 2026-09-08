@@ -2,32 +2,49 @@ import os
 import pty
 import socket
 import struct
-import subprocess
 import threading
 
-from unsafie_sdk.chrome.ws import WebSocket
 from unsafie_sdk.chrome import vnc
+from unsafie_sdk.chrome.ws import WebSocket
 
 CHUNK = 65536
-VNC_WAIT = 20.0
+DIAL_WAIT = 20.0
+
+
+class TunnelError(RuntimeError):
+    pass
 
 
 def serve_tunnel(url: str, kind: str, port: int) -> None:
-    socket_to_server = WebSocket(url, timeout=600.0)
+    local = None if kind == "term" else dial(port)
+    link = WebSocket(url, timeout=600.0)
     try:
-        if kind == "term":
-            _terminal(socket_to_server)
+        if local is None:
+            _terminal(link)
         else:
-            _tcp(socket_to_server, port)
+            _tcp(link, local)
     finally:
-        socket_to_server.close()
+        link.close()
+        if local is not None:
+            local.close()
 
 
-def _tcp(link: WebSocket, port: int) -> None:
+def dial(port: int) -> socket.socket:
     if port == vnc.RFB_PORT:
-        vnc.attach(vnc.DISPLAY)
-    local = socket.create_connection(("127.0.0.1", port), timeout=VNC_WAIT)
+        problem = vnc.attach(vnc.DISPLAY)
+        if problem and not vnc.listening(vnc.RFB_PORT, 2.0):
+            raise TunnelError(
+                f"no desktop on this machine ({problem}); start one with browser.start()"
+            )
+    try:
+        local = socket.create_connection(("127.0.0.1", port), timeout=DIAL_WAIT)
+    except OSError as broken:
+        raise TunnelError(f"nothing answers on 127.0.0.1:{port} ({broken})") from None
     local.settimeout(None)
+    return local
+
+
+def _tcp(link: WebSocket, local: socket.socket) -> None:
     stop = threading.Event()
 
     def to_server() -> None:
@@ -54,7 +71,6 @@ def _tcp(link: WebSocket, port: int) -> None:
         return
     finally:
         stop.set()
-        local.close()
 
 
 def _terminal(link: WebSocket) -> None:

@@ -34,6 +34,7 @@ HEALTH_CHECK = 30.0
 
 _client: Redis | None = None
 _reader: Redis | None = None
+_binary: Redis | None = None
 _release = None
 _extend = None
 
@@ -64,7 +65,7 @@ def read_timeout() -> float:
     return max(settings.events_block, settings.live_block) + settings.redis_timeout
 
 
-def _open(timeout: float) -> Redis:
+def _open(timeout: float | None, decode: bool = True) -> Redis:
     return Redis.from_url(
         settings.redis_url,
         max_connections=settings.redis_max_connections,
@@ -72,24 +73,27 @@ def _open(timeout: float) -> Redis:
         socket_connect_timeout=settings.redis_timeout,
         socket_keepalive=True,
         health_check_interval=HEALTH_CHECK,
-        decode_responses=True,
+        decode_responses=decode,
     )
 
 
 async def connect() -> Redis:
-    global _client, _reader, _release, _extend
+    global _client, _reader, _binary, _release, _extend
     if _client is not None:
         return _client
     opened = _open(settings.redis_timeout)
     reading = _open(read_timeout())
+    raw = _open(None, decode=False)
     try:
         await opened.ping()
     except (RedisError, OSError) as e:
         await opened.aclose()
         await reading.aclose()
+        await raw.aclose()
         raise Unavailable(f"redis at {safe_url(settings.redis_url)} is not reachable: {e}") from e
     _client = opened
     _reader = reading
+    _binary = raw
     _release = opened.register_script(RELEASE)
     _extend = opened.register_script(EXTEND)
     logger.info(
@@ -116,14 +120,20 @@ def reader() -> Redis:
     return _reader
 
 
+def binary() -> Redis:
+    if _binary is None:
+        raise Unavailable("redis is not connected")
+    return _binary
+
+
 async def close() -> None:
-    global _client, _reader, _release, _extend
-    for pool in (_client, _reader):
+    global _client, _reader, _binary, _release, _extend
+    for pool in (_client, _reader, _binary):
         if pool is not None:
             await pool.aclose()
     if _client is not None:
         logger.info("redis pools closed")
-    _client = _reader = _release = _extend = None
+    _client = _reader = _binary = _release = _extend = None
 
 
 async def health() -> dict:
