@@ -123,7 +123,14 @@ def number_lines(text: str, start: int | None, end: int | None, limit: int) -> t
 
 
 def image_block(data: bytes, mime: str) -> dict:
-    return {"type": "image", "data": base64.b64encode(data).decode(), "mimeType": mime}
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": mime,
+            "data": base64.b64encode(data).decode(),
+        },
+    }
 
 
 def image_result(data: bytes, mime: str, note: str | None = None) -> dict:
