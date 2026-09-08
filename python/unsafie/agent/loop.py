@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -10,6 +11,8 @@ from unsafie.log import short
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
+
+TOOL = request.PYTHON_TOOL_NAME
 
 
 @dataclass
@@ -35,21 +38,66 @@ def _ask(messages: list[dict], value: str) -> None:
     messages.append({"role": "user", "content": [block]})
 
 
-def _watcher(runner: blocks.Runner, reader: blocks.Reader, recorder: Recorder):
-    """Feeds the streamed text into the fence reader and fires every block as it closes."""
+def _code(raw: str) -> str | None:
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    code = parsed.get("code")
+    return code if isinstance(code, str) else None
 
-    def on_event(name: str, data: dict) -> None:
-        recorder.raw(name, data)
+
+class Watcher:
+    """Reads the raw stream and starts every python call the moment its arguments close."""
+
+    def __init__(self, runner: blocks.Runner, recorder: Recorder) -> None:
+        self.runner = runner
+        self.recorder = recorder
+        self.open: dict[int, dict] = {}
+
+    def __call__(self, name: str, data: dict) -> None:
+        self.recorder.raw(name, data)
         kind = name or str(data.get("type") or "")
-        if kind != "content_block_delta":
+        if kind == "content_block_start":
+            block = data.get("content_block") or {}
+            if block.get("type") == "tool_use" and block.get("name") == TOOL:
+                self.open[int(data.get("index", 0))] = {"id": str(block.get("id") or ""), "args": ""}
             return
-        delta = data.get("delta") or {}
-        if delta.get("type") != "text_delta":
+        if kind == "content_block_delta":
+            delta = data.get("delta") or {}
+            if delta.get("type") != "input_json_delta":
+                return
+            pending = self.open.get(int(data.get("index", 0)))
+            if pending is not None:
+                pending["args"] += str(delta.get("partial_json") or "")
             return
-        for code in reader.feed(str(delta.get("text") or "")):
-            runner.start(code)
+        if kind == "content_block_stop":
+            pending = self.open.pop(int(data.get("index", 0)), None)
+            if pending is None or not pending["id"]:
+                return
+            code = _code(pending["args"])
+            if code is None:
+                self.runner.refuse(
+                    pending["id"],
+                    "the arguments were not a JSON object with a string 'code' field",
+                )
+                return
+            self.runner.start(pending["id"], code)
 
-    return on_event
+
+def _unanswered(reply, runner: blocks.Runner) -> None:
+    """Every tool_use must come back with a tool_result, whatever the stream looked like."""
+    for block in reply.calls:
+        call_id = str(block.get("id") or "")
+        if block.get("name") != TOOL or not call_id or runner.handled(call_id):
+            continue
+        code = (block.get("input") or {}).get("code")
+        if isinstance(code, str):
+            runner.start(call_id, code)
+        else:
+            runner.refuse(call_id, "no 'code' argument arrived")
 
 
 async def run(
@@ -66,6 +114,7 @@ async def run(
 ) -> Result:
     result = Result()
     marked = -1
+    definitions = request.tools()
 
     while result.steps < settings.agent_max_steps:
         if result.cost_usd >= budget_usd:
@@ -86,19 +135,16 @@ async def run(
             prompt=prompt,
             messages=messages,
             marks=marks,
-            definitions=request.tools([]),
+            definitions=definitions,
             effort=effort,
             max_tokens=settings.claude_max_tokens,
         )
         result.steps += 1
-        recorder.request(result.steps, len(messages), 0)
+        recorder.request(result.steps, len(messages), len(definitions))
         runner = blocks.Runner(ctx, recorder)
-        reader = blocks.Reader()
         try:
-            reply = await client.send(credential, body, on_event=_watcher(runner, reader, recorder))
+            reply = await client.send(credential, body, on_event=Watcher(runner, recorder))
         except ApiError as e:
-            for code in reader.flush():
-                runner.start(code)
             await runner.settle()
             dropped = request.downgrade(model, e)
             if dropped:
@@ -114,8 +160,7 @@ async def run(
             logger.warning("%s step=%s %s", ctx.prefix, result.steps, short(result.error, 600))
             return result
 
-        for code in reader.flush():
-            runner.start(code)
+        _unanswered(reply, runner)
 
         step_cost = pricing.cost(reply.model or model, reply.usage)
         result.cost_usd += step_cost
@@ -129,6 +174,7 @@ async def run(
         text = reply.text.strip()
         if text:
             result.text = text
+            logger.info("%s wrote %s chars of text nobody will read", ctx.prefix, len(text))
 
         content = await runner.settle()
         result.ran += runner.count

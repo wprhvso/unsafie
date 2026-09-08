@@ -27,10 +27,7 @@ async def root():
 async def spa(path: str, request: Request):
     if path.startswith(MACHINERY):
         logger.info("no route %s /%s", request.method, path)
-        return JSONResponse(
-            {"detail": f"no route {request.method} /{path}"},
-            status_code=404,
-        )
+        return JSONResponse({"detail": f"no route {request.method} /{path}"}, status_code=404)
     if request.method not in ("GET", "HEAD"):
         raise HTTPException(405, f"{request.method} is not accepted here")
     if path.startswith(RESERVED):

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 
@@ -15,13 +14,12 @@ from unsafie_wire import markers
 
 logger = logging.getLogger(__name__)
 
-FENCE = re.compile(r"^[ \t]*```[ \t]*(python|py|python3)[ \t]*$", re.IGNORECASE)
-CLOSE = re.compile(r"^[ \t]*```[ \t]*$")
-HEAD = 400
+TOOL = "python"
 
 
 @dataclass
 class Block:
+    call_id: str
     index: int
     code: str
     started_at: float = field(default_factory=time.monotonic)
@@ -41,68 +39,21 @@ class Block:
     def heading(self) -> str:
         where = self.machine or "no machine"
         if self.error:
-            return f"[block {self.index}] {where}: {self.error}"
+            return f"[{self.index}] {where}: {self.error}"
         if self.exit_code is None:
-            return f"[block {self.index}] {where}: still running after {self.seconds:.0f}s"
+            return f"[{self.index}] {where}: still running after {self.seconds:.0f}s"
         state = "ok" if self.ok else "raised"
-        return f"[block {self.index}] {where} · {state} in {self.seconds:.1f}s"
-
-
-class Reader:
-    """Watches the text as it streams and hands over every python block the moment it closes."""
-
-    def __init__(self) -> None:
-        self.buffer = ""
-        self.inside = False
-        self.code: list[str] = []
-        self.found = 0
-
-    def feed(self, delta: str) -> list[str]:
-        self.buffer += delta
-        ready: list[str] = []
-        while "\n" in self.buffer:
-            line, _, rest = self.buffer.partition("\n")
-            self.buffer = rest
-            done = self._line(line)
-            if done is not None:
-                ready.append(done)
-        return ready
-
-    def _line(self, line: str) -> str | None:
-        if not self.inside:
-            if FENCE.match(line):
-                self.inside = True
-                self.code = []
-            return None
-        if CLOSE.match(line):
-            self.inside = False
-            self.found += 1
-            return "\n".join(self.code)
-        self.code.append(line)
-        return None
-
-    def flush(self) -> list[str]:
-        tail = self.buffer
-        self.buffer = ""
-        ready = []
-        if tail:
-            done = self._line(tail)
-            if done is not None:
-                ready.append(done)
-        if self.inside and self.code:
-            self.inside = False
-            self.found += 1
-            ready.append("\n".join(self.code))
-        return ready
+        return f"[{self.index}] {where} · {state} in {self.seconds:.1f}s"
 
 
 class Runner:
-    """Runs the blocks of one reply, in order, on the machine of this chat."""
+    """Runs every python call of one reply, in order, on the machine of this chat."""
 
     def __init__(self, ctx: Ctx, recorder) -> None:
         self.ctx = ctx
         self.recorder = recorder
         self.blocks: list[Block] = []
+        self.seen: set[str] = set()
         self.lock = asyncio.Lock()
         self.tasks: set[asyncio.Task] = set()
 
@@ -110,13 +61,28 @@ class Runner:
     def count(self) -> int:
         return len(self.blocks)
 
-    def start(self, code: str) -> Block:
-        block = Block(index=len(self.blocks) + 1, code=code)
+    def handled(self, call_id: str) -> bool:
+        return call_id in self.seen
+
+    def start(self, call_id: str, code: str) -> Block:
+        block = Block(call_id=call_id, index=len(self.blocks) + 1, code=code)
         self.blocks.append(block)
-        self.recorder.tool_started(str(block.index), "python", {"code": code})
-        task = asyncio.create_task(self._run(block), name=f"block:{self.ctx.turn_id}:{block.index}")
+        self.seen.add(call_id)
+        self.recorder.tool_started(call_id, TOOL, {"code": code})
+        task = asyncio.create_task(
+            self._run(block), name=f"python:{self.ctx.turn_id}:{block.index}"
+        )
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
+        return block
+
+    def refuse(self, call_id: str, reason: str) -> Block:
+        block = Block(call_id=call_id, index=len(self.blocks) + 1, code="")
+        block.error = reason
+        self.blocks.append(block)
+        self.seen.add(call_id)
+        self.recorder.tool_started(call_id, TOOL, {})
+        self._finished(block)
         return block
 
     async def _run(self, block: Block) -> None:
@@ -142,7 +108,7 @@ class Runner:
             except Exception as broken:  # noqa: BLE001 - the model must see what happened
                 block.error = f"{type(broken).__name__}: {broken}"
                 block.seconds = time.monotonic() - block.started_at
-                logger.exception("%s block %s could not run", self.ctx.prefix, block.index)
+                logger.exception("%s python %s could not run", self.ctx.prefix, block.index)
                 self._finished(block)
                 return
             body, found = markers.split(result.output)
@@ -189,9 +155,9 @@ class Runner:
         }
         if block.error or not block.ok:
             result["is_error"] = True
-        self.recorder.tool_finished(str(block.index), "python", result, block.seconds * 1000)
+        self.recorder.tool_finished(block.call_id, TOOL, result, block.seconds * 1000)
         logger.info(
-            "%s block %s on %s: %s",
+            "%s python %s on %s: %s",
             self.ctx.prefix,
             block.index,
             block.machine or "-",
@@ -199,20 +165,27 @@ class Runner:
         )
 
     async def settle(self) -> list[dict]:
-        if not self.tasks:
-            return self.content()
-        await asyncio.gather(*list(self.tasks), return_exceptions=True)
+        if self.tasks:
+            await asyncio.gather(*list(self.tasks), return_exceptions=True)
         return self.content()
 
     def content(self) -> list[dict]:
+        """One tool_result per call, in the order the model asked for them."""
         out: list[dict] = []
         for block in self.blocks:
             text = block.heading()
-            body = block.output.strip()
             if block.truncated:
                 text += f" (output cut at {human_size(settings.pool_max_output)})"
-            out.append({"type": "text", "text": f"{text}\n{body or '(no output)'}"})
-            out.extend(block.images)
+            body: list[dict] = [{"type": "text", "text": f"{text}\n{block.output.strip() or '(no output)'}"}]
+            body.extend(block.images)
+            result: dict = {
+                "type": "tool_result",
+                "tool_use_id": block.call_id,
+                "content": body,
+            }
+            if block.error or not block.ok:
+                result["is_error"] = True
+            out.append(result)
         return out
 
     @property

@@ -32,16 +32,22 @@ jobs:
       - name: types
         run: uv run basedpyright
 
-      - name: the sdk and the prompt hold together
+      - name: the sdk, the prompt and the python tool hold together
         run: |
           uv run python -c "
           import unsafie_sdk
           from unsafie.agent.prompt import SYSTEM_PROMPT
+          from unsafie.agent.request import PYTHON_TOOL, tools
           missing = [name for name in unsafie_sdk.__all__ if not hasattr(unsafie_sdk, name)]
           assert not missing, missing
+          description = PYTHON_TOOL['description']
           for word in ('say(', 'page(', 'run(', 'install(', 'github.use', 'browser.shot'):
-              assert word in SYSTEM_PROMPT, word
-          print('sdk', len(unsafie_sdk.__all__), 'names; prompt', len(SYSTEM_PROMPT), 'chars')
+              assert word in description, word
+          assert PYTHON_TOOL['input_schema']['required'] == ['code']
+          assert 'code' in PYTHON_TOOL['input_schema']['properties']
+          assert [t.get('name') for t in tools()][0] == 'python'
+          assert 'say(' in SYSTEM_PROMPT
+          print('tool', len(description), 'chars; prompt', len(SYSTEM_PROMPT), 'chars')
           "
 
       - name: migrations match the models

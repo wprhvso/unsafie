@@ -11,9 +11,9 @@ from unsafie.settings import settings
 from unsafie.ssh import binding
 
 REMINDER = (
-    "Reminder: only ```python blocks are executed and only say(), file() and page() reach the "
-    "chat. Anything you write outside a block is discarded, so do not end this turn until a "
-    "block has called say(...) with the answer."
+    "Reminder: nothing you write as text is delivered. Only say(), file() and page(), called "
+    "from inside a python tool call, reach the chat. Do not end this turn until a call has run "
+    "say(...) with the answer."
 )
 
 
@@ -37,7 +37,7 @@ async def time_context(session: AsyncSession, ctx: Ctx) -> str:
 
 async def machines_context(ctx: Ctx) -> str:
     if not settings.pool_enabled:
-        return "Pool: switched off on this server — no machine, so no python blocks will run."
+        return "Pool: switched off on this server — no machine, so python calls will not run."
     mine = await registry.of_user(ctx.user_id)
     counts = await registry.counted()
     if mine:
@@ -46,7 +46,7 @@ async def machines_context(ctx: Ctx) -> str:
         )
         head = f"Your machine: {held}"
     else:
-        head = "Your machine: none yet — the first block takes one automatically"
+        head = "Your machine: none yet — the first python call takes one automatically"
     return (
         f"{head}. Pool: {counts.get('idle', 0)} free of {counts.get('total', 0)}, every machine "
         "fully equipped. A machine is single use: releasing destroys it, and its files go with it."
