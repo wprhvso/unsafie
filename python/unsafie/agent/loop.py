@@ -11,19 +11,6 @@ from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
-MAX_REMINDERS = 3
-
-NOTHING_RAN = (
-    "STOP — that message contained no ```python block, so nothing happened and the user is still "
-    "sitting in silence. Text outside a block is never delivered. Answer with a block and nothing "
-    "else:\n\n```python\nsay(\"…\")\n```"
-)
-NOTHING_SAID = (
-    "STOP — the blocks ran but none of them called say(), so the user received nothing. Whatever "
-    "you wrote as prose was thrown away before Telegram. Write the answer now, inside a block:\n\n"
-    "```python\nsay(\"…\")\n```\n\nIf it is long, page(...) it first and say(...) the link."
-)
-
 
 @dataclass
 class Result:
@@ -79,7 +66,6 @@ async def run(
 ) -> Result:
     result = Result()
     marked = -1
-    reminders = 0
 
     while result.steps < settings.agent_max_steps:
         if result.cost_usd >= budget_usd:
@@ -166,20 +152,7 @@ async def run(
             _ask(messages, extra)
             continue
 
-        if not result.replied and reminders < MAX_REMINDERS:
-            reminders += 1
-            recorder.note("unsafie.silent_turn", {"attempt": reminders, "blocks": result.ran})
-            logger.info(
-                "%s said nothing to the user (blocks=%s): %s", ctx.prefix, result.ran, short(text)
-            )
-            _ask(messages, NOTHING_RAN if result.ran == 0 else NOTHING_SAID)
-            continue
-
         return result
 
     logger.warning("%s hit the %s step ceiling", ctx.prefix, settings.agent_max_steps)
-    if result.replied:
-        return result
-    result.status = "failed"
-    result.error = f"stopped after {settings.agent_max_steps} steps without a reply"
     return result
