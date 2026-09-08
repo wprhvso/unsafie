@@ -1,10 +1,11 @@
+import os
 import platform
 import sys
 from importlib import metadata
 
 from unsafie_cli import help as help_pages
 from unsafie_cli import spec
-from unsafie_cli.errors import Usage
+from unsafie_cli.errors import CliError, Usage
 from unsafie_cli.output import Out
 from unsafie_cli.parser import Call
 
@@ -32,6 +33,26 @@ def version(call: Call, out: Out) -> int:
     _ = call
     out.send(payload, [f"unsafie {payload['cli']} (wire {payload['wire']}, python {payload['python']})"])
     return 0
+
+
+def update(call: Call, out: Out) -> int:
+    import shutil
+    import subprocess
+
+    spec_name = os.environ.get("UNSAFIE_CLI_SPEC") or "unsafie-cli"
+    if shutil.which("uv"):
+        line = ["uv", "tool", "install", "--force", spec_name]
+    else:
+        line = [sys.executable, "-m", "pip", "install", "--upgrade", spec_name]
+    out.line(" ".join(line))
+    done = subprocess.run(line, check=False, capture_output=True, text=True)
+    tail = (done.stdout + done.stderr).strip().splitlines()[-5:]
+    for row in tail:
+        out.line(row)
+    _ = call
+    if done.returncode != 0:
+        raise CliError(f"update failed with code {done.returncode}")
+    return version(call, out)
 
 
 def _tree() -> dict[str, list[str]]:

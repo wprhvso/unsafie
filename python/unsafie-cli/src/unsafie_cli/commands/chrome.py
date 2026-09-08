@@ -260,16 +260,25 @@ def markdown(call: Call, out: Out) -> int:
     return OK
 
 
-def _to_markdown(body: str) -> str:
-    try:
-        from bloat2md import to_markdown
-    except ImportError:
+def _converter():
+    import importlib
+
+    for module, attribute in (("bloat2md", "to_markdown"), ("llmmd", "html_to_markdown")):
         try:
-            from llmmd import html_to_markdown as to_markdown
+            found = getattr(importlib.import_module(module), attribute, None)
         except ImportError:
-            return _strip(body)
+            continue
+        if callable(found):
+            return found
+    return None
+
+
+def _to_markdown(body: str) -> str:
+    convert = _converter()
+    if convert is None:
+        return _strip(body)
     try:
-        return str(to_markdown(body))
+        return str(convert(body))
     except Exception:
         return _strip(body)
 

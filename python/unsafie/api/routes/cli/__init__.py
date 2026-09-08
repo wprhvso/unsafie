@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from unsafie.api.routes.cli.automation import router as automation_router
 from unsafie.api.routes.cli.chat import router as chat_router
 from unsafie.api.routes.cli.ci import router as ci_router
 from unsafie.api.routes.cli.github import router as github_router
@@ -16,5 +17,6 @@ cli_router.include_router(pool_router)
 cli_router.include_router(store_router)
 cli_router.include_router(github_router)
 cli_router.include_router(ci_router)
+cli_router.include_router(automation_router)
 
 __all__ = ["cli_router"]

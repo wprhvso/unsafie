@@ -133,7 +133,7 @@ def c(
     )
 
 
-READY_THROUGH = 7
+READY_THROUGH = 10
 
 GLOBAL_FLAGS: tuple[Flag, ...] = (
     _flag("--json # machine readable output"),
@@ -386,17 +386,32 @@ COMMANDS: tuple[Cmd, ...] = (
     c("fs replace", "automation", "replace exactly one occurrence", "path old new", "--all", phase=5),
     c("fs tree", "automation", "what is in a directory", "dir?", "--depth=N|2", phase=5),
     c("admin donors", "admin", "accounts that give the pool its machines", "", "--json", phase=7),
-    c("admin donor add", "admin", "add a donor token", "", "--token=TOKEN --jobs=N|20 --label=TEXT", phase=7),
-    c("admin donor test", "admin", "check a donor: rights, limits, repository", "login", phase=7),
+    c(
+        "admin donor add",
+        "admin",
+        "add a donor token",
+        "",
+        "--token=TOKEN --jobs=N|20 --label=TEXT",
+        ("unsafie admin donor add --token ghp_… --jobs 20",),
+        phase=7,
+    ),
+    c("admin donor test", "admin", "check a donor: rights, state, machines", "login", phase=7),
     c("admin donor bootstrap", "admin", "create the donor repository and seed its secrets", "login", phase=7),
     c("admin donor rotate", "admin", "rotate the worker token of a donor", "login", phase=7),
     c("admin donor disable", "admin", "stop launching new jobs on a donor", "login", "--enable", phase=7),
     c("admin donor rm", "admin", "remove a donor", "login", phase=7),
-    c("admin capacity", "admin", "idle, leased, ci, queue, waiting time", "", "--watch", phase=7),
+    c("admin capacity", "admin", "idle, leased, ci, donors, target", "", "--watch", phase=7),
     c("admin machines", "admin", "every machine in the pool", "", "--donor=LOGIN", phase=7),
     c("admin recycle", "admin", "destroy a machine now", "name", phase=7),
-    c("admin quota", "admin", "limits of a user", "user", "--machines=N --minutes=N --priority=N", phase=7),
-    c("admin ci", "admin", "pause or block the CI of a repository", "action repo", phase=8),
+    c(
+        "admin quota",
+        "admin",
+        "limits of a user; without flags it just shows them",
+        "user",
+        "--machines=N --background=N --minutes=N --machines-day=N --priority=N --block --unblock",
+        phase=7,
+    ),
+    c("admin ci", "admin", "list, pause or resume the CI of a repository", "action? repo?", phase=8),
     c("admin users", "admin", "who uses the pool and how much", "", "--busy", phase=7),
     c("serve", "internal", "become a machine of the pool", "", "--token=TOKEN --profile=NAME", phase=3, internal=True),
     c(

@@ -13,9 +13,10 @@ USER_AGENT = "unsafie-cli"
 
 
 class Api:
-    def __init__(self, base: str, token: str) -> None:
+    def __init__(self, base: str, token: str, prefix: str = "/api/v1") -> None:
         self.base = base.rstrip("/")
         self.token = token
+        self.prefix = prefix
 
     def call(
         self,
@@ -25,8 +26,8 @@ class Api:
         params: dict[str, Any] | None = None,
         timeout: float = TIMEOUT,
     ) -> Any:
-        url = f"{self.base}/api/v1{path}"
-        clean = {k: v for k, v in (params or {}).items() if v not in (None, "", False)}
+        url = f"{self.base}{self.prefix}{path}"
+        clean = {k: v for k, v in (params or {}).items() if v not in (None, "")}
         if clean:
             url = f"{url}?{urllib.parse.urlencode(clean)}"
         payload = None if body is None else json.dumps(body, ensure_ascii=False).encode()
@@ -57,7 +58,7 @@ class Api:
 
     def raw(self, method: str, path: str, data: bytes, timeout: float = TIMEOUT) -> Any:
         request = urllib.request.Request(
-            f"{self.base}/api/v1{path}", data=data, method=method.upper()
+            f"{self.base}{self.prefix}{path}", data=data, method=method.upper()
         )
         request.add_header("Authorization", f"Bearer {self.token}")
         request.add_header("User-Agent", USER_AGENT)
@@ -72,7 +73,7 @@ class Api:
         return json.loads(body) if body else None
 
     def download(self, path: str, timeout: float = TIMEOUT) -> bytes:
-        request = urllib.request.Request(f"{self.base}/api/v1{path}", method="GET")
+        request = urllib.request.Request(f"{self.base}{self.prefix}{path}", method="GET")
         request.add_header("Authorization", f"Bearer {self.token}")
         request.add_header("User-Agent", USER_AGENT)
         try:

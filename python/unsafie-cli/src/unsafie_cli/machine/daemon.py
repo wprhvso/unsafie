@@ -294,8 +294,9 @@ class Daemon:
     def _pump(self, command_id: str, process: subprocess.Popen) -> int:
         stream = process.stdout
         if stream is not None:
+            reader = getattr(stream, "read1", stream.read)
             while True:
-                chunk = stream.read1(READ_SIZE) if hasattr(stream, "read1") else stream.read(READ_SIZE)
+                chunk = reader(READ_SIZE)
                 if not chunk:
                     break
                 self._emit(wire.output(command_id, chunk.decode(errors="replace")))

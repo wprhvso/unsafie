@@ -9,11 +9,12 @@ from unsafie_cli.parser import Call
 
 
 def _size(value: int) -> str:
+    left = float(value)
     for unit in ("B", "KB", "MB", "GB"):
-        if value < 1024 or unit == "GB":
-            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
-        value /= 1024
-    return f"{value}B"
+        if left < 1024 or unit == "GB":
+            return f"{left:.0f}{unit}" if unit == "B" else f"{left:.1f}{unit}"
+        left /= 1024
+    return f"{left}B"
 
 
 def blob_put(call: Call, out: Out) -> int:

@@ -58,6 +58,46 @@ class Message(BaseModel):
     turn: str | None = None
 
 
+class Moderation(BaseModel):
+    chat_id: int | None = None
+    until: str | None = None
+    revoke: bool = False
+    undo: bool = False
+
+
+class Invite(BaseModel):
+    chat_id: int | None = None
+    name: str | None = None
+    member_limit: int | None = None
+    expires_in: str | None = None
+    join_request: bool = False
+
+
+def _until(value: str | None):
+    from datetime import UTC, datetime, timedelta
+
+    from unsafie.scheduler.when import WhenError, duration
+
+    if not value:
+        return None
+    try:
+        return datetime.now(UTC) + timedelta(seconds=duration(value))
+    except WhenError:
+        raise HTTPException(400, f"'{value}' is not a duration: use 10m, 1h, 7d") from None
+
+
+def _hit(hit) -> dict:
+    return {
+        "who": hit.who,
+        "message_id": hit.message_id,
+        "user_id": hit.user_id,
+        "name": hit.name,
+        "at": hit.when,
+        "text": hit.body,
+        "reply_to": hit.reply_to,
+    }
+
+
 class Upload(BaseModel):
     name: str
     data: str
@@ -407,6 +447,138 @@ async def contact(body: Contact, who: Chat) -> dict:
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
     return await _record(who, body.turn, sent, f"contact {body.first_name}")
+
+
+@router.get("/history/search")
+async def history_search(
+    who: Chat,
+    query: str,
+    kind: str = "any",
+    since: int | None = None,
+    until: int | None = None,
+    limit: int = 20,
+) -> dict:
+    from unsafie.database import SessionLocal
+    from unsafie.database.repositories.history import HistoryRepository
+
+    if who.bot_id is None:
+        raise HTTPException(400, "this token is not bound to a bot")
+    async with SessionLocal() as session:
+        hits, how = await HistoryRepository(session).search(
+            who.bot_id,
+            who.chat(),
+            query,
+            who=kind,
+            since=since,
+            until=until,
+            limit=max(1, min(limit, 50)),
+        )
+    return {"matched_by": how, "hits": [_hit(hit) for hit in hits]}
+
+
+@router.get("/history")
+async def history_get(
+    who: Chat, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None
+) -> dict:
+    from unsafie.database import SessionLocal
+    from unsafie.database.repositories.history import HistoryRepository
+
+    if who.bot_id is None:
+        raise HTTPException(400, "this token is not bound to a bot")
+    async with SessionLocal() as session:
+        repository = HistoryRepository(session)
+        if message_id:
+            hits = await repository.around(who.bot_id, who.chat(), message_id, max(1, min(around, 30)))
+        else:
+            hits = await repository.recent(who.bot_id, who.chat(), max(1, min(limit, 100)), before)
+    return {"hits": [_hit(hit) for hit in hits]}
+
+
+@router.get("/info")
+async def chat_info(who: Chat, chat_id: int | None = None) -> dict:
+    bot = await who.bot()
+    try:
+        found = await bot.get_chat(who.chat(chat_id))
+        members = await bot.get_chat_member_count(who.chat(chat_id))
+    except TelegramAPIError as refused:
+        raise HTTPException(502, f"telegram refused: {refused}") from None
+    return {
+        "id": found.id,
+        "type": found.type,
+        "title": found.title,
+        "username": found.username,
+        "description": found.description,
+        "members": members,
+        "pinned": found.pinned_message.message_id if found.pinned_message else None,
+    }
+
+
+@router.get("/members/{user_id}")
+async def chat_member(user_id: int, who: Chat, chat_id: int | None = None) -> dict:
+    bot = await who.bot()
+    try:
+        member = await bot.get_chat_member(who.chat(chat_id), user_id)
+    except TelegramAPIError as refused:
+        raise HTTPException(502, f"telegram refused: {refused}") from None
+    return {"user_id": user_id, "status": member.status, "member": member.model_dump(mode="json")}
+
+
+@router.post("/members/{user_id}/ban")
+async def chat_ban(user_id: int, who: Chat, body: Moderation) -> dict:
+    bot = await who.bot()
+    chat_id = who.chat(body.chat_id)
+    try:
+        if body.undo:
+            await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
+            return {"user_id": user_id, "banned": False}
+        await bot.ban_chat_member(
+            chat_id,
+            user_id,
+            until_date=_until(body.until),
+            revoke_messages=body.revoke,
+        )
+    except TelegramAPIError as refused:
+        raise HTTPException(502, f"telegram refused: {refused}") from None
+    return {"user_id": user_id, "banned": True, "until": body.until}
+
+
+@router.post("/members/{user_id}/mute")
+async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
+    from aiogram.types import ChatPermissions
+
+    bot = await who.bot()
+    allowed = ChatPermissions(
+        can_send_messages=bool(body.undo),
+        can_send_audios=bool(body.undo),
+        can_send_documents=bool(body.undo),
+        can_send_photos=bool(body.undo),
+        can_send_videos=bool(body.undo),
+        can_send_other_messages=bool(body.undo),
+        can_add_web_page_previews=bool(body.undo),
+    )
+    try:
+        await bot.restrict_chat_member(
+            who.chat(body.chat_id), user_id, permissions=allowed, until_date=_until(body.until)
+        )
+    except TelegramAPIError as refused:
+        raise HTTPException(502, f"telegram refused: {refused}") from None
+    return {"user_id": user_id, "muted": not body.undo, "until": body.until}
+
+
+@router.post("/invites")
+async def chat_invite(who: Chat, body: Invite) -> dict:
+    bot = await who.bot()
+    try:
+        link = await bot.create_chat_invite_link(
+            who.chat(body.chat_id),
+            name=body.name,
+            member_limit=body.member_limit,
+            expire_date=_until(body.expires_in),
+            creates_join_request=body.join_request,
+        )
+    except TelegramAPIError as refused:
+        raise HTTPException(502, f"telegram refused: {refused}") from None
+    return {"url": link.invite_link, "name": link.name, "expires": link.expire_date}
 
 
 @router.post("/albums")

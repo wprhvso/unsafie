@@ -7,13 +7,14 @@ from unsafie_cli.errors import Usage
 
 DEFAULT_API = "https://unsafie.com"
 
-KEYS = ("token", "api", "chat", "machine", "format")
+KEYS = ("token", "api", "chat", "machine", "format", "admin")
 ENV = {
     "token": "UNSAFIE_TOKEN",
     "api": "UNSAFIE_API",
     "chat": "UNSAFIE_CHAT",
     "machine": "UNSAFIE_MACHINE",
     "format": "UNSAFIE_FORMAT",
+    "admin": "UNSAFIE_ADMIN_TOKEN",
 }
 DEFAULTS = {"api": DEFAULT_API, "format": "text"}
 
