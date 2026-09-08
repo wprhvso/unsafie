@@ -276,6 +276,15 @@ async def resolve(user_id: int, ref: str | None) -> PoolMachine:
     return mine[0]
 
 
+async def _pick(mine: list[PoolMachine], chat_id: int | None) -> PoolMachine:
+    here = [m for m in mine if chat_id is not None and m.chat_id == chat_id] or mine
+    ranked = [(await registry.held(m.name), m) for m in here]
+    left, machine = max(ranked, key=lambda row: row[0])
+    if left:
+        logger.info("pool %s reused for the next turn, %.0fs of hold left", machine.name, left)
+    return machine
+
+
 async def ensure(
     user_id: int,
     chat_id: int | None,
@@ -284,7 +293,7 @@ async def ensure(
 ) -> PoolMachine:
     mine = await registry.of_user(user_id)
     if mine:
-        return mine[0]
+        return await _pick(mine, chat_id)
     taken = await take(user_id, chat_id, 1, turn_id=turn_id, bot_id=bot_id)
     return taken[0]
 

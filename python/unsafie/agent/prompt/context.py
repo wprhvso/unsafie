@@ -41,10 +41,13 @@ async def machines_context(ctx: Ctx) -> str:
     mine = await registry.of_user(ctx.user_id)
     counts = await registry.counted()
     if mine:
-        held = "; ".join(
-            f"{row.alias or row.name} ({(row.facts or {}).get('cpus', '?')} cpu)" for row in mine
-        )
-        head = f"Your machine: {held}"
+        parts = []
+        for row in mine:
+            left = await registry.held(row.name)
+            kept = f", held {left:.0f}s more" if left else ""
+            label = f"{row.alias or row.name} ({(row.facts or {}).get('cpus', '?')} cpu{kept})"
+            parts.append(label)
+        head = "Your machine: " + "; ".join(parts)
     else:
         head = "Your machine: none yet — the first python call takes one automatically"
     return (
