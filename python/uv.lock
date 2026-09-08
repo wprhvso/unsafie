@@ -5,7 +5,7 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "unsafie",
-    "unsafie-cli",
+    "unsafie-sdk",
     "unsafie-wire",
 ]
 
@@ -1207,7 +1207,7 @@ dependencies = [
 dev = [
     { name = "basedpyright" },
     { name = "ruff" },
-    { name = "unsafie-cli" },
+    { name = "unsafie-sdk" },
 ]
 
 [package.metadata]
@@ -1238,13 +1238,13 @@ requires-dist = [
 dev = [
     { name = "basedpyright", specifier = ">=1.39" },
     { name = "ruff", specifier = ">=0.16" },
-    { name = "unsafie-cli", editable = "unsafie-cli" },
+    { name = "unsafie-sdk", editable = "unsafie-sdk" },
 ]
 
 [[package]]
-name = "unsafie-cli"
+name = "unsafie-sdk"
 version = "0.1.0"
-source = { editable = "unsafie-cli" }
+source = { editable = "unsafie-sdk" }
 dependencies = [
     { name = "unsafie-wire" },
 ]
