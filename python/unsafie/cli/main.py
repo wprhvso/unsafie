@@ -23,6 +23,9 @@ def main(argv: list[str] | None = None) -> int:
 
     subs.add_parser("me")
 
+    p_setup = subs.add_parser("setup")
+    p_setup.add_argument("tools", nargs="*", default=[])
+
     p_stop = subs.add_parser("stop")
     p_stop.add_argument("message", nargs="?", default=None)
 
@@ -166,6 +169,11 @@ def main(argv: list[str] | None = None) -> int:
         return _out({"error": "subcommand required"}, ok=False)
 
     try:
+        if args.cmd == "setup":
+            from unsafie.machine.toolchains import TOOLCHAINS, setup
+            wanted = args.tools or list(TOOLCHAINS)
+            return _out(setup(*wanted))
+
         if args.cmd == "me":
             from unsafie.cli.client import client
             return _out(client().call("GET", "/me"))
