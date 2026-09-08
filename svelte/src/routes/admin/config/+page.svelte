@@ -42,13 +42,12 @@
   <Panel title="Multipliers">
     <div class="pad stack">
       <p class="muted small">
-        A turn costing <b>$1</b> of real Anthropic spend is charged to the user as
-        <b>{Math.round(Number(ratio) * UNITS_PER_USD).toLocaleString()}</b> units on an api_key,
-        <b>{Math.round(Number(oauth) * UNITS_PER_USD).toLocaleString()}</b> units on an oauth key
+        A turn costing <b>$1</b> of real model spend is charged to the user as
+        <b>{Math.round(Number(ratio) * UNITS_PER_USD).toLocaleString()}</b> units
         ({UNITS_PER_USD.toLocaleString()} units = $1).
       </p>
       <label class="row">
-        <span class="w">api_key ratio</span>
+        <span class="w">ratio</span>
         <input type="number" step="0.05" min="0" bind:value={ratio} disabled={busy} />
       </label>
       <label class="row">

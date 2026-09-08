@@ -20,13 +20,12 @@
     end: 'Finished'
   };
 
-  const HINT = 'Set CLAUDE_THINKING_DISPLAY=summarized to read summaries here.';
 
   const BLANK = {
     summarized: 'The API returned no summary for this block.',
-    updates: `Empty by design: display = updates returns progress notes, not the reasoning. ${HINT}`,
-    omitted: `Empty by design: display = omitted drops the reasoning. ${HINT}`,
-    off: `The request carries no thinking.display, so the reasoning comes back empty. ${HINT}`
+    updates: 'Empty by design: display = updates returns progress notes, not the reasoning.',
+    omitted: 'Empty by design: display = omitted drops the reasoning.',
+    off: 'The request carries no thinking.display, so the reasoning comes back empty.'
   };
 
   const HEADLINE = [
