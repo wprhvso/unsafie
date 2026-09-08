@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from unsafie_sdk import client as config
+from unsafie_sdk.client import save as save_config
 from unsafie_sdk.machine.repl import Repl, interrupt
 from unsafie_wire import channel as wire
 
@@ -229,7 +229,7 @@ class Daemon:
         }
         for name, value in self._environment().items():
             os.environ[name] = value
-        config.save(
+        save_config(
             {
                 "token": self.lease["token"],
                 "api": self.link.base,
