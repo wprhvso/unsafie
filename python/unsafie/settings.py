@@ -196,7 +196,7 @@ class Settings(BaseSettings):
     pool_output_ttl: float = 3600.0
     pool_job_ttl: float = 19_800.0
     pool_keeper_interval: float = 30.0
-    pool_launch_burst: int = 5
+    pool_launch_burst: int = 10
     pool_workflow: str = "unsafie.yml"
     pool_repo_name: str = "unsafie-pool"
     pool_sdk_spec: str = (
@@ -208,9 +208,6 @@ class Settings(BaseSettings):
     pool_max_blob_bytes: int = 536_870_912
     pool_max_blob_item: int = 134_217_728
     pool_boot_grace: float = 900.0
-    pool_warm_min: int = 3
-    pool_warm_max: int = 10
-    pool_warm_full: int = 0
     pool_cache_url: str = ""
     pool_vnc_port: int = 8444
     pool_desktop_ttl: float = 7_200.0
@@ -221,7 +218,7 @@ class Settings(BaseSettings):
     pool_ci_max_jobs: int = 20
     pool_ci_idle: int = 300
     pool_ci_lifetime: int = 3600
-    pool_ci_borrow: int = 2
+    pool_ci_reserve: int = 2
 
     default_timezone: str = "UTC"
     schedule_enabled: bool = True

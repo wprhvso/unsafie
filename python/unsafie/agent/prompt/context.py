@@ -10,6 +10,12 @@ from unsafie.scheduler.when import zone
 from unsafie.settings import settings
 from unsafie.ssh import binding
 
+REMINDER = (
+    "Reminder: only ```python blocks are executed and only say(), file() and page() reach the "
+    "chat. Anything you write outside a block is discarded, so do not end this turn until a "
+    "block has called say(...) with the answer."
+)
+
 
 async def time_context(session: AsyncSession, ctx: Ctx) -> str:
     user = await UserRepository(session).get(ctx.user_id)
@@ -36,15 +42,14 @@ async def machines_context(ctx: Ctx) -> str:
     counts = await registry.counted()
     if mine:
         held = "; ".join(
-            f"{row.alias or row.name} ({row.profile}, {(row.facts or {}).get('cpus', '?')} cpu)"
-            for row in mine
+            f"{row.alias or row.name} ({(row.facts or {}).get('cpus', '?')} cpu)" for row in mine
         )
         head = f"Your machine: {held}"
     else:
         head = "Your machine: none yet — the first block takes one automatically"
     return (
-        f"{head}. Pool: {counts.get('idle', 0)} free of {counts.get('total', 0)}. "
-        "A machine is single use: releasing destroys it, and its files go with it."
+        f"{head}. Pool: {counts.get('idle', 0)} free of {counts.get('total', 0)}, every machine "
+        "fully equipped. A machine is single use: releasing destroys it, and its files go with it."
     )
 
 
@@ -74,5 +79,6 @@ async def build_context(session: AsyncSession, ctx: Ctx) -> str:
         await machines_context(ctx),
         await accounts_context(ctx),
         await servers_context(ctx),
+        REMINDER,
     ]
     return "\n".join(part for part in parts if part)

@@ -52,7 +52,6 @@ def _machine(row: PoolMachine) -> dict:
         "alias": row.alias,
         "donor_id": row.donor_id,
         "run_id": row.run_id,
-        "profile": row.profile,
         "state": row.state,
         "user_id": row.user_id,
         "chat_id": row.chat_id,

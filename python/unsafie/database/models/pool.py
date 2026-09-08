@@ -75,7 +75,6 @@ class PoolMachine(Base):
         ForeignKey("pool_donors.id", ondelete="SET NULL"), nullable=True
     )
     run_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    profile: Mapped[str] = mapped_column(String(16), default="fast")
     state: Mapped[str] = mapped_column(String(16), default=MachineState.IDLE)
     user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

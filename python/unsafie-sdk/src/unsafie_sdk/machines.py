@@ -44,7 +44,6 @@ class Machine:
     name: str
     alias: str | None
     state: str
-    profile: str
     facts: dict
 
     @property
@@ -69,7 +68,6 @@ def _machine(row: dict) -> Machine:
         name=row.get("name", ""),
         alias=row.get("alias"),
         state=row.get("state", ""),
-        profile=row.get("profile", ""),
         facts=row.get("facts") or {},
     )
 

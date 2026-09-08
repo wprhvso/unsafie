@@ -49,7 +49,6 @@ def _view(machine: PoolMachine) -> dict:
         "name": machine.name,
         "alias": machine.alias,
         "state": machine.state,
-        "profile": machine.profile,
         "started_at": machine.started_at,
         "leased_at": machine.leased_at,
         "facts": machine.facts,

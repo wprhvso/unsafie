@@ -142,8 +142,8 @@ class Controller:
     async def _room(self) -> int:
         live = len(await repos.running_jobs(self.repo.id))
         idle = await registry.idle_count()
-        reserve = max(0, settings.pool_warm_min - settings.pool_ci_borrow)
-        return max(0, min(self.repo.jobs - live, max(0, idle - reserve)))
+        free = max(0, idle - settings.pool_ci_reserve)
+        return max(0, min(self.repo.jobs - live, free))
 
     async def _scale(self, assigned: int) -> None:
         live = len(await repos.running_jobs(self.repo.id))

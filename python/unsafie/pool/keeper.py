@@ -32,13 +32,6 @@ async def runs(http: GithubHTTP, donor: PoolDonor) -> list[dict]:
     return sorted(found.values(), key=lambda run: str(run["created_at"]), reverse=True)
 
 
-async def target(donor: PoolDonor) -> int:
-    idle = await registry.idle_count()
-    hungry = max(0, settings.pool_warm_min - idle)
-    keep = min(donor.jobs, max(settings.pool_warm_min, min(settings.pool_warm_max, idle + hungry)))
-    return max(keep, settings.pool_warm_min if donor.enabled else 0)
-
-
 async def reconcile(donor: PoolDonor) -> dict:
     http = GithubHTTP(donor.token)
     live = await runs(http, donor)
@@ -47,23 +40,20 @@ async def reconcile(donor: PoolDonor) -> dict:
         await http.request("POST", f"/repos/{donor.repo}/actions/runs/{run['id']}/cancel")
         logger.info("pool donor %s: run %s retired at %.0fs", donor.login, run["id"], _age(run))
     kept = [run for run in live if run not in old]
-    wanted = min(donor.jobs, await target(donor))
-    missing = max(0, wanted - len(kept))
+    missing = max(0, donor.jobs - len(kept))
     launched = 0
     if missing:
         repo = await http.request("GET", f"/repos/{donor.repo}")
         branch = repo.get("default_branch") or "main"
-        full_short = max(0, settings.pool_warm_full - await registry.idle_count("full"))
-        for index in range(min(missing, settings.pool_launch_burst)):
-            profile = "full" if index < full_short else "fast"
+        for _ in range(min(missing, settings.pool_launch_burst)):
             await http.request(
                 "POST",
                 f"/repos/{donor.repo}/actions/workflows/{donor.workflow}/dispatches",
-                json_body={"ref": branch, "inputs": {"profile": profile}},
+                json_body={"ref": branch},
             )
             launched += 1
     await donors.note(donor.id, "ready")
-    return {"live": len(kept), "retired": len(old), "launched": launched, "target": wanted}
+    return {"live": len(kept), "retired": len(old), "launched": launched, "target": donor.jobs}
 
 
 class Keeper(Loop):

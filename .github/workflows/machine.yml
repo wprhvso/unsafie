@@ -2,13 +2,6 @@ name: unsafie
 
 on:
   workflow_dispatch:
-    inputs:
-      profile:
-        description: fast keeps the boot under a minute, full brings the desktop with it
-        type: choice
-        options: [fast, full]
-        default: fast
-        required: false
 
 jobs:
   machine:
@@ -50,12 +43,11 @@ jobs:
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
       - name: bring the desktop along
-        if: inputs.profile == 'full'
         run: |
           sudo -E env "PATH=$PATH" python3 -c "
           from unsafie_sdk.packages import setup
           print(setup('xvfb', 'kasmvnc', 'tools'))
-          " || echo "::warning::the full profile came up short, the machine still serves"
+          " || echo "::warning::the desktop came up short, the machine still serves"
 
       - name: serve
         env:
@@ -64,4 +56,4 @@ jobs:
           UNSAFIE_CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
         run: |
           sudo -E env "PATH=$PATH" "UNSAFIE_BOOT_STARTED=$UNSAFIE_BOOT_STARTED" \
-            "$(command -v unsafie-machine)" serve --profile "${{ inputs.profile || 'fast' }}"
+            "$(command -v unsafie-machine)" serve

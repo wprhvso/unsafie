@@ -16,7 +16,6 @@ router = APIRouter(prefix="/api/v1/machines", tags=["machines"])
 
 class Registration(BaseModel):
     run_id: int | None = None
-    profile: str = "fast"
     facts: dict = {}
     boot_seconds: float | None = None
 
@@ -50,9 +49,7 @@ async def register(
     donor = await donors.by_worker_token(x_unsafie_worker)
     if donor is None or not donor.enabled:
         raise HTTPException(401, "unknown or disabled donor")
-    machine = await registry.register(
-        donor.id, body.run_id, body.profile, body.facts, body.boot_seconds
-    )
+    machine = await registry.register(donor.id, body.run_id, body.facts, body.boot_seconds)
     _, raw = await tokens.issue(
         user_id=None,
         name=f"machine {machine.name}",

@@ -7,7 +7,7 @@ from unsafie_sdk.machine.daemon import serve
 
 USAGE = """unsafie-machine — what a pool machine runs for itself
 
-  unsafie-machine serve [--profile fast|full]   become a machine of the pool
+  unsafie-machine serve                         become a machine of the pool
   unsafie-machine put <key> <file>              store a file under a key
   unsafie-machine get <key> <file>              write a stored file here
   unsafie-machine ci-runner --jit <config>      become a github runner for one job
@@ -37,7 +37,7 @@ def main() -> int:
             sys.stderr.write("no worker token: set UNSAFIE_WORKER_TOKEN\n")
             return 2
         api = _flag(argv, "--api") or setting("api") or DEFAULT_API
-        return serve(api, token, _flag(argv, "--profile", "fast"))
+        return serve(api, token)
     if action in ("put", "get"):
         from unsafie_sdk import store
 

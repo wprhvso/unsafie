@@ -106,7 +106,7 @@
         <Stat label="ci" value={capacity.data.machines.ci ?? 0} />
         <Stat label="alive" value={capacity.data.machines.total ?? 0} />
         <Stat label="donors" value={capacity.data.donors} />
-        <Stat label="target jobs" value={capacity.data.target_jobs} />
+        <Stat label="target jobs" value={capacity.data.target_jobs} hint="always fully hot" />
       </div>
     </Loader>
   </Panel>
@@ -159,14 +159,13 @@
   <Panel title="Machines">
     <Loader state={machines} empty="No machines alive.">
       <table>
-        <thead><tr><th>machine</th><th>alias</th><th>state</th><th>profile</th><th>user</th><th>boot</th><th>started</th><th></th></tr></thead>
+        <thead><tr><th>machine</th><th>alias</th><th>state</th><th>user</th><th>boot</th><th>started</th><th></th></tr></thead>
         <tbody>
           {#each machines.data.machines as machine (machine.name)}
             <tr>
               <td class="mono small">{machine.name}</td>
               <td>{machine.alias ?? '—'}</td>
               <td><Badge tone={tone(machine.state)}>{machine.state}</Badge></td>
-              <td class="small">{machine.profile}</td>
               <td class="mono">
                 {#if machine.user_id}<a href="/admin/users/{machine.user_id}">{machine.user_id}</a>{:else}—{/if}
               </td>

@@ -18,7 +18,7 @@ def _machine_line(machine) -> str:
     where = machine.alias or machine.name
     facts = machine.facts or {}
     size = f"{facts.get('cpus', '?')} cpu, {facts.get('disk_gb', '?')} GB"
-    return f"· `{where}` · {machine.state} · {machine.profile} · {size}"
+    return f"· `{where}` · {machine.state} · {size}"
 
 
 async def _status(user_id: int, locale: str) -> str:

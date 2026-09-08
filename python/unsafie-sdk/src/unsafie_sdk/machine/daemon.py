@@ -89,9 +89,8 @@ class Job:
 
 
 class Daemon:
-    def __init__(self, link: Link, profile: str = "fast", workdir: Path | None = None) -> None:
+    def __init__(self, link: Link, workdir: Path | None = None) -> None:
         self.link = link
-        self.profile = profile
         self.workdir = workdir or Path.home() / "work"
         self.name = ""
         self.poll_timeout = 25.0
@@ -129,7 +128,6 @@ class Daemon:
             "/machines/register",
             body={
                 "run_id": int(run_id) if run_id and run_id.isdigit() else None,
-                "profile": self.profile,
                 "facts": self.facts(),
                 "boot_seconds": boot,
             },
@@ -477,5 +475,5 @@ class Daemon:
         _log(f"gone: {self.reason}")
 
 
-def serve(api: str, worker_token: str, profile: str = "fast") -> int:
-    return Daemon(Link(api, worker_token), profile).serve()
+def serve(api: str, worker_token: str) -> int:
+    return Daemon(Link(api, worker_token)).serve()
