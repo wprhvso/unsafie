@@ -20,7 +20,7 @@
   <div class="stack">
     <Panel title="Details">
       <div class="pad row wide">
-        <span><span class="muted">status</span> <Badge tone={t.status === 'failed' ? 'bad' : 'ok'}>{t.status}</Badge></span>
+        <span><span class="muted">status</span> <Badge tone={t.status === 'failed' ? 'bad' : t.status === 'cancelled' ? 'warn' : 'ok'}>{t.status}</Badge></span>
         <span><span class="muted">chat</span> <a href="/admin/chats/{t.bot_id}/{t.chat_id}" class="mono">{t.chat_id}</a></span>
         <span><span class="muted">user</span> <a href="/admin/users/{t.user_id}" class="mono">{t.user_id}</a></span>
         <span><span class="muted">steps</span> {t.num_turns}</span>

@@ -15,7 +15,7 @@
   const move = (n) => { offset = n; turns.reload(); };
   onMount(() => refreshOn(['turn.*'], () => turns.reload(), 2000));
 
-  const tone = (s) => (s === 'failed' ? 'bad' : s === 'running' ? 'warn' : 'ok');
+  const tone = (s) => (s === 'failed' ? 'bad' : s === 'running' || s === 'cancelled' ? 'warn' : 'ok');
 </script>
 
 <svelte:head><title>unsafie — turns</title></svelte:head>
@@ -28,6 +28,7 @@
       <option value="running">running</option>
       <option value="done">done</option>
       <option value="failed">failed</option>
+      <option value="cancelled">cancelled</option>
     </select>
   {/snippet}
 

@@ -14,6 +14,7 @@ class TurnStatus(StrEnum):
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class Turn(Base):

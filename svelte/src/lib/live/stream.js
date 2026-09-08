@@ -2,7 +2,7 @@ import { ApiError, api } from '$lib/api.js';
 
 const RETRY_MIN = 800;
 const RETRY_MAX = 15000;
-const OVER = ['done', 'failed'];
+const OVER = ['done', 'failed', 'cancelled'];
 
 export function watch(token, { onSnapshot, onFrame, onStatus, onGap } = {}) {
   let source = null;

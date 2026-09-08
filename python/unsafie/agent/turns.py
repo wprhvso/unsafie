@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from unsafie import cluster
-from unsafie.agent import queue
+from unsafie.agent import cancel, queue
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
@@ -102,25 +102,40 @@ async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | 
         return leftover
 
 
-async def _beat(turn_id: UUID) -> None:
+async def _beat(turn_id: UUID, owner: asyncio.Task) -> None:
     while True:
         await asyncio.sleep(settings.turn_heartbeat)
         try:
             async with SessionLocal() as session:
                 await TurnRepository(session).beat(turn_id)
+            if await cancel.asked(turn_id):
+                logger.info("turn=%s was asked to stop, cancelling it here", turn_id)
+                owner.cancel()
+                return
         except asyncio.CancelledError:
             raise
         except Exception:
             logger.warning("turn=%s heartbeat failed", turn_id, exc_info=True)
 
 
-_here: set[UUID] = set()
+_here: dict[UUID, asyncio.Task] = {}
 _idle = asyncio.Event()
 _idle.set()
 
 
 def busy() -> list[UUID]:
     return sorted(_here)
+
+
+async def stop(turn_id: UUID) -> None:
+    """Stop a turn: instantly if it runs here, through redis if it runs elsewhere."""
+    await queue.clear(turn_id)
+    task = _here.get(turn_id)
+    if task is not None:
+        logger.info("turn=%s stopped on this instance", turn_id)
+        task.cancel()
+        return
+    await cancel.ask(turn_id)
 
 
 async def drain(grace: float) -> list[UUID]:
@@ -134,15 +149,18 @@ async def drain(grace: float) -> list[UUID]:
 
 @contextlib.asynccontextmanager
 async def alive(turn_id: UUID) -> AsyncIterator[None]:
-    _here.add(turn_id)
+    owner = asyncio.current_task()
+    assert owner is not None
+    _here[turn_id] = owner
     _idle.clear()
-    task = asyncio.create_task(_beat(turn_id), name=f"heartbeat:{turn_id}")
+    await cancel.clear(turn_id)
+    task = asyncio.create_task(_beat(turn_id, owner), name=f"heartbeat:{turn_id}")
     try:
         yield
     finally:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
-        _here.discard(turn_id)
+        _here.pop(turn_id, None)
         if not _here:
             _idle.set()

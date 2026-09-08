@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -11,7 +12,17 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message
 
 from unsafie import events, telemetry
-from unsafie.agent import billing, credentials, live, loop, queue, request, segments, turns
+from unsafie.agent import (
+    billing,
+    cancel,
+    credentials,
+    live,
+    loop,
+    queue,
+    request,
+    segments,
+    turns,
+)
 from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.request import DEFAULT_EFFORT
@@ -434,6 +445,15 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                         logger.info(
                             "%s re-running with messages that arrived after the reply", prefix
                         )
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
+            status = TurnStatus.CANCELLED
+            note = "stopped by the user"
+            logger.info("%s stopped by the user", prefix)
+            await queue.clear(turn.id)
+            await notify(bot, turn, t("agent-stopped", locale))
         except Exception as e:
             telemetry.fail(turn_span, e)
             logger.exception("%s turn crashed", prefix)
@@ -441,6 +461,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             note = "crashed"
             await notify(bot, turn, t("agent-failure", locale))
         finally:
+            await cancel.clear(turn.id)
             await turns.seal(turn.id)
             await segments.save(turn, messages[base:], snapshot)
             async with SessionLocal() as session:
