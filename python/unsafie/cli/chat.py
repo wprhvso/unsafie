@@ -1,10 +1,11 @@
 import base64
+import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
-from unsafie_sdk.client import client, setting
-from unsafie_sdk.errors import UnsafieError
+from unsafie.cli.client import client, setting
 from unsafie_wire import markers
 
 MEDIA = ("document", "photo", "video", "audio", "voice", "animation", "sticker")
@@ -29,9 +30,6 @@ def send(
     silent: bool = False,
     chat: int | str | None = None,
 ) -> dict:
-    """Send a markdown message to the chat. Returns {"message_ids": [...]}."""
-    import json
-
     body = {
         "text": text,
         "chat_id": _chat(chat),
@@ -41,7 +39,8 @@ def send(
         "turn": _turn(),
     }
     res = client().call("POST", "/chat/messages", body)
-    print(markers.sent(), flush=True)
+    sys.stderr.write(markers.sent() + "\n")
+    sys.stderr.flush()
     return res
 
 
@@ -54,18 +53,17 @@ def send_file(
     silent: bool = False,
     chat: int | str | None = None,
 ) -> dict:
-    """Send a file to the chat. Accepts a path or raw bytes; kind picks how Telegram shows it."""
     if isinstance(path, bytes):
         data = path
         filename = name or "file.bin"
     else:
         target = Path(path)
         if not target.is_file():
-            raise UnsafieError(f"no file at {target}")
+            raise ValueError(f"no file at {target}")
         data = target.read_bytes()
         filename = name or target.name
     if kind not in MEDIA:
-        raise UnsafieError(f"kind must be one of {', '.join(MEDIA)}")
+        raise ValueError(f"kind must be one of {', '.join(MEDIA)}")
     body = {
         "name": filename,
         "data": base64.b64encode(data).decode(),
@@ -76,19 +74,16 @@ def send_file(
         "turn": _turn(),
     }
     res = client().call("POST", "/chat/files", body)
-    print(markers.sent(), flush=True)
+    sys.stderr.write(markers.sent() + "\n")
+    sys.stderr.flush()
     return res
 
 
 def send_photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs) -> dict:
-    """Send an image as a photo."""
     return send_file(path, caption=caption, kind="photo", **kwargs)
 
 
 def edit(message_id: int, text: str, *, buttons: Any = None) -> dict:
-    """Replace the text of a message the bot sent."""
-    import json
-
     body = {
         "text": text,
         "buttons": json.dumps(buttons, ensure_ascii=False) if buttons is not None else None,
@@ -97,38 +92,26 @@ def edit(message_id: int, text: str, *, buttons: Any = None) -> dict:
 
 
 def delete(*message_ids: int) -> dict:
-    """Delete messages by id."""
     last: dict = {}
     for message_id in message_ids:
         last = client().call("DELETE", f"/chat/messages/{message_id}")
-    return last
+    return last or {"deleted": list(message_ids)}
 
 
 def react(message_id: int, emoji: str = "👍", *, big: bool = False) -> dict:
-    """Put a reaction on a message; an empty emoji removes it."""
     return client().call("POST", f"/chat/reactions/{message_id}", {"emoji": emoji, "big": big})
 
 
-def pin(message_id: int, *, silent: bool = True) -> dict:
-    """Pin a message."""
-    return client().call("POST", f"/chat/pins/{message_id}", {"silent": silent, "unpin": False})
+def pin(message_id: int, *, unpin: bool = False, silent: bool = False) -> dict:
+    return client().call("POST", f"/chat/pins/{message_id}", {"silent": silent, "unpin": unpin})
 
 
-def history(query: str | None = None, *, limit: int = 20, since: str | None = None, **kwargs):
-    """Search this chat, or read the last messages when no query is given."""
+def history(query: str | None = None, *, limit: int = 20, since: str | None = None, **kwargs) -> dict:
     if query:
         params = {"query": query, "limit": limit, "since": since, **kwargs}
-        return client().call("GET", "/chat/history/search", params=params).get("hits", [])
-    return client().call("GET", "/chat/history", params={"limit": limit, **kwargs}).get("hits", [])
+        return client().call("GET", "/chat/history/search", params=params)
+    return client().call("GET", "/chat/history", params={"limit": limit, **kwargs})
 
 
 def info(chat: int | str | None = None) -> dict:
-    """Type, title, description, member count and pinned message of the chat."""
     return client().call("GET", "/chat/info", params={"chat_id": _chat(chat)})
-
-
-def stop(message: str | None = None) -> None:
-    """Conclude the turn immediately."""
-    from unsafie_sdk.stop import stop as _stop
-
-    _stop(message)

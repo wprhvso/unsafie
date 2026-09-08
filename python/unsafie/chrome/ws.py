@@ -5,6 +5,7 @@ import secrets
 import socket
 import struct
 import urllib.parse
+import urllib.request
 
 TEXT = 0x1
 BINARY = 0x2
@@ -35,7 +36,6 @@ class WebSocket:
         raw = socket.create_connection((host, port), timeout=timeout)
         if secure:
             import ssl
-
             raw = ssl.create_default_context().wrap_socket(raw, server_hostname=host)
         self.sock = raw
         self.sock.settimeout(timeout)
@@ -148,12 +148,6 @@ class WebSocket:
         return taken
 
     def close(self) -> None:
-        """Close, and make sure a read blocked in another thread comes back.
-
-        A plain close() only drops this reference: a thread already inside recv keeps
-        waiting on the kernel. shutdown() is what wakes it, and that is the only way
-        to unstick a block that hung on a browser that stopped talking.
-        """
         try:
             self.sock.settimeout(GOODBYE)
             self.sock.sendall(bytes([FIN | CLOSE, MASK | 0]) + os.urandom(4))
@@ -170,7 +164,5 @@ class WebSocket:
 
 
 def json_get(url: str, timeout: float = 10.0) -> object:
-    import urllib.request
-
     with urllib.request.urlopen(url, timeout=timeout) as answer:
         return json.loads(answer.read())

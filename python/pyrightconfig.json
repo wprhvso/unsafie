@@ -1,5 +1,5 @@
 {
-  "include": ["unsafie-sdk/src", "unsafie-wire/src"],
+  "include": ["unsafie", "unsafie-wire/src"],
   "exclude": ["**/__pycache__", "**/.venv"],
   "pythonVersion": "3.14",
   "typeCheckingMode": "standard",

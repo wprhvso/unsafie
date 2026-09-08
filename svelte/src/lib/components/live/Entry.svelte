@@ -80,8 +80,8 @@
     <div class="card">
       <button class="head" onclick={toggle} aria-expanded={open}>
         <span class="caret" class:open>▸</span>
-        <span class="title mono">Python [#{item.index}]</span>
-        <span class="machine-tag mono">{item.machine || 'sandbox'}</span>
+        <span class="title mono">Nu [#{item.index}]</span>
+        <span class="machine-tag mono">{item.machine || 'local'}</span>
         <span class="spacer"></span>
         <span class="status-tag {item.status}">
           {item.status === 'running' ? 'running…' : item.status === 'ok' ? 'ok' : `exit ${item.exit_code ?? 1}`}
@@ -92,16 +92,14 @@
         <time class="muted tiny nowrap">{clock(item.at)}</time>
       </button>
 
-      <!-- Блок с исходным кодом Python -->
       <div class="code-box">
         <div class="box-head">
-          <span class="muted tiny">Python Code</span>
-          <Copy text={item.code} label="Copy Python Code" />
+          <span class="muted tiny">Nushell Code</span>
+          <Copy text={item.code} label="Copy Nushell Code" />
         </div>
         <pre class="source"><code>{item.code}</code></pre>
       </div>
 
-      <!-- Консольный вывод REPL (stdout / stderr) -->
       {#if item.output || item.error || item.images?.length}
         <div class="output-box">
           <div class="box-head">

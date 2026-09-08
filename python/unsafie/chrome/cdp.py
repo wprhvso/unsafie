@@ -3,7 +3,7 @@ import threading
 import time
 from typing import Any
 
-from unsafie_sdk.chrome.ws import WebSocket, WsError
+from unsafie.chrome.ws import WebSocket, WsError
 
 
 class CdpError(RuntimeError):

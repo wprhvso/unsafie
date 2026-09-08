@@ -2,7 +2,7 @@ import json
 import time
 from typing import Any
 
-from unsafie_sdk.chrome.cdp import Cdp, CdpError
+from unsafie.chrome.cdp import Cdp, CdpError
 
 READY = "document.readyState === 'complete'"
 POLL = 0.2
@@ -224,7 +224,6 @@ def html_of(cdp: Cdp, selector: str | None) -> str:
 
 def screenshot(cdp: Cdp, full: bool = False) -> bytes:
     import base64
-
     params: dict[str, Any] = {"format": "png"}
     if full:
         params["captureBeyondViewport"] = True

@@ -7,9 +7,9 @@ import subprocess
 import time
 from pathlib import Path
 
-from unsafie_sdk.chrome.cdp import Cdp, CdpError
-from unsafie_sdk.chrome.ws import json_get
-from unsafie_sdk.chrome import vnc
+from unsafie.chrome import vnc
+from unsafie.chrome.cdp import Cdp, CdpError
+from unsafie.chrome.ws import json_get
 
 CANDIDATES = (
     "google-chrome",
@@ -41,9 +41,7 @@ def binary() -> str:
         found = shutil.which(name)
         if found:
             return found
-    raise BrowserError(
-        "no chrome on this machine; install it with `unsafie setup chrome`"
-    )
+    raise BrowserError("no chrome on this machine")
 
 
 def state_dir() -> Path:
@@ -66,7 +64,6 @@ def _free_port() -> int:
 
 
 def _display(size: str) -> tuple[str, subprocess.Popen | None]:
-    """A display for Chrome, with a VNC server watching it from birth."""
     return vnc.start_display(size)
 
 
@@ -156,30 +153,6 @@ def new_page(port: int, url: str = "about:blank") -> str | None:
     if isinstance(created, dict):
         return str(created.get("webSocketDebuggerUrl") or "")
     return None
-
-
-def json_list(port: int) -> list[dict]:
-    try:
-        listing = json_get(f"http://127.0.0.1:{port}/json/list", timeout=5.0)
-    except Exception:
-        return []
-    if not isinstance(listing, list):
-        return []
-    return [item for item in listing if item.get("type") == "page"]
-
-
-def close_page(port: int, target_id: str) -> None:
-    try:
-        json_get(f"http://127.0.0.1:{port}/json/close/{target_id}", timeout=5.0)
-    except Exception:
-        return
-
-
-def activate_page(port: int, target_id: str) -> None:
-    try:
-        json_get(f"http://127.0.0.1:{port}/json/activate/{target_id}", timeout=5.0)
-    except Exception:
-        return
 
 
 def stop(state: dict) -> None:

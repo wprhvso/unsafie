@@ -1,15 +1,17 @@
 import asyncio
 import contextlib
 import logging
+import os
+import shutil
 import time
 from dataclasses import dataclass, field
 
+from unsafie import tokens
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
-from unsafie.errors import OpsError
 from unsafie.log import short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
-from unsafie.pool import blobs, channel, leases
+from unsafie.pool import blobs
 from unsafie.settings import settings
 from unsafie_wire import markers
 
@@ -24,7 +26,7 @@ class Block:
     index: int
     code: str
     started_at: float = field(default_factory=time.monotonic)
-    machine: str = ""
+    machine: str = "local"
     exit_code: int | None = None
     output: str = ""
     seconds: float = 0.0
@@ -49,7 +51,7 @@ class Block:
         return lines[-1][:REASON_LIMIT] if lines else ""
 
     def heading(self) -> str:
-        where = self.machine or "no machine"
+        where = self.machine or "local"
         if self.error:
             return f"[block {self.index}] {where}: {self.error}"
         if self.exit_code is None:
@@ -57,7 +59,7 @@ class Block:
         if self.ok:
             return f"[block {self.index}] {where} · ok in {self.seconds:.1f}s"
         tail = self.reason()
-        head = f"[block {self.index}] {where} · raised in {self.seconds:.1f}s"
+        head = f"[block {self.index}] {where} · exit {self.exit_code} in {self.seconds:.1f}s"
         return f"{head}: {tail}" if tail else head
 
 
@@ -68,6 +70,7 @@ class Runner:
         self.blocks: list[Block] = []
         self.lock = asyncio.Lock()
         self.tasks: set[asyncio.Task] = set()
+        self._cli_token: str | None = None
 
     @property
     def count(self) -> int:
@@ -77,13 +80,24 @@ class Runner:
     def stopped(self) -> bool:
         return any(block.stopped for block in self.blocks)
 
+    async def _ensure_token(self) -> str:
+        if self._cli_token is None:
+            _, self._cli_token = await tokens.issue(
+                user_id=self.ctx.user_id,
+                bot_id=self.ctx.bot_id,
+                chat_id=self.ctx.chat_id,
+                name=f"agent-{self.ctx.turn_id}",
+                hours=2.0,
+            )
+        return self._cli_token
+
     def start(self, code: str) -> Block:
         index = len(self.blocks) + 1
         block = Block(index=index, code=code)
         self.blocks.append(block)
-        self.recorder.code_started(index, code)
+        self.recorder.code_started(index, code, "local")
         task = asyncio.create_task(
-            self._run(block), name=f"python:{self.ctx.turn_id}:{block.index}"
+            self._run(block), name=f"nu:{self.ctx.turn_id}:{block.index}"
         )
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
@@ -95,10 +109,9 @@ class Runner:
             await asyncio.sleep(NAG_EVERY)
             waited += NAG_EVERY
             logger.warning(
-                "%s python block %s on %s has been running for %.0fs",
+                "%s nushell block %s has been running for %.0fs",
                 self.ctx.prefix,
                 block.index,
-                block.machine or "-",
                 waited,
             )
             live.emit(
@@ -107,9 +120,9 @@ class Runner:
                 name="unsafie.block_slow",
                 attributes={
                     "index": block.index,
-                    "machine": block.machine,
+                    "machine": "local",
                     "seconds": int(waited),
-                    "timeout": settings.pool_block_timeout,
+                    "timeout": settings.agent_block_timeout,
                 },
             )
 
@@ -120,27 +133,47 @@ class Runner:
                 block.seconds = time.monotonic() - block.started_at
                 self._finished(block)
                 return
-            try:
-                machine = await leases.ensure(
-                    self.ctx.user_id, self.ctx.chat_id, self.ctx.turn_id, self.ctx.bot_id
-                )
-            except OpsError as refused:
-                block.error = str(refused)
-                block.seconds = time.monotonic() - block.started_at
-                self._finished(block)
-                return
-            block.machine = machine.alias or machine.name
+            token = await self._ensure_token()
+            env = dict(os.environ)
+            env["UNSAFIE_API"] = settings.public_base_url or f"http://{settings.host}:{settings.port}"
+            env["UNSAFIE_TOKEN"] = token
+            env["UNSAFIE_CHAT"] = str(self.ctx.chat_id)
+            env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
             watch = asyncio.create_task(
-                self._nag(block), name=f"python-slow:{self.ctx.turn_id}:{block.index}"
+                self._nag(block), name=f"nu-slow:{self.ctx.turn_id}:{block.index}"
             )
+            nu_bin = shutil.which("nu") or "nu"
+            started = time.monotonic()
             try:
-                result = await channel.run_python(
-                    machine.name,
+                proc = await asyncio.create_subprocess_exec(
+                    nu_bin,
+                    "-c",
                     block.code,
-                    user_id=self.ctx.user_id,
-                    turn_id=self.ctx.turn_id,
-                    timeout=settings.pool_block_timeout,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
                 )
+                raw_out, raw_err = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=settings.agent_block_timeout,
+                )
+                combined = (
+                    raw_out.decode("utf-8", "replace")
+                    + ("\n" + raw_err.decode("utf-8", "replace") if raw_err else "")
+                )
+                block.exit_code = proc.returncode
+            except TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
+                block.exit_code = 124
+                combined = ""
+            except FileNotFoundError:
+                block.error = "nushell executable 'nu' not found"
+                block.exit_code = 127
+                combined = ""
             except asyncio.CancelledError:
                 block.error = "stopped by the user"
                 block.seconds = time.monotonic() - block.started_at
@@ -149,18 +182,21 @@ class Runner:
             except Exception as broken:
                 block.error = f"{type(broken).__name__}: {broken}"
                 block.seconds = time.monotonic() - block.started_at
-                logger.exception("%s python block %s could not run", self.ctx.prefix, block.index)
+                logger.exception("%s nushell block %s could not run", self.ctx.prefix, block.index)
                 self._finished(block)
                 return
             finally:
                 watch.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await watch
-            body, found = markers.split(result.output)
+
+            if len(combined) > settings.pool_max_output:
+                combined = combined[: settings.pool_max_output]
+                block.truncated = True
+
+            body, found = markers.split(combined)
             block.output = body
-            block.exit_code = result.exit_code
-            block.seconds = result.seconds
-            block.truncated = result.truncated
+            block.seconds = time.monotonic() - started
             await self._decorate(block, found)
             self._finished(block)
 
@@ -218,7 +254,7 @@ class Runner:
     def _finished(self, block: Block) -> None:
         self.recorder.code_finished(
             index=block.index,
-            machine=block.machine or "-",
+            machine="local",
             exit_code=block.exit_code,
             output=self._body(block, limit=8000),
             seconds=block.seconds,
@@ -226,10 +262,9 @@ class Runner:
             images=block.images,
         )
         logger.info(
-            "%s python block %s on %s: %s",
+            "%s nushell block %s: %s",
             self.ctx.prefix,
             block.index,
-            block.machine or "-",
             block.error or f"exit={block.exit_code} in {block.seconds:.1f}s",
         )
 

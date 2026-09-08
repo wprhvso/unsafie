@@ -7,18 +7,19 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from unsafie_sdk.errors import LimitReached, NotAuthorized, NotFound, Refused, UnsafieError
-
-DEFAULT_API = "https://unsafie.com"
+DEFAULT_API = "http://127.0.0.1:8000"
 TIMEOUT = 120.0
-USER_AGENT = "unsafie-sdk"
-KEYS = ("token", "api", "chat", "machine")
+USER_AGENT = "unsafie-cli"
+KEYS = ("token", "api", "chat")
 ENV = {
     "token": "UNSAFIE_TOKEN",
     "api": "UNSAFIE_API",
     "chat": "UNSAFIE_CHAT",
-    "machine": "UNSAFIE_MACHINE",
 }
+
+
+class CliError(Exception):
+    pass
 
 
 def config_path() -> Path:
@@ -40,22 +41,13 @@ def _file() -> dict[str, str]:
 def setting(key: str, override: str | None = None) -> str | None:
     if override:
         return override
-    found = os.environ.get(ENV[key])
+    found = os.environ.get(ENV.get(key, ""))
     if found:
         return found
     stored = _file().get(key)
     if stored:
         return stored
     return DEFAULT_API if key == "api" else None
-
-
-def save(values: dict[str, str]) -> Path:
-    target = config_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    body = "".join(f'{key} = "{values[key]}"\n' for key in KEYS if values.get(key))
-    target.write_text(body, encoding="utf-8")
-    target.chmod(0o600)
-    return target
 
 
 class Client:
@@ -68,10 +60,7 @@ class Client:
     def token(self) -> str:
         found = setting("token", self._token)
         if not found:
-            raise NotAuthorized(
-                "no token",
-                "on a machine it arrives in UNSAFIE_TOKEN; a human gets one with /auth in Telegram",
-            )
+            raise CliError("no token provided: set UNSAFIE_TOKEN")
         return found
 
     def call(
@@ -97,11 +86,15 @@ class Client:
             with urllib.request.urlopen(request, timeout=timeout) as answer:
                 data = answer.read()
         except urllib.error.HTTPError as refused:
-            raise _refusal(refused) from None
-        except urllib.error.URLError as unreachable:
-            raise UnsafieError(f"{self.api} is not answering: {unreachable.reason}") from None
-        except TimeoutError:
-            raise UnsafieError(f"{self.api} did not answer in {timeout:.0f}s") from None
+            err_body = refused.read()
+            try:
+                parsed = json.loads(err_body)
+                detail = parsed.get("detail", str(parsed))
+            except Exception:
+                detail = err_body.decode(errors="replace") or str(refused)
+            raise CliError(f"{refused.code}: {detail}") from None
+        except Exception as e:
+            raise CliError(str(e)) from None
         if raw:
             return data
         if not data:
@@ -112,7 +105,8 @@ class Client:
             return data.decode(errors="replace")
 
     def upload(self, path: str, data: bytes, timeout: float = TIMEOUT) -> Any:
-        request = urllib.request.Request(f"{self.api}{self.prefix}{path}", data=data, method="PUT")
+        url = f"{self.api}{self.prefix}{path}"
+        request = urllib.request.Request(url, data=data, method="PUT")
         request.add_header("Authorization", f"Bearer {self.token}")
         request.add_header("User-Agent", USER_AGENT)
         request.add_header("Content-Type", "application/octet-stream")
@@ -120,29 +114,10 @@ class Client:
             with urllib.request.urlopen(request, timeout=timeout) as answer:
                 body = answer.read()
         except urllib.error.HTTPError as refused:
-            raise _refusal(refused) from None
+            raise CliError(f"{refused.code}: {refused.read().decode(errors='replace')}") from None
+        except Exception as e:
+            raise CliError(str(e)) from None
         return json.loads(body) if body else None
-
-
-def _refusal(error: urllib.error.HTTPError) -> UnsafieError:
-    try:
-        parsed = json.loads(error.read() or b"{}")
-    except ValueError:
-        parsed = None
-    detail = parsed.get("detail") if isinstance(parsed, dict) else None
-    if isinstance(detail, list):
-        message = "; ".join(
-            str(item.get("msg", item)) if isinstance(item, dict) else str(item) for item in detail
-        )
-    else:
-        message = str(detail or error.reason or "refused")
-    if error.code in (401, 403):
-        return NotAuthorized(message)
-    if error.code == 404:
-        return NotFound(message)
-    if error.code in (409, 429):
-        return LimitReached(message)
-    return Refused(f"{error.code}: {message}")
 
 
 _shared: Client | None = None
@@ -153,4 +128,3 @@ def client() -> Client:
     if _shared is None:
         _shared = Client()
     return _shared
-
