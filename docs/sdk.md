@@ -6,7 +6,7 @@
 ```bash
 uv tool install unsafie-sdk        # или pip install unsafie-sdk
 export UNSAFIE_TOKEN=uns_…         # токен выдаёт бот командой /auth
-python -c "import unsafie_sdk as u; u.say('привет')"
+python -c "import unsafie_sdk as u; u.chat.send('привет')"
 ```
 
 ## Как этим пользуется агент
@@ -14,7 +14,7 @@ python -c "import unsafie_sdk as u; u.say('привет')"
 У агента два инструмента: `python` и веб-поиск. У `python` одно поле — `code`:
 
 ```json
-{"name": "python", "input": {"code": "run(\"git clone https://github.com/wprhvso/unsafie.git\")\nrun(\"cd unsafie/python && uv run pytest -q\").output[-2000:]"}}
+{"name": "python", "input": {"code": "machines.run(\"git clone https://github.com/wprhvso/unsafie.git\")\nmachines.run(\"cd unsafie/python && uv run pytest -q\").output[-2000:]"}}
 ```
 
 Вызов исполняется в тот момент, когда дописаны его аргументы, — не дожидаясь конца ответа. Пока
@@ -24,7 +24,7 @@ python -c "import unsafie_sdk as u; u.say('привет')"
 картинками.
 
 Текст вне вызовов не доставляется никогда: пользователь видит ровно то, что ушло из кода через
-`say`, `file` и `page`.
+`chat.send`, `chat.send_file` и `pages.create`.
 
 ## Живой REPL
 
@@ -33,7 +33,7 @@ Namespace один на всю аренду: переменные, импорт�
 эхо-печатается, как в интерпретаторе.
 
 ```python
-install("pandas")            # uv ставит пакет прямо сейчас
+packages.install("pandas")   # uv ставит пакет прямо сейчас
 import pandas as pd          # и его сразу можно импортировать
 df = pd.read_csv("data.csv") # df живёт до конца аренды
 ```
@@ -42,17 +42,18 @@ df = pd.read_csv("data.csv") # df живёт до конца аренды
 
 | группа | что там |
 |---|---|
-| `say file photo page note` | всё, что видит человек |
-| `chat.* pages.*` | правки, реакции, история, страницы-артефакты |
-| `run take release fan submit machines.* quota install` | машины пула |
+| `chat.send send_file send_photo` | всё, что видит человек |
+| `chat.edit delete react pin history info` | правки, реакции, история |
+| `pages.create update delete listing` | страницы-артефакты |
+| `machines.run take release fan submit logs copy desktop quota` | машины пула |
+| `packages.install` | пакеты в этот интерпретатор |
 | `github.logins use token` | какой аккаунт GitHub говорит сейчас |
 | `browser.*` | настоящий Chrome: навигация, клики, текст, `evaluate`, `shot()`, живой десктоп |
-| `store.* kv secrets` | состояние, переживающее машину |
-| `ci.* automation.*` | CI на пуле, расписания, вотчи, подписки, таймзона |
-| `fetch net.*` | чтение веба |
+
+Наверху пакета нет ни одной команды: всё живёт в своём модуле.
 
 Обёрток над тем, что и так есть в шелле, в SDK нет: `git`, `gh`, `ssh`, `scp`, `docker`, `curl`
-стоят на машине и уже авторизованы — их зовут напрямую, `run("gh pr create --fill")`. Полная
+стоят на машине и уже авторизованы — их зовут напрямую, `machines.run("gh pr create --fill")`. Полная
 спецификация — в описании инструмента (`python/unsafie/agent/request.py`, константа
 `PYTHON_TOOL_DESCRIPTION`); других списков нет, чтобы им некуда было разъехаться.
 
@@ -61,7 +62,7 @@ df = pd.read_csv("data.csv") # df живёт до конца аренды
 ```python
 github.logins()          # ['wprhvso', 'alice']
 github.use("alice")      # git и gh с этого момента говорят от имени alice
-run("git clone https://github.com/alice/app.git")
+machines.run("git clone https://github.com/alice/app.git")
 github.use(None)         # обратно к первому
 ```
 

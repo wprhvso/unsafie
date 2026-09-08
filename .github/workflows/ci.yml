@@ -41,12 +41,16 @@ jobs:
           missing = [name for name in unsafie_sdk.__all__ if not hasattr(unsafie_sdk, name)]
           assert not missing, missing
           description = PYTHON_TOOL['description']
-          for word in ('say(', 'page(', 'run(', 'install(', 'github.use', 'browser.shot'):
+          for word in ('chat.send(', 'pages.create(', 'machines.run(', 'packages.install(',
+                       'github.use', 'browser.shot'):
               assert word in description, word
           assert PYTHON_TOOL['input_schema']['required'] == ['code']
           assert 'code' in PYTHON_TOOL['input_schema']['properties']
           assert [t.get('name') for t in tools()][0] == 'python'
-          assert 'say(' in SYSTEM_PROMPT
+          assert 'chat.send(' in SYSTEM_PROMPT
+          assert not any(hasattr(unsafie_sdk, gone) for gone in
+                         ('say', 'file', 'photo', 'note', 'store', 'ci', 'automation', 'fetch',
+                          'net', 'run', 'take', 'install'))
           print('tool', len(description), 'chars; prompt', len(SYSTEM_PROMPT), 'chars')
           "
 

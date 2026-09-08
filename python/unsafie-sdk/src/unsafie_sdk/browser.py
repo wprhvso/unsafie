@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from unsafie_sdk import store
+from unsafie_sdk import blobs
 from unsafie_sdk.chrome import actions
 from unsafie_sdk.chrome import browser as engine
 from unsafie_sdk.chrome.cdp import CdpError
@@ -54,7 +54,7 @@ def stop(*, save_profile: bool = True) -> dict:
         return {"running": False}
     if save_profile and state.get("profile"):
         name = str(state["profile"])
-        store.put(f"profiles/{name}.tar.gz", _pack(engine.PROFILES / name))
+        blobs.put(f"profiles/{name}.tar.gz", _pack(engine.PROFILES / name))
     engine.stop(state)
     engine.forget()
     return {"stopped": True}
@@ -112,12 +112,12 @@ def shot(*, full: bool = False, send: bool = False, caption: str | None = None) 
     """Take a screenshot. It comes back to the model as a picture; send=True also posts it."""
     data = _act(actions.screenshot, full)
     key = f"{SHOTS}/{int(time.time() * 1000)}.png"
-    store.put(key, data)
+    blobs.put(key, data)
     print(markers.image(key, "image/png", caption))
     if send:
         from unsafie_sdk import chat
 
-        chat.photo(data, caption=caption)
+        chat.send_photo(data, caption=caption)
     return key
 
 
@@ -143,7 +143,7 @@ def desktop() -> str:
 
 def profiles() -> list[str]:
     """Profiles stored for this account."""
-    rows = store.listing("profiles/")
+    rows = blobs.listing("profiles/")
     return [row["key"].removeprefix("profiles/").removesuffix(".tar.gz") for row in rows]
 
 
@@ -152,7 +152,7 @@ def restore(name: str) -> Path:
     import io
     import tarfile
 
-    data = store.get(f"profiles/{name}.tar.gz")
+    data = blobs.get(f"profiles/{name}.tar.gz")
     engine.PROFILES.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
         archive.extractall(engine.PROFILES, filter="data")

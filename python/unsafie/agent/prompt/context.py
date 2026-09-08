@@ -11,9 +11,9 @@ from unsafie.settings import settings
 from unsafie.ssh import binding
 
 REMINDER = (
-    "Reminder: nothing you write as text is delivered. Only say(), file() and page(), called "
-    "from inside a python tool call, reach the chat. Do not end this turn until a call has run "
-    "say(...) with the answer."
+    "Reminder: nothing you write as text is delivered. Only chat.send(), chat.send_file() and "
+    "pages.create(), called from inside a python tool call, reach the chat. Do not end this turn "
+    "until a call has run chat.send(...) with the answer."
 )
 
 
@@ -28,8 +28,8 @@ async def time_context(session: AsyncSession, ctx: Ctx) -> str:
     line = f"Now: {now.strftime('%Y-%m-%d %H:%M')} ({now.strftime('%A')}), timezone {tz.key}"
     if not name:
         line += (
-            " (the user has not set one; ask and save it with automation.timezone(...) when the "
-            "time of day matters)"
+            " (the user has not set one; ask and it is saved with /tz when the time of day "
+            "matters)"
         )
     line += f". User locale: {ctx.locale}."
     return line
