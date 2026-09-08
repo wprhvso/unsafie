@@ -2,9 +2,9 @@ auth-issued =
     Токен **{ $name }**. Он бессрочный и показывается один раз — сохрани.
 
     ```
-    uv tool install unsafie-cli
-    unsafie auth login --token ВСТАВЬ --api { $api }
-    unsafie help
+    uv tool install unsafie-sdk
+    export UNSAFIE_TOKEN=ВСТАВЬ UNSAFIE_API={ $api }
+    python -c "import unsafie_sdk as u; u.help()"
     ```
 auth-empty =
     Токенов пока нет.

@@ -2,9 +2,9 @@ auth-issued =
     Token **{ $name }**. It does not expire — keep it somewhere safe, it is shown once.
 
     ```
-    uv tool install unsafie-cli
-    unsafie auth login --token ВСТАВЬ --api { $api }
-    unsafie help
+    uv tool install unsafie-sdk
+    export UNSAFIE_TOKEN=PASTE UNSAFIE_API={ $api }
+    python -c "import unsafie_sdk as u; u.help()"
     ```
 auth-empty =
     No tokens yet.
