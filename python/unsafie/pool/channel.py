@@ -78,6 +78,51 @@ async def send(
     return command_id
 
 
+async def send_python(
+    machine: str,
+    code: str,
+    *,
+    user_id: int | None,
+    turn_id: UUID | None = None,
+    timeout: float | None = None,
+    reset: bool = False,
+) -> str:
+    block_id = uuid.uuid4().hex
+    frame = wire.python(block_id, code, timeout=timeout, reset=reset)
+    redis = cluster.client()
+    await redis.rpush(keys.inbox(machine), wire.encode(frame))
+    await redis.expire(keys.inbox(machine), int(settings.pool_output_ttl))
+    async with SessionLocal() as session:
+        session.add(
+            PoolCommand(
+                id=uuid.UUID(block_id),
+                machine=machine,
+                user_id=user_id,
+                turn_id=turn_id,
+                command=code[:8000],
+            )
+        )
+        await session.commit()
+    logger.info("pool %s <- python %s (%s chars)", machine, block_id, len(code))
+    return block_id
+
+
+async def run_python(
+    machine: str,
+    code: str,
+    *,
+    user_id: int | None,
+    turn_id: UUID | None = None,
+    timeout: float | None = None,
+    reset: bool = False,
+) -> Result:
+    limit = min(timeout or settings.pool_block_timeout, settings.pool_max_command_timeout)
+    block_id = await send_python(
+        machine, code, user_id=user_id, turn_id=turn_id, timeout=limit, reset=reset
+    )
+    return await collect(block_id, machine, limit + CHUNK_WAIT * 2)
+
+
 async def pull(machine: str, wait: float) -> list[dict]:
     redis = cluster.client()
     deadline = time.monotonic() + max(wait, 0.0)

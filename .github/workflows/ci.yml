@@ -32,12 +32,17 @@ jobs:
       - name: types
         run: uv run basedpyright
 
-      - name: the cli answers
+      - name: the sdk and the prompt hold together
         run: |
-          uv run unsafie version
-          uv run unsafie help >/dev/null
-          uv run unsafie help --json | python -c "import json,sys; json.load(sys.stdin)"
-          uv run unsafie completion bash >/dev/null
+          uv run python -c "
+          import unsafie_sdk
+          from unsafie.agent.prompt import SYSTEM_PROMPT
+          missing = [name for name in unsafie_sdk.__all__ if not hasattr(unsafie_sdk, name)]
+          assert not missing, missing
+          for word in ('say(', 'page(', 'run(', 'install(', 'github.use', 'browser.shot'):
+              assert word in SYSTEM_PROMPT, word
+          print('sdk', len(unsafie_sdk.__all__), 'names; prompt', len(SYSTEM_PROMPT), 'chars')
+          "
 
       - name: migrations match the models
         run: uv run python -c "import unsafie.database.models"

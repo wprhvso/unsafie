@@ -30,6 +30,7 @@ class RepoIn(BaseModel):
 class ShortToken(BaseModel):
     repo: str | None = None
     minutes: int = 60
+    login: str | None = None
 
 
 class ApiCall(BaseModel):
@@ -37,6 +38,7 @@ class ApiCall(BaseModel):
     method: str = "GET"
     body: dict[str, Any] | None = None
     params: dict[str, Any] | None = None
+    login: str | None = None
 
 
 def _repo(row: Repo, alias: str | None = None) -> dict:
@@ -132,9 +134,7 @@ async def short_token(body: ShortToken, who: Github) -> dict:
                     "repo": f"{row.owner}/{row.name}",
                     "minutes": 60,
                 }
-    account = await pat.account_of(who.user_id)
-    if account is None or not account.token:
-        raise HTTPException(400, "no github account: unsafie account add ghp_…")
+    account = await _account(who.user_id, body.login)
     return {
         "token": account.token,
         "kind": "pat",
@@ -143,11 +143,21 @@ async def short_token(body: ShortToken, who: Github) -> dict:
     }
 
 
+async def _account(user_id: int, login: str | None):
+    account = await pat.account_of(user_id, login)
+    if account is None or not account.token:
+        known = ", ".join(row.login for row in await pat.accounts_of(user_id)) or "none"
+        raise HTTPException(
+            400,
+            f"no github account '{login}'. Attached: {known}. Add one with github.add(token) "
+            "or /gh <token> in the chat",
+        )
+    return account
+
+
 @router.post("/api")
 async def call_api(body: ApiCall, who: Github) -> dict:
-    account = await pat.account_of(who.user_id)
-    if account is None or not account.token:
-        raise HTTPException(400, "no github account: unsafie account add ghp_…")
+    account = await _account(who.user_id, body.login)
     path = body.path if body.path.startswith(("/", "http")) else f"/{body.path}"
     try:
         answer = await GithubHTTP(account.token).request(

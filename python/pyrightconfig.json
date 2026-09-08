@@ -1,9 +1,10 @@
 {
-  "include": ["unsafie-cli/src", "unsafie-wire/src"],
+  "include": ["unsafie", "unsafie-sdk/src", "unsafie-wire/src"],
+  "exclude": ["**/__pycache__", "**/.venv", "**/migrations/versions"],
   "pythonVersion": "3.14",
   "typeCheckingMode": "standard",
-  "venvPath": ".",
-  "venv": ".venv",
   "reportMissingImports": "error",
-  "reportUnusedImport": "warning"
+  "reportUnusedImport": "error",
+  "venvPath": ".",
+  "venv": ".venv"
 }

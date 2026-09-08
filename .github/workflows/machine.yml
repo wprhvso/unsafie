@@ -37,23 +37,25 @@ jobs:
           } >>"$GITHUB_ENV"
           echo "cache: $CACHE_URL"
 
-      - name: install the cli
+      - name: install the sdk
         env:
-          SPEC: ${{ secrets.UNSAFIE_CLI_SPEC }}
+          SPEC: ${{ secrets.UNSAFIE_SDK_SPEC }}
           WIRE: ${{ secrets.UNSAFIE_WIRE_SPEC }}
         run: |
           if [ -n "$WIRE" ]; then
-            uv tool install --with "$WIRE" "${SPEC:-unsafie-cli}"
+            uv tool install --with "$WIRE" "${SPEC:-unsafie-sdk}"
           else
-            uv tool install "${SPEC:-unsafie-cli}"
+            uv tool install "${SPEC:-unsafie-sdk}"
           fi
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
       - name: bring the desktop along
         if: inputs.profile == 'full'
         run: |
-          sudo -E env "PATH=$PATH" "$(command -v unsafie)" setup xvfb kasmvnc tools || \
-            echo "::warning::the full profile came up short, the machine still serves"
+          sudo -E env "PATH=$PATH" python3 -c "
+          from unsafie_sdk.packages import setup
+          print(setup('xvfb', 'kasmvnc', 'tools'))
+          " || echo "::warning::the full profile came up short, the machine still serves"
 
       - name: serve
         env:
@@ -62,4 +64,4 @@ jobs:
           UNSAFIE_CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
         run: |
           sudo -E env "PATH=$PATH" "UNSAFIE_BOOT_STARTED=$UNSAFIE_BOOT_STARTED" \
-            "$(command -v unsafie)" serve --profile "${{ inputs.profile || 'fast' }}"
+            "$(command -v unsafie-machine)" serve --profile "${{ inputs.profile || 'fast' }}"

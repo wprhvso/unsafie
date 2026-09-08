@@ -9,6 +9,7 @@ PROTOCOL = 1
 class FrameKind(StrEnum):
     HELLO = "hello"
     COMMAND = "command"
+    PYTHON = "python"
     STDIN = "stdin"
     CANCEL = "cancel"
     OUTPUT = "output"
@@ -75,6 +76,13 @@ def command(
     if stdin:
         body["stdin"] = stdin
     return Frame(FrameKind.COMMAND, command_id, body)
+
+
+def python(block_id: str, code: str, timeout: float | None = None, reset: bool = False) -> Frame:
+    body: dict[str, Any] = {"code": code, "reset": reset}
+    if timeout:
+        body["timeout"] = timeout
+    return Frame(FrameKind.PYTHON, block_id, body)
 
 
 def output(command_id: str, data: str, stream: Stream = Stream.OUT) -> Frame:

@@ -1,24 +1,20 @@
-import asyncio
 import logging
-import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
-from unsafie.agent import client, credentials, pricing, queue, request
+from unsafie.agent import blocks, client, credentials, pricing, queue, request
 from unsafie.agent.client import ApiError
-from unsafie.agent.tools.base import ToolContext
-from unsafie.agent.tools.registry import ToolSpec
+from unsafie.agent.session import Ctx
 from unsafie.agent.trace import Recorder
 from unsafie.log import short
 from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
-EMPTY_RESULT = [{"type": "text", "text": "(no output)"}]
 MAX_REMINDERS = 2
-NOT_DELIVERED = (
-    "Your plain text goes nowhere: the user never sees it. Say it from the machine with "
-    "`unsafie say`, or publish it with `unsafie page create` and send the link."
+NOTHING_SAID = (
+    "Nothing of that reached the user: plain text is not delivered and no block called say(). "
+    "Write a ```python block that calls say(...) — or page(...) plus say(link) when it is long."
 )
 
 
@@ -33,84 +29,7 @@ class Result:
     failure: credentials.Failure | None = None
     replied: bool = False
     stop_reason: str | None = None
-
-
-def _image(block: dict) -> dict:
-    return {
-        "type": "image",
-        "source": {
-            "type": "base64",
-            "media_type": block.get("mimeType") or "image/png",
-            "data": block.get("data") or "",
-        },
-    }
-
-
-def _content(payload: dict) -> list[dict]:
-    out: list[dict] = []
-    for block in payload.get("content") or []:
-        if not isinstance(block, dict):
-            continue
-        if block.get("type") == "image" and "source" not in block:
-            out.append(_image(block))
-        else:
-            out.append(block)
-    return out or list(EMPTY_RESULT)
-
-
-def _failed(call_id: str, message: str) -> dict:
-    return {
-        "type": "tool_result",
-        "tool_use_id": call_id,
-        "content": [{"type": "text", "text": message}],
-        "is_error": True,
-    }
-
-
-async def _invoke(
-    ctx: ToolContext, tools: dict[str, ToolSpec], name: str, call_id: str, args: dict
-) -> dict:
-    spec = tools.get(name)
-    if spec is None:
-        logger.warning("%s tool=%s does not exist", ctx.prefix, name)
-        return _failed(call_id, f"there is no tool named {name}")
-    missing = [key for key in spec.required if key not in args]
-    if missing:
-        logger.warning("%s tool=%s missing %s", ctx.prefix, name, missing)
-        return _failed(call_id, f"{name}: missing required argument(s): {', '.join(missing)}")
-    try:
-        payload = await asyncio.wait_for(
-            spec.handler(ctx, args), timeout=settings.agent_tool_timeout
-        )
-    except TimeoutError:
-        logger.warning("%s tool=%s timed out", ctx.prefix, name)
-        return _failed(call_id, f"{name} timed out after {settings.agent_tool_timeout:.0f}s")
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        logger.exception("%s tool=%s crashed", ctx.prefix, name)
-        return _failed(call_id, f"{name} crashed: {type(e).__name__}: {e}")
-    if not isinstance(payload, dict):
-        return _failed(call_id, f"{name} returned {type(payload).__name__} instead of a result")
-    result = {"type": "tool_result", "tool_use_id": call_id, "content": _content(payload)}
-    if payload.get("is_error"):
-        result["is_error"] = True
-    if payload.get("replied"):
-        result["_replied"] = True
-    return result
-
-
-async def _call(
-    ctx: ToolContext, tools: dict[str, ToolSpec], block: dict, recorder: Recorder
-) -> dict:
-    name = block.get("name") or ""
-    call_id = block.get("id") or ""
-    args = block.get("input") if isinstance(block.get("input"), dict) else {}
-    recorder.tool_started(call_id, name, args)
-    started = time.perf_counter()
-    result = await _invoke(ctx, tools, name, call_id, args)
-    recorder.tool_finished(call_id, name, result, (time.perf_counter() - started) * 1000)
-    return result
+    ran: int = 0
 
 
 def _ask(messages: list[dict], value: str) -> None:
@@ -122,8 +41,25 @@ def _ask(messages: list[dict], value: str) -> None:
     messages.append({"role": "user", "content": [block]})
 
 
+def _watcher(runner: blocks.Runner, reader: blocks.Reader, recorder: Recorder):
+    """Feeds the streamed text into the fence reader and fires every block as it closes."""
+
+    def on_event(name: str, data: dict) -> None:
+        recorder.raw(name, data)
+        kind = name or str(data.get("type") or "")
+        if kind != "content_block_delta":
+            return
+        delta = data.get("delta") or {}
+        if delta.get("type") != "text_delta":
+            return
+        for code in reader.feed(str(delta.get("text") or "")):
+            runner.start(code)
+
+    return on_event
+
+
 async def run(
-    ctx: ToolContext,
+    ctx: Ctx,
     *,
     messages: list[dict],
     credential,
@@ -131,14 +67,10 @@ async def run(
     prompt: str,
     effort: str | None,
     budget_usd: float,
-    definitions: list[dict],
-    tools: dict[str, ToolSpec],
     recorder: Recorder,
     on_cost: Callable[[float], Awaitable[int]] | None = None,
 ) -> Result:
     result = Result()
-    replying = {name for name, spec in tools.items() if spec.replies}
-    catalogue = request.tools(definitions)
     marked = -1
     reminders = 0
 
@@ -161,15 +93,20 @@ async def run(
             prompt=prompt,
             messages=messages,
             marks=marks,
-            definitions=catalogue,
+            definitions=request.tools([]),
             effort=effort,
             max_tokens=settings.claude_max_tokens,
         )
         result.steps += 1
-        recorder.request(result.steps, len(messages), len(catalogue))
+        recorder.request(result.steps, len(messages), 0)
+        runner = blocks.Runner(ctx, recorder)
+        reader = blocks.Reader()
         try:
-            reply = await client.send(credential, body, on_event=recorder.raw)
+            reply = await client.send(credential, body, on_event=_watcher(runner, reader, recorder))
         except ApiError as e:
+            for code in reader.flush():
+                runner.start(code)
+            await runner.settle()
             dropped = request.downgrade(model, e)
             if dropped:
                 result.steps -= 1
@@ -184,6 +121,9 @@ async def run(
             logger.warning("%s step=%s %s", ctx.prefix, result.steps, short(result.error, 600))
             return result
 
+        for code in reader.flush():
+            runner.start(code)
+
         step_cost = pricing.cost(reply.model or model, reply.usage)
         result.cost_usd += step_cost
         if on_cost is not None:
@@ -196,17 +136,12 @@ async def run(
         text = reply.text.strip()
         if text:
             result.text = text
-            recorder.note("unsafie.text_dropped", {"chars": len(text)})
-            logger.info("%s text not delivered: %s", ctx.prefix, short(text))
 
-        calls = reply.calls
-        if calls:
-            content: list[dict] = []
-            for call in calls:
-                answer = await _call(ctx, tools, call, recorder)
-                if answer.pop("_replied", False) or call.get("name") in replying:
-                    result.replied = True
-                content.append(answer)
+        content = await runner.settle()
+        result.ran += runner.count
+        if runner.replied:
+            result.replied = True
+        if content:
             extra = await queue.drain(ctx.turn_id)
             if extra is not None:
                 recorder.note("unsafie.messages_injected")
@@ -224,10 +159,11 @@ async def run(
             _ask(messages, extra)
             continue
 
-        if text and not result.replied and reminders < MAX_REMINDERS:
+        if not result.replied and reminders < MAX_REMINDERS:
             reminders += 1
-            recorder.note("unsafie.text_reminder", {"attempt": reminders})
-            _ask(messages, NOT_DELIVERED)
+            recorder.note("unsafie.silent_turn", {"attempt": reminders})
+            logger.info("%s said nothing to the user: %s", ctx.prefix, short(text))
+            _ask(messages, NOTHING_SAID)
             continue
 
         return result

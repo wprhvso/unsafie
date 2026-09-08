@@ -37,7 +37,7 @@ unsafie_pool_max_machines: 3
 unsafie_pool_warm_min: 3
 unsafie_pool_warm_max: 10
 unsafie_pool_lease_idle: 900
-unsafie_pool_cli_spec: "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-cli"
+unsafie_pool_sdk_spec: "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-sdk"
 unsafie_pool_wire_spec: "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-wire"
 
 unsafie_service_name: unsafie

@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     claude_fallbacks: str = "default"
     cache_ttl: str = "1h"
     agent_max_steps: int = 6400
-    agent_tool_timeout: float = 600.0
+    agent_block_timeout: float = 900.0
 
     public_base_url: str = "https://unsafie.com"
     github_base_url: str = "https://github.unsafie.com"
@@ -190,6 +190,7 @@ class Settings(BaseSettings):
     pool_take_wait: float = 180.0
     pool_lease_idle: float = 900.0
     pool_command_timeout: float = 600.0
+    pool_block_timeout: float = 900.0
     pool_max_command_timeout: float = 21600.0
     pool_max_output: int = 60_000
     pool_output_ttl: float = 3600.0
@@ -198,8 +199,8 @@ class Settings(BaseSettings):
     pool_launch_burst: int = 5
     pool_workflow: str = "unsafie.yml"
     pool_repo_name: str = "unsafie-pool"
-    pool_cli_spec: str = (
-        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-cli"
+    pool_sdk_spec: str = (
+        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-sdk"
     )
     pool_wire_spec: str = (
         "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-wire"

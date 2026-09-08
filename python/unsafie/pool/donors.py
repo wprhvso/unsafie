@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "machine.yml"
 SECRET_URL = "UNSAFIE_URL"
 SECRET_TOKEN = "UNSAFIE_WORKER_TOKEN"
-SECRET_SPEC = "UNSAFIE_CLI_SPEC"
+SECRET_SPEC = "UNSAFIE_SDK_SPEC"
 SECRET_WIRE = "UNSAFIE_WIRE_SPEC"
 SECRET_CACHE = "UNSAFIE_CACHE_URL"
 
@@ -147,7 +147,7 @@ async def bootstrap(login: str, worker_token: str | None = None) -> dict:
     secrets_to_seal = {
         SECRET_URL: settings.public_origin,
         SECRET_TOKEN: worker_token,
-        SECRET_SPEC: settings.pool_cli_spec,
+        SECRET_SPEC: settings.pool_sdk_spec,
         SECRET_WIRE: settings.pool_wire_spec,
     }
     if settings.pool_cache_url:
