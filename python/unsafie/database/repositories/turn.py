@@ -107,6 +107,16 @@ HOLD_QUERY = text("""
 """)
 
 
+LINEAGE_QUERY = text("""
+    WITH RECURSIVE tree AS (
+        SELECT id FROM turns WHERE id = CAST(:turn_id AS uuid)
+        UNION ALL
+        SELECT t.id FROM turns t JOIN tree ON t.parent_id = tree.id
+    )
+    SELECT id FROM tree
+""")
+
+
 class Reserved(NamedTuple):
     units: int
     balance: int
@@ -126,6 +136,26 @@ class TurnRepository:
         if turn_id is None:
             return None
         return await self.session.get(Turn, turn_id)
+
+    async def running(self, bot_id: int, chat_id: int) -> list[Turn]:
+        """Turns of this chat that are still beating."""
+        cutoff = datetime.now(UTC) - timedelta(seconds=settings.turn_stale_after)
+        rows = await self.session.scalars(
+            select(Turn)
+            .where(
+                Turn.bot_id == bot_id,
+                Turn.chat_id == chat_id,
+                Turn.status == TurnStatus.RUNNING,
+                func.coalesce(Turn.heartbeat_at, Turn.created_at) > cutoff,
+            )
+            .order_by(Turn.created_at)
+        )
+        return list(rows)
+
+    async def lineage(self, turn_id: UUID) -> set[UUID]:
+        """A turn and every turn spawned from it."""
+        rows = await self.session.scalars(LINEAGE_QUERY, {"turn_id": str(turn_id)})
+        return set(rows)
 
     async def create(
         self,

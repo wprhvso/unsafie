@@ -6,3 +6,4 @@ agent-no-credentials-when = { $minutes ->
     [one] { " " }(the nearest one frees up in ~{ $minutes } minute)
    *[other] { " " }(the nearest one frees up in ~{ $minutes } minutes)
 }
+agent-stopped = Stopped. Everything said up to this point stays in the context.
