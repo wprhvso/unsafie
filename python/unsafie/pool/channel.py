@@ -128,6 +128,7 @@ async def collect(
             size += len(data)
             if size <= cap:
                 pieces.append(data)
+                await remember(command_id, data)
             else:
                 result.truncated = True
             continue
@@ -142,6 +143,32 @@ async def collect(
     result.seconds = time.monotonic() - started
     await _finish(command_id, None, size, CommandStatus.FAILED)
     return result
+
+
+_DRAINS: set[asyncio.Task] = set()
+
+
+def drain(command_id: str, machine: str, timeout: float | None = None) -> None:
+    limit = min(timeout or settings.pool_max_command_timeout, settings.pool_max_command_timeout)
+    task = asyncio.create_task(
+        collect(command_id, machine, limit + CHUNK_WAIT * 2), name=f"pool.drain:{command_id}"
+    )
+    _DRAINS.add(task)
+    task.add_done_callback(_DRAINS.discard)
+
+
+async def remember(command_id: str, text: str) -> None:
+    if not text:
+        return
+    redis = cluster.client()
+    if await redis.strlen(keys.log(command_id)) >= settings.pool_max_output:
+        return
+    await redis.append(keys.log(command_id), text)
+    await redis.expire(keys.log(command_id), int(settings.pool_output_ttl))
+
+
+async def tail(command_id: str) -> str:
+    return str(await cluster.client().get(keys.log(command_id)) or "")
 
 
 async def _finish(command_id: str, code: int | None, size: int, status: CommandStatus) -> None:

@@ -19,6 +19,10 @@ def outbox(command_id: str) -> str:
     return cluster.key(NAMESPACE, "out", command_id)
 
 
+def log(command_id: str) -> str:
+    return cluster.key(NAMESPACE, "log", command_id)
+
+
 def pending() -> str:
     return cluster.key(NAMESPACE, "pending")
 

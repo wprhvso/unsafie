@@ -260,14 +260,16 @@ def logs(call: Call, out: Out) -> int:
     client = api.client(call)
     follow = call.on("follow")
     deadline = time.monotonic() + FOLLOW_LIMIT
+    seen = 0
     while True:
         answer = client.call(
             "GET",
             f"/pool/jobs/{job_id}",
-            params={"wait": FOLLOW_STEP if follow else 0},
+            params={"wait": FOLLOW_STEP if follow else 0, "since": seen},
             timeout=FOLLOW_STEP + 60.0,
         )
         body = str(answer.get("output") or "")
+        seen = int(answer.get("read") or seen)
         if body:
             out.line(body.rstrip("\n"))
         status = str(answer.get("status") or "")

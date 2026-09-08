@@ -116,6 +116,7 @@ async def run(body: Run, who: Pool) -> dict:
             timeout=body.timeout,
             background=True,
         )
+        channel.drain(command_id, machine.name, body.timeout)
         return {"job": command_id, "machine": machine.alias or machine.name}
     result = await channel.run(
         machine.name,
@@ -233,13 +234,13 @@ async def jobs(who: Pool, limit: int = 20, background: bool = True) -> dict:
 
 
 @router.get("/jobs/{job_id}")
-async def job(job_id: str, who: Pool, wait: float = 0.0) -> dict:
+async def job(job_id: str, who: Pool, wait: float = 0.0, since: int = 0) -> dict:
     row = await _own_job(job_id, who.user_id)
-    output = ""
-    if wait > 0:
-        result = await channel.collect(job_id, row.machine, wait)
-        output = result.output
-    return {**_job_view(row), "output": output}
+    if wait > 0 and row.status not in (CommandStatus.DONE, CommandStatus.FAILED, CommandStatus.LOST):
+        await channel.collect(job_id, row.machine, wait)
+        row = await _own_job(job_id, who.user_id)
+    whole = await channel.tail(job_id)
+    return {**_job_view(row), "output": whole[max(0, since) :], "read": len(whole)}
 
 
 @router.post("/jobs/{job_id}/cancel")
