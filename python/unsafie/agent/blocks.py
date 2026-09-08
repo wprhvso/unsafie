@@ -22,7 +22,6 @@ REASON_LIMIT = 300
 
 @dataclass
 class Block:
-    call_id: str
     index: int
     code: str
     started_at: float = field(default_factory=time.monotonic)
@@ -44,7 +43,6 @@ class Block:
         return bool(self.error) or not self.ok
 
     def reason(self) -> str:
-        """The one line that says what went wrong: the last line of the traceback."""
         if self.error:
             return self.error[:REASON_LIMIT]
         lines = [line for line in (self.output or "").strip().splitlines() if line.strip()]
@@ -53,24 +51,21 @@ class Block:
     def heading(self) -> str:
         where = self.machine or "no machine"
         if self.error:
-            return f"[{self.index}] {where}: {self.error}"
+            return f"[block {self.index}] {where}: {self.error}"
         if self.exit_code is None:
-            return f"[{self.index}] {where}: never came back, {self.seconds:.0f}s"
+            return f"[block {self.index}] {where}: never came back, {self.seconds:.0f}s"
         if self.ok:
-            return f"[{self.index}] {where} · ok in {self.seconds:.1f}s"
+            return f"[block {self.index}] {where} · ok in {self.seconds:.1f}s"
         tail = self.reason()
-        head = f"[{self.index}] {where} · raised in {self.seconds:.1f}s"
+        head = f"[block {self.index}] {where} · raised in {self.seconds:.1f}s"
         return f"{head}: {tail}" if tail else head
 
 
 class Runner:
-    """Runs every python call of one reply, in order, on the machine of this chat."""
-
     def __init__(self, ctx: Ctx, recorder) -> None:
         self.ctx = ctx
         self.recorder = recorder
         self.blocks: list[Block] = []
-        self.seen: set[str] = set()
         self.lock = asyncio.Lock()
         self.tasks: set[asyncio.Task] = set()
 
@@ -78,14 +73,11 @@ class Runner:
     def count(self) -> int:
         return len(self.blocks)
 
-    def handled(self, call_id: str) -> bool:
-        return call_id in self.seen
-
-    def start(self, call_id: str, code: str) -> Block:
-        block = Block(call_id=call_id, index=len(self.blocks) + 1, code=code)
+    def start(self, code: str) -> Block:
+        index = len(self.blocks) + 1
+        block = Block(index=index, code=code)
         self.blocks.append(block)
-        self.seen.add(call_id)
-        self.recorder.tool_started(call_id, TOOL, {"code": code})
+        self.recorder.tool_started(str(index), TOOL, {"code": code})
         task = asyncio.create_task(
             self._run(block), name=f"python:{self.ctx.turn_id}:{block.index}"
         )
@@ -93,23 +85,13 @@ class Runner:
         task.add_done_callback(self.tasks.discard)
         return block
 
-    def refuse(self, call_id: str, reason: str) -> Block:
-        block = Block(call_id=call_id, index=len(self.blocks) + 1, code="")
-        block.error = reason
-        self.blocks.append(block)
-        self.seen.add(call_id)
-        self.recorder.tool_started(call_id, TOOL, {})
-        self._finished(block)
-        return block
-
     async def _nag(self, block: Block) -> None:
-        """A block that says nothing for a minute is worth a line in the live log."""
         waited = 0.0
         while True:
             await asyncio.sleep(NAG_EVERY)
             waited += NAG_EVERY
             logger.warning(
-                "%s python %s on %s has been running for %.0fs",
+                "%s python block %s on %s has been running for %.0fs",
                 self.ctx.prefix,
                 block.index,
                 block.machine or "-",
@@ -155,10 +137,10 @@ class Runner:
                 block.seconds = time.monotonic() - block.started_at
                 self._finished(block)
                 raise
-            except Exception as broken:  # noqa: BLE001 - the model must see what happened
+            except Exception as broken:
                 block.error = f"{type(broken).__name__}: {broken}"
                 block.seconds = time.monotonic() - block.started_at
-                logger.exception("%s python %s could not run", self.ctx.prefix, block.index)
+                logger.exception("%s python block %s could not run", self.ctx.prefix, block.index)
                 self._finished(block)
                 return
             finally:
@@ -206,37 +188,20 @@ class Runner:
         live.emit(self.ctx.turn_id, "note", text=f"image {key} ({human_size(len(data))})")
         return image_block(data, mime)
 
-    def _body(self, block: Block, limit: int | None = None) -> list[dict]:
-        """The blocks of one tool_result.
-
-        The API refuses a tool_result that carries anything but text when is_error is
-        set, so a failed block never gets its pictures: it says where they went instead.
-        """
+    def _body(self, block: Block, limit: int | None = None) -> str:
         text = block.heading()
         if block.truncated:
             text += f" (output cut at {human_size(settings.pool_max_output)})"
         text = f"{text}\n{block.output.strip() or '(no output)'}"
         if limit:
             text = short(text, limit)
-        body: list[dict] = [{"type": "text", "text": text}]
-        if not block.images:
-            return body
-        if block.failed:
-            body[0]["text"] += (
-                f"\n[{len(block.images)} image(s) not attached: a failed call may only carry "
-                "text. The screenshot is stored — show it from a call that succeeds.]"
-            )
-            return body
-        body.extend(block.images)
-        return body
+        return text
 
     def _finished(self, block: Block) -> None:
-        result: dict = {"content": self._body(block, limit=8000)}
-        if block.failed:
-            result["is_error"] = True
-        self.recorder.tool_finished(block.call_id, TOOL, result, block.seconds * 1000)
+        result = {"output": self._body(block, limit=8000), "is_error": block.failed}
+        self.recorder.tool_finished(str(block.index), TOOL, result, block.seconds * 1000)
         logger.info(
-            "%s python %s on %s: %s",
+            "%s python block %s on %s: %s",
             self.ctx.prefix,
             block.index,
             block.machine or "-",
@@ -249,18 +214,14 @@ class Runner:
         return self.content()
 
     def content(self) -> list[dict]:
-        """One tool_result per call, in the order the model asked for them."""
-        out: list[dict] = []
+        if not self.blocks:
+            return []
+        parts: list[dict] = []
         for block in self.blocks:
-            result: dict = {
-                "type": "tool_result",
-                "tool_use_id": block.call_id,
-                "content": self._body(block),
-            }
-            if block.failed:
-                result["is_error"] = True
-            out.append(result)
-        return out
+            parts.append({"type": "text", "text": self._body(block)})
+            if not block.failed and block.images:
+                parts.extend(block.images)
+        return parts
 
     @property
     def replied(self) -> bool:

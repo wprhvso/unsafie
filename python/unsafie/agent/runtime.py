@@ -18,6 +18,7 @@ from unsafie.agent import (
     credentials,
     live,
     loop,
+    opal,
     queue,
     request,
     segments,
@@ -25,14 +26,13 @@ from unsafie.agent import (
 )
 from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
-from unsafie.agent.request import DEFAULT_EFFORT
 from unsafie.agent.session import Ctx
 from unsafie.agent.trace import Recorder
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.repositories.config import ConfigRepository
-from unsafie.database.repositories.credential import CredentialRepository
+from unsafie.database.repositories.opal_session import OpalSessionRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
@@ -74,10 +74,6 @@ def _usage(span, result: loop.Result) -> None:
         {
             attrs.GEN_AI_INPUT_TOKENS: result.usage.get("input_tokens"),
             attrs.GEN_AI_OUTPUT_TOKENS: result.usage.get("output_tokens"),
-            "gen_ai.usage.cache_read_input_tokens": result.usage.get("cache_read_input_tokens"),
-            "gen_ai.usage.cache_creation_input_tokens": result.usage.get(
-                "cache_creation_input_tokens"
-            ),
         },
     )
 
@@ -117,7 +113,7 @@ class Meter:
         return delta
 
 
-async def _bill(ctx: Ctx, credential, result: loop.Result, meter: Meter) -> int:
+async def _bill(ctx: Ctx, session_id: int, result: loop.Result, meter: Meter) -> int:
     leftover = result.cost_usd - meter.segment
     if leftover > 0:
         await meter.take(leftover)
@@ -127,7 +123,7 @@ async def _bill(ctx: Ctx, credential, result: loop.Result, meter: Meter) -> int:
     async with SessionLocal() as session:
         await TurnRepository(session).record(
             ctx.turn_id,
-            credential_id=credential.id,
+            credential_id=session_id,
             cost_usd=result.cost_usd,
             charge=charge,
             num_turns=result.steps,
@@ -136,21 +132,21 @@ async def _bill(ctx: Ctx, credential, result: loop.Result, meter: Meter) -> int:
     return charge
 
 
-async def _punish(credential, result: loop.Result) -> None:
+async def _punish(session_row, result: loop.Result) -> None:
+    await opal.invalidate(session_row.id)
     async with SessionLocal() as session:
-        creds = CredentialRepository(session)
-        row = await creds.get(credential.id)
+        creds = OpalSessionRepository(session)
+        row = await creds.get(session_row.id)
         if row is None:
             return
-        cooldown = credentials.cooldown_for(row.kind, row.failures + 1, result.failure)
+        cooldown = credentials.cooldown_for(row.failures + 1, result.failure)
         disable = result.failure == credentials.Failure.AUTH
         await creds.failed(
-            credential.id, error=result.error or "", cooldown_until=cooldown, disable=disable
+            session_row.id, error=result.error or "", cooldown_until=cooldown, disable=disable
         )
     events.publish(
         "credential.failed",
-        credential_id=credential.id,
-        kind=str(credential.kind),
+        credential_id=session_row.id,
         failure=str(result.failure),
         cooldown_until=cooldown.isoformat() if cooldown else None,
         disabled=disable,
@@ -167,24 +163,36 @@ async def _execute(
     tried: set[int] = set()
     spent = 0.0
     meter = Meter(held, ctx.turn_id)
+
     for attempt in range(1, MAX_ATTEMPTS + 1):
         with telemetry.span(
             "agent.attempt",
             attributes={attrs.ATTEMPT: attempt, attrs.TURN_ID: str(ctx.turn_id)},
         ) as attempt_span:
             async with SessionLocal() as session:
-                creds = CredentialRepository(session)
-                credential = await creds.pick(tried)
-                if credential is None:
+                creds = OpalSessionRepository(session)
+                session_row = await creds.pick(tried)
+                if session_row is None:
                     next_at = await creds.next_cooldown()
-                    telemetry.refused(attempt_span, f"no usable credential (tried={sorted(tried)})")
-                    logger.warning("%s no usable credential (tried=%s)", prefix, sorted(tried))
+                    telemetry.refused(attempt_span, f"no usable opal session (tried={sorted(tried)})")
+                    logger.warning("%s no usable opal session (tried=%s)", prefix, sorted(tried))
                     return Outcome("no_credentials", next_at=next_at, cost_usd=spent)
                 config = await ConfigRepository(session).get()
-                ratio = billing.ratio_for(config, credential.kind)
+                ratio = config.ratio
                 user = await UserRepository(session).get_or_create(ctx.user_id)
-                model = user.model or settings.claude_model
-                effort = user.effort or DEFAULT_EFFORT
+                model = user.model or settings.gemini_model
+                effort = user.effort or settings.gemini_thinking_level
+
+            try:
+                access_token = await opal.get_access_token(session_row.id, session_row.refresh_token)
+            except opal.OpalRefreshFailed as e:
+                logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
+                tried.add(session_row.id)
+                await _punish(
+                    session_row,
+                    loop.Result(status="failed", error=str(e), failure=credentials.Failure.AUTH),
+                )
+                continue
 
             meter.begin(ratio)
             left = held.usd(ratio)
@@ -194,30 +202,22 @@ async def _execute(
                 logger.warning("%s stopped: nothing left to spend (%s)", prefix, empty)
                 return Outcome("ok" if spent else empty, cost_usd=spent)
 
-            applied = request.applied_thinking(model) or {}
             telemetry.set_attrs(
                 attempt_span,
                 {
-                    attrs.CREDENTIAL_ID: credential.id,
-                    attrs.CREDENTIAL_KIND: str(credential.kind),
+                    attrs.CREDENTIAL_ID: session_row.id,
                     attrs.GEN_AI_MODEL: model,
                     attrs.EFFORT: effort,
-                    attrs.THINKING: applied.get("type", "off"),
-                    attrs.THINKING_DISPLAY: applied.get("display", "off"),
                     attrs.BUDGET_USD: left,
                 },
             )
             logger.info(
-                "%s attempt=%s credential=%s(%s) model=%s effort=%s thinking=%s/%s ratio=%s "
-                "budget=%.6f messages=%s",
+                "%s attempt=%s session=%s model=%s effort=%s ratio=%s budget=%.6f messages=%s",
                 prefix,
                 attempt,
-                credential.id,
-                credential.kind,
+                session_row.id,
                 model,
                 effort,
-                applied.get("type", "off"),
-                applied.get("display", "off"),
                 ratio,
                 left,
                 len(messages),
@@ -233,16 +233,13 @@ async def _execute(
                 ratio=ratio,
                 budget_units=held.units,
                 balance_units=held.balance,
-                thinking=applied.get("type", "off"),
-                display=applied.get("display", "off"),
-                configured=settings.claude_thinking_display or "off",
             )
             started = time.perf_counter()
             with telemetry.span(
                 "gen_ai.invoke_agent",
                 kind=telemetry.CLIENT,
                 attributes={
-                    attrs.GEN_AI_SYSTEM: "anthropic",
+                    attrs.GEN_AI_SYSTEM: "gemini",
                     attrs.GEN_AI_OPERATION: "invoke_agent",
                     attrs.GEN_AI_MODEL: model,
                     attrs.EFFORT: effort,
@@ -253,7 +250,7 @@ async def _execute(
                 result = await loop.run(
                     ctx,
                     messages=messages,
-                    credential=credential,
+                    access_token=access_token,
                     model=model,
                     prompt=system_prompt,
                     effort=effort,
@@ -270,9 +267,7 @@ async def _execute(
                         attrs.SDK_MESSAGES: len(messages),
                         attrs.NUM_TURNS: result.steps,
                         attrs.COST_USD: result.cost_usd,
-                        attrs.GEN_AI_FINISH_REASONS: [result.stop_reason]
-                        if result.stop_reason
-                        else None,
+                        attrs.GEN_AI_FINISH_REASONS: [result.stop_reason] if result.stop_reason else None,
                         attrs.COMPLETION: telemetry.content(result.text),
                     },
                 )
@@ -281,7 +276,7 @@ async def _execute(
                         query_span, RuntimeError(short(result.error or result.status, 300))
                     )
 
-            charge = await _bill(ctx, credential, result, meter)
+            charge = await _bill(ctx, session_row.id, result, meter)
             telemetry.set_attrs(
                 attempt_span,
                 {
@@ -320,20 +315,20 @@ async def _execute(
 
             if result.status == "ok":
                 async with SessionLocal() as session:
-                    await CredentialRepository(session).succeeded(credential.id, result.cost_usd)
+                    await OpalSessionRepository(session).succeeded(session_row.id)
                 return Outcome("ok", cost_usd=spent)
             if result.status == "budget":
                 return Outcome("empty_balance", cost_usd=spent)
             if result.failure is not None and credentials.blames_credential(result.failure):
                 logger.warning(
-                    "%s credential=%s failed (%s): %s",
+                    "%s session=%s failed (%s): %s",
                     prefix,
-                    credential.id,
+                    session_row.id,
                     result.failure,
                     short(result.error, 600),
                 )
-                tried.add(credential.id)
-                await _punish(credential, result)
+                tried.add(session_row.id)
+                await _punish(session_row, result)
                 continue
             return Outcome("failed", error=result.error, cost_usd=spent)
     return Outcome("failed", error="attempts exhausted", cost_usd=spent)

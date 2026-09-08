@@ -8,38 +8,22 @@ from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
-CALL_BLOCKS = ("tool_use", "server_tool_use")
-THINKING_BLOCKS = ("thinking", "redacted_thinking")
-KNOWN_BLOCKS = ("text", *THINKING_BLOCKS, *CALL_BLOCKS)
 LIST_LIMIT = 200
 
 
 def log_reply(reply, prefix: str) -> None:
     logger.info(
-        "%s model=%s stop=%s blocks=%s",
+        "%s model=%s stop=%s text_len=%s thoughts_len=%s",
         prefix,
         reply.model,
         reply.stop_reason,
-        len(reply.content),
+        len(reply.text),
+        len(reply.thoughts),
     )
-    for index, block in enumerate(reply.content):
-        kind = block.get("type")
-        if kind == "text":
-            logger.info("%s block[%s] text: %s", prefix, index, short(block.get("text")))
-        elif kind in THINKING_BLOCKS:
-            logger.debug("%s block[%s] thinking: %s", prefix, index, short(block.get("thinking")))
-        elif kind in CALL_BLOCKS:
-            logger.info(
-                "%s block[%s] %s id=%s name=%s input=%s",
-                prefix,
-                index,
-                kind,
-                block.get("id"),
-                block.get("name"),
-                short(block.get("input")),
-            )
-        else:
-            logger.debug("%s block[%s] %s: %s", prefix, index, kind, short(block))
+    if reply.thoughts:
+        logger.debug("%s thoughts: %s", prefix, short(reply.thoughts))
+    if reply.text:
+        logger.info("%s text: %s", prefix, short(reply.text))
 
 
 def shrink(value, limit: int):
@@ -57,6 +41,12 @@ def shrink(value, limit: int):
 
 
 def _output(content) -> list[dict]:
+    if isinstance(content, str):
+        body, cut = stream.clip(content)
+        item = {"type": "text", "text": body}
+        if cut:
+            item["cut"] = cut
+        return [item]
     out: list[dict] = []
     for block in content or []:
         if not isinstance(block, dict):
@@ -64,7 +54,7 @@ def _output(content) -> list[dict]:
         kind = block.get("type")
         if kind == "text":
             body, cut = stream.clip(block.get("text") or "")
-            item: dict = {"type": "text", "text": body}
+            item = {"type": "text", "text": body}
             if cut:
                 item["cut"] = cut
             out.append(item)
@@ -80,22 +70,6 @@ def _output(content) -> list[dict]:
     return out
 
 
-def _block(block: dict) -> dict:
-    kind = block.get("type")
-    item: dict = {"type": kind}
-    if kind in CALL_BLOCKS:
-        item["id"] = block.get("id")
-        item["name"] = block.get("name")
-    elif kind == "text":
-        item["chars"] = len(block.get("text") or "")
-    elif kind == "thinking":
-        item["chars"] = len(block.get("thinking") or "")
-        item["hidden"] = not item["chars"]
-    elif kind == "redacted_thinking":
-        item["hidden"] = True
-    return item
-
-
 class Recorder:
     def __init__(self, prefix: str, live: Live | None = None) -> None:
         self.prefix = prefix
@@ -104,63 +78,51 @@ class Recorder:
 
     def request(self, step: int, messages: int, tools: int) -> None:
         self.steps = step
-        logger.info("%s step=%s messages=%s tools=%s", self.prefix, step, messages, tools)
+        logger.info("%s step=%s messages=%s", self.prefix, step, messages)
         if self.live is not None:
             self.live.emit("step.start", step=step, messages=messages, tools=tools)
 
     def raw(self, name: str, data: dict) -> None:
         if self.live is None:
             return
-        kind = name or str(data.get("type") or "")
-        if kind == "message_start":
-            message = data.get("message") or {}
+        if name == "message_start":
             self.live.emit(
                 "step.model",
                 step=self.steps,
-                id=message.get("id"),
-                model=message.get("model"),
-                usage=message.get("usage") or {},
+                model=data.get("model"),
             )
-        elif kind == "content_block_start":
-            block = data.get("content_block") or {}
-            payload = {
-                "step": self.steps,
-                "index": int(data.get("index", 0)),
-                "type": block.get("type"),
-                "id": block.get("id"),
-                "name": block.get("name"),
-            }
-            if block.get("type") not in KNOWN_BLOCKS:
-                payload["block"] = shrink(block, settings.live_max_text)
-            self.live.emit("block.open", **payload)
-        elif kind == "content_block_delta":
-            self._delta(int(data.get("index", 0)), data.get("delta") or {})
-        elif kind == "content_block_stop":
-            self.live.emit("block.close", step=self.steps, index=int(data.get("index", 0)))
-        elif kind == "error":
+        elif name == "thought_delta":
+            thought = data.get("thought") or ""
+            self.live.append("block.think", self.steps, 0, thought)
+        elif name == "text_delta":
+            text = data.get("text") or ""
+            self.live.append("block.text", self.steps, 0, text)
+        elif name == "message_delta":
+            self.live.emit(
+                "step.usage",
+                step=self.steps,
+                usage=data.get("usage") or {},
+                stop_reason=data.get("stop_reason"),
+            )
+        elif name == "error":
             error = data.get("error") or {}
             self.failed(short(error.get("message") or "stream failed", 500), error.get("type"))
-
-    def _delta(self, index: int, delta: dict) -> None:
-        assert self.live is not None
-        kind = delta.get("type")
-        if kind == "text_delta":
-            self.live.append("block.text", self.steps, index, delta.get("text") or "")
-        elif kind == "thinking_delta":
-            self.live.append("block.think", self.steps, index, delta.get("thinking") or "")
-        elif kind == "input_json_delta":
-            self.live.append("block.args", self.steps, index, delta.get("partial_json") or "")
 
     def reply(self, reply) -> None:
         log_reply(reply, f"{self.prefix} step#{self.steps}")
         if self.live is not None:
+            blocks = []
+            if reply.thoughts:
+                blocks.append({"type": "thinking", "chars": len(reply.thoughts)})
+            if reply.text:
+                blocks.append({"type": "text", "chars": len(reply.text)})
             self.live.emit(
                 "step.end",
                 step=self.steps,
                 model=reply.model,
                 stop_reason=reply.stop_reason,
                 usage=reply.usage,
-                blocks=[_block(b) for b in reply.content],
+                blocks=blocks,
             )
 
     def tool_started(self, call_id: str, name: str, args: dict) -> None:
@@ -182,7 +144,7 @@ class Recorder:
                 name=name,
                 ok=not result.get("is_error"),
                 ms=round(ms, 1),
-                output=_output(result.get("content")),
+                output=_output(result.get("output")),
             )
 
     def note(self, name: str, attributes: dict | None = None) -> None:

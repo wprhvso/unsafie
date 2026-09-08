@@ -117,7 +117,7 @@ SERVER_PORT = "server.port"
 SECRETS = re.compile(
     r"(gh[pousr]_[A-Za-z0-9]{16,}"
     r"|github_pat_[A-Za-z0-9_]{20,}"
-    r"|sk-ant-[A-Za-z0-9\-_]{16,}"
+    r"|1//[A-Za-z0-9_-]{20,}"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----"
     r"|(?i:authorization|api[-_]?key|password|token)[\"'\s:=]+[A-Za-z0-9._\-]{8,})"
 )

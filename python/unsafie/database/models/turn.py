@@ -40,7 +40,7 @@ class Turn(Base):
     reply_to: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default=TurnStatus.RUNNING)
     credential_id: Mapped[int | None] = mapped_column(
-        ForeignKey("anthropic_credentials.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("opal_sessions.id", ondelete="SET NULL"), nullable=True
     )
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     charge: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")

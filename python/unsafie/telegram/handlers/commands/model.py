@@ -38,8 +38,8 @@ def build_model_router() -> Router:
                     t(
                         "commands-model-status",
                         locale,
-                        model=user.model or settings.claude_model,
-                        default=settings.claude_model,
+                        model=user.model or settings.gemini_model,
+                        default=settings.gemini_model,
                     ),
                 )
                 return
@@ -47,7 +47,7 @@ def build_model_router() -> Router:
                 await users.set_model(user_id, None)
                 logger.info("bot=%s user=%s model -> default", bot_id, user_id)
                 await answer(
-                    message, bot_id, t("commands-model-reset", locale, model=settings.claude_model)
+                    message, bot_id, t("commands-model-reset", locale, model=settings.gemini_model)
                 )
                 return
             if not MODEL_RE.match(raw):

@@ -3,27 +3,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 MILLION = 1_000_000
-CACHE_WRITE_5M = 1.25
-CACHE_WRITE_1H = 2.0
-CACHE_READ = 0.1
 
 PRICES: dict[str, tuple[float, float]] = {
-    "claude-mythos-5": (10.0, 50.0),
-    "claude-fable-5": (10.0, 50.0),
-    "claude-opus-4": (5.0, 25.0),
-    "claude-opus-5": (5.0, 25.0),
-    "claude-sonnet-4": (3.0, 15.0),
-    "claude-sonnet-5": (2.0, 10.0),
-    "claude-haiku-4": (1.0, 5.0),
-    "claude-haiku-4-5": (1.0, 5.0),
+    "gemini-3.1-pro-preview": (1.25, 5.0),
+    "gemini-3-flash-preview": (0.15, 0.6),
+    "gemini-3.1-flash-lite": (0.075, 0.3),
+    "gemini-2.5-pro": (1.25, 5.0),
+    "gemini-2.5-flash": (0.15, 0.6),
 }
-FALLBACK = (5.0, 25.0)
-COUNTERS = (
-    "input_tokens",
-    "output_tokens",
-    "cache_creation_input_tokens",
-    "cache_read_input_tokens",
-)
+FALLBACK = (0.5, 2.0)
+COUNTERS = ("input_tokens", "output_tokens", "total_tokens")
 
 _unpriced: set[str] = set()
 
@@ -45,19 +34,9 @@ def cost(model: str, usage: dict) -> float:
     if not usage:
         return 0.0
     price_in, price_out = rates(model)
-    breakdown = usage.get("cache_creation") or {}
-    write_5m = int(breakdown.get("ephemeral_5m_input_tokens") or 0)
-    write_1h = int(breakdown.get("ephemeral_1h_input_tokens") or 0)
-    if not (write_5m or write_1h):
-        write_1h = int(usage.get("cache_creation_input_tokens") or 0)
-    billable = (
-        int(usage.get("input_tokens") or 0)
-        + write_5m * CACHE_WRITE_5M
-        + write_1h * CACHE_WRITE_1H
-        + int(usage.get("cache_read_input_tokens") or 0) * CACHE_READ
-    )
+    inputs = int(usage.get("input_tokens") or 0)
     output = int(usage.get("output_tokens") or 0)
-    return billable * price_in / MILLION + output * price_out / MILLION
+    return (inputs * price_in + output * price_out) / MILLION
 
 
 def merge(total: dict, usage: dict) -> dict:

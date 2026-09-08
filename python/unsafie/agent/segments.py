@@ -11,8 +11,6 @@ from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
-OPENING = frozenset({"tool_use", "server_tool_use"})
-
 
 @dataclass(frozen=True)
 class History:
@@ -25,22 +23,9 @@ def encode(messages: list) -> bytes:
     return json.dumps(messages, ensure_ascii=False).encode()
 
 
-def _types(message: dict) -> set[str]:
-    content = message.get("content")
-    if not isinstance(content, list):
-        return set()
-    return {block.get("type") for block in content if isinstance(block, dict)}
-
-
-def _dangling(message: dict) -> bool:
-    if message.get("role") == "assistant":
-        return bool(OPENING & _types(message))
-    return "tool_result" in _types(message)
-
-
 def tidy(messages: list) -> list:
     kept = list(messages)
-    while kept and _dangling(kept[-1]):
+    while kept and kept[-1].get("role") != "assistant":
         kept.pop()
     return kept
 

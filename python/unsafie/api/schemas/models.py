@@ -51,28 +51,25 @@ class BudgetWrite(BaseModel):
     budget: int
 
 
-class CredentialRead(Base):
+class OpalSessionRead(Base):
     id: int
-    kind: str
     label: str | None = None
-    secret_masked: str
+    refresh_token_masked: str
     enabled: bool
     failures: int
     cooldown_until: datetime | None = None
     last_error: str | None = None
     last_used_at: datetime | None = None
     uses: int
-    total_cost_usd: float
     created_at: datetime
 
 
-class CredentialWrite(BaseModel):
-    kind: str
-    secret: str
+class OpalSessionWrite(BaseModel):
+    refresh_token: str
     label: str | None = None
 
 
-class CredentialPatch(BaseModel):
+class OpalSessionPatch(BaseModel):
     enabled: bool | None = None
     label: str | None = None
     reset: bool = False

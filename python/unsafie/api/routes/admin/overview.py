@@ -6,8 +6,8 @@ from sqlalchemy import func, select
 from unsafie.api.schemas.models import DayPointRead, OverviewRead, PeriodRead
 from unsafie.database import SessionLocal
 from unsafie.database.models.bot import Bot
-from unsafie.database.models.credential import AnthropicCredential
 from unsafie.database.models.installation import Installation
+from unsafie.database.models.opal_session import OpalSession
 from unsafie.database.models.repo import Repo
 from unsafie.database.models.scheduled_task import ScheduledTask
 from unsafie.database.models.ssh_host import SshHost
@@ -44,7 +44,7 @@ async def overview():
             bots_running=sum(1 for by in polled.values() if by),
             running_turns=counts["running_turns"],
             credentials=counts["credentials"],
-            credentials_total=await _count(session, AnthropicCredential),
+            credentials_total=await _count(session, OpalSession),
             repos=await _count(session, Repo),
             installations=await _count(session, Installation),
             subscriptions=await _count(session, GithubSubscription),

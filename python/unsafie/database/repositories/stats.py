@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.chat import Chat
-from unsafie.database.models.credential import AnthropicCredential
+from unsafie.database.models.opal_session import OpalSession
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.models.user import User
 
@@ -106,8 +106,8 @@ class StatsRepository:
         creds = (
             await self.session.scalar(
                 select(func.count())
-                .select_from(AnthropicCredential)
-                .where(AnthropicCredential.enabled.is_(True))
+                .select_from(OpalSession)
+                .where(OpalSession.enabled.is_(True))
             )
             or 0
         )

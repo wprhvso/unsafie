@@ -1,3 +1,4 @@
+# python/unsafie/agent/billing.py
 import math
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -7,7 +8,6 @@ from uuid import UUID
 
 from unsafie.database import SessionLocal
 from unsafie.database.models.config import Config
-from unsafie.database.models.credential import CredentialKind
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.user import UserRepository
 
@@ -34,8 +34,8 @@ def parse_usd(raw: str) -> int | None:
     return -1 if value < 0 else min(usd_to_units(value), MAX_UNITS)
 
 
-def ratio_for(config: Config, kind: str) -> float:
-    return config.oauth_ratio if kind == CredentialKind.OAUTH else config.ratio
+def ratio_for(config: Config) -> float:
+    return config.ratio
 
 
 def charge_units(cost_usd: float | None, ratio: float) -> int:

@@ -2,6 +2,7 @@ import logging
 import socket
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,9 +14,16 @@ SECRETS_DIR = Path("/run/secrets")
 
 ROLES = ("all", "web", "worker", "poller")
 CACHE_TTLS = ("5m", "1h")
-THINKING_DISPLAYS = ("summarized", "updates", "omitted")
-THINKING_DISPLAY_OFF = ("", "off", "none", "0")
 POLL_TTL_MARGIN = 10.0
+
+SafetyThreshold = Literal[
+    "BLOCK_LOW_AND_ABOVE",
+    "BLOCK_MEDIUM_AND_ABOVE",
+    "BLOCK_NONE",
+    "BLOCK_ONLY_HIGH",
+    "OFF",
+]
+ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
 
 
 def _instance_id() -> str:
@@ -112,30 +120,23 @@ class Settings(BaseSettings):
     otel_batch_size: int = 512
     otel_schedule_delay: int = 2000
 
-    anthropic_api_url: str = "https://api.anthropic.com"
-    anthropic_version: str = "2023-06-01"
-    anthropic_beta: str = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,advisor-tool-2026-03-01,effort-2025-11-24,server-side-fallback-2026-07-01,fallback-credit-2026-06-01,thinking-display-updates-2026-08-18,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07"
-    anthropic_oauth_beta: str = "oauth-2025-04-20"
-    anthropic_connections: int = 16
-    anthropic_timeout: float = 900.0
-    anthropic_connect_timeout: float = 20.0
-    anthropic_read_timeout: float = 180.0
-    anthropic_retries: int = 3
-    anthropic_retry_base: float = 2.0
-    anthropic_retry_max: float = 60.0
-    anthropic_log_curl: bool = True
-    anthropic_log_curl_level: str = "INFO"
-    anthropic_log_body_limit: int = 0
+    gemini_model: str = "gemini-3.1-pro-preview"
+    gemini_api_url: str = "https://appcatalyst.pa.googleapis.com/v1beta1/models"
+    gemini_safety_threshold: SafetyThreshold = "BLOCK_NONE"
+    gemini_thinking_level: ThinkingLevel = "HIGH"
+    gemini_max_output_tokens: int = 65536
+    gemini_timeout: float = 900.0
+    gemini_connect_timeout: float = 20.0
+    gemini_read_timeout: float = 180.0
+    gemini_retries: int = 3
+    gemini_retry_base: float = 2.0
+    gemini_retry_max: float = 60.0
+    gemini_connections: int = 16
 
-    claude_model: str = "claude-opus-5"
-    claude_max_tokens: int = 128000
-    claude_thinking: str = "adaptive"
-    claude_web_search: bool = True
-    claude_web_search_max_uses: int = 800
-    claude_thinking_display: str = "summarized"
-    claude_clear_thinking: bool = True
-    claude_clear_thinking_keep: str = "all"
-    claude_fallbacks: str = "default"
+    opal_refresh_url: str = "https://opal.google/connection/refresh"
+    opal_access_ttl: int = 2700
+    opal_pick_attempts: int = 3
+
     cache_ttl: str = "1h"
     agent_max_steps: int = 6400
     agent_block_timeout: float = 900.0
@@ -295,23 +296,6 @@ class Settings(BaseSettings):
                 f"vs {self.turn_heartbeat})"
             )
         return self
-
-    @field_validator("claude_thinking_display", mode="before")
-    @classmethod
-    def _display(cls, v):
-        value = str(v or "").strip().lower()
-        if value in THINKING_DISPLAY_OFF:
-            return ""
-        if value == "raw":
-            logger.warning(
-                "CLAUDE_THINKING_DISPLAY=raw is not accepted by the API, using summarized instead"
-            )
-            return "summarized"
-        if value not in THINKING_DISPLAYS:
-            raise ValueError(
-                f"CLAUDE_THINKING_DISPLAY must be {' | '.join(THINKING_DISPLAYS)} | off, got '{v}'"
-            )
-        return value
 
     @property
     def runs_web(self) -> bool:

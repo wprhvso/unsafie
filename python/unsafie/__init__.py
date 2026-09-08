@@ -15,7 +15,7 @@ def main() -> None:
         settings.host,
         settings.port,
         settings.reload,
-        settings.claude_model,
+        settings.gemini_model,
         settings.instance_id,
         settings.role,
     )

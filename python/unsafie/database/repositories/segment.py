@@ -53,9 +53,7 @@ class SegmentRepository:
 
     async def lineage(self, turn_id: UUID, *, max_depth: int, budget: int) -> Lineage:
         rows = (
-            await self.session.execute(
-                LINEAGE, {"turn_id": str(turn_id), "max_depth": max_depth}
-            )
+            await self.session.execute(LINEAGE, {"turn_id": str(turn_id), "max_depth": max_depth})
         ).all()
         if not rows:
             return Lineage([], None, 0, 0, 0)

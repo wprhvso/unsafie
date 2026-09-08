@@ -11,9 +11,10 @@ from unsafie.settings import settings
 from unsafie.ssh import binding
 
 REMINDER = (
-    "Reminder: nothing you write as text is delivered. Only chat.send(), chat.send_file() and "
-    "pages.create(), called from inside a python tool call, reach the chat. Do not end this turn "
-    "until a call has run chat.send(...) with the answer."
+    "Reminder: Write ONLY executable Python code inside ```python ... ``` blocks. "
+    "Do not write prose outside code blocks. Nothing written outside code blocks reaches the user. "
+    "All messages must be sent via chat.send(...) inside your code. "
+    "Do not conclude until you have called chat.send(...) with your answer."
 )
 
 
@@ -27,17 +28,14 @@ async def time_context(session: AsyncSession, ctx: Ctx) -> str:
     now = datetime.now(UTC).astimezone(tz)
     line = f"Now: {now.strftime('%Y-%m-%d %H:%M')} ({now.strftime('%A')}), timezone {tz.key}"
     if not name:
-        line += (
-            " (the user has not set one; ask and it is saved with /tz when the time of day "
-            "matters)"
-        )
+        line += " (user timezone not set, default UTC used)"
     line += f". User locale: {ctx.locale}."
     return line
 
 
 async def machines_context(ctx: Ctx) -> str:
     if not settings.pool_enabled:
-        return "Pool: switched off on this server — no machine, so python calls will not run."
+        return "Pool: disabled on this server."
     mine = await registry.of_user(ctx.user_id)
     counts = await registry.counted()
     if mine:
@@ -49,19 +47,16 @@ async def machines_context(ctx: Ctx) -> str:
             parts.append(label)
         head = "Your machine: " + "; ".join(parts)
     else:
-        head = "Your machine: none yet — the first python call takes one automatically"
-    return (
-        f"{head}. Pool: {counts.get('idle', 0)} free of {counts.get('total', 0)}, every machine "
-        "fully equipped. A machine is single use: releasing destroys it, and its files go with it."
-    )
+        head = "Your machine: none active, the first code execution allocates one automatically"
+    return f"{head}. Pool capacity: {counts.get('idle', 0)} free of {counts.get('total', 0)}."
 
 
 async def accounts_context(ctx: Ctx) -> str:
     rows = await pat.accounts_of(ctx.user_id)
     if not rows:
-        return "GitHub: no account attached — the user adds one with /gh <token>."
+        return "GitHub: no account attached."
     logins = ", ".join(row.login for row in rows)
-    tail = " · github.use('login') switches between them" if len(rows) > 1 else ""
+    tail = " (github.use('login') switches account)" if len(rows) > 1 else ""
     return f"GitHub accounts: {logins}{tail}."
 
 
@@ -70,10 +65,7 @@ async def servers_context(ctx: Ctx) -> str:
     if not hosts:
         return ""
     listed = "; ".join(f"{host.alias} ({host.label})" for host in hosts)
-    return (
-        f"SSH servers: {listed}. The key and these aliases are already in ~/.ssh on the machine, "
-        "so plain ssh, scp and rsync work from the shell: run(\"ssh alias 'df -h'\")."
-    )
+    return f"SSH servers configured in ~/.ssh: {listed}."
 
 
 async def build_context(session: AsyncSession, ctx: Ctx) -> str:
