@@ -26,11 +26,29 @@ RETRY_MAX = 15.0
 KILL_GRACE = 5.0
 TIMED_OUT = 124
 CANCELLED = 125
+BLOCK_TIMEOUT = 900.0
+BLOCK_GRACE = 5.0
+UNWIND_GRACE = 8.0
 
 
 def _log(message: str) -> None:
     sys.stderr.write(f"[machine] {message}\n")
     sys.stderr.flush()
+
+
+def _unblock() -> None:
+    """Break whatever the running block is waiting on inside C code.
+
+    KeyboardInterrupt is only delivered between bytecodes, so a block sitting in
+    socket.recv or Popen.wait ignores it forever. Closing the devtools socket is
+    the one lever that turns a blocked read into an exception the block can see.
+    """
+    try:
+        from unsafie_sdk import browser
+
+        browser.detach()
+    except Exception:  # noqa: BLE001 - this is a best effort, never a failure
+        return
 
 
 class Link:
@@ -323,21 +341,81 @@ class Daemon:
                 frame = self.blocks.get(timeout=FLUSH)
             except queue.Empty:
                 continue
-            self._run_block(frame)
+            try:
+                self._run_block(frame)
+            except Exception as broken:  # noqa: BLE001 - the channel outlives one bad block
+                _log(f"block loop: {broken}")
 
     def _run_block(self, frame: dict) -> None:
+        """Run one block under a deadline that holds even for blocking C calls.
+
+        The interpreter is shared, so the work happens on a worker thread while this
+        one watches the clock. A block that ignores KeyboardInterrupt is abandoned and
+        the namespace is thrown away — one lost variable beats a channel that is dead
+        for the rest of the lease.
+        """
         block_id = str(frame.get("id") or "")
         code = str(frame.get("code") or "")
         if not block_id or not code.strip():
             return
+        limit = float(frame.get("timeout") or 0) or BLOCK_TIMEOUT
         repl = self._repl()
         if frame.get("reset"):
             repl.reset()
         self.block_id = block_id
-        self.block_thread = threading.current_thread()
-        outcome = repl.run(code, frame.get("timeout"))
+        started = time.monotonic()
+        done = threading.Event()
+        box: dict[str, Any] = {}
+
+        def work() -> None:
+            try:
+                box["outcome"] = repl.run(code, limit)
+            except BaseException as broken:  # noqa: BLE001 - reported, never swallowed
+                box["error"] = broken
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=work, name=f"block-{block_id[:8]}", daemon=True)
+        self.block_thread = worker
+        worker.start()
+
+        if done.wait(limit + BLOCK_GRACE):
+            self.block_thread = None
+            broken = box.get("error")
+            if broken is not None:
+                self._emit(wire.output(block_id, f"the block died: {broken!r}\n"))
+                self._emit(wire.exited(block_id, 1, time.monotonic() - started))
+                return
+            outcome = box.get("outcome")
+            code_out = 0 if outcome is not None and outcome.ok else 1
+            seconds = outcome.seconds if outcome is not None else time.monotonic() - started
+            self._emit(wire.exited(block_id, code_out, seconds))
+            return
+
+        _log(f"block {block_id} passed {limit:.0f}s, unwinding it")
+        self._emit(
+            wire.output(block_id, f"\n[timeout] the block ran past {limit:.0f}s and was stopped\n")
+        )
+        self._unwind(worker, block_id)
         self.block_thread = None
-        self._emit(wire.exited(block_id, 0 if outcome.ok else 1, outcome.seconds))
+        self._emit(wire.exited(block_id, TIMED_OUT, time.monotonic() - started))
+
+    def _unwind(self, worker: threading.Thread, block_id: str) -> None:
+        interrupt(worker)
+        _unblock()
+        if worker.is_alive():
+            worker.join(UNWIND_GRACE)
+        if not worker.is_alive():
+            return
+        _log(f"block {block_id} is stuck below python, dropping the namespace")
+        self.repl = None
+        self._emit(
+            wire.output(
+                block_id,
+                "[the interpreter was reset: the previous block never returned, so its "
+                "variables and imports are gone]\n",
+            )
+        )
 
     # shell ----------------------------------------------------------------
 
@@ -409,9 +487,11 @@ class Daemon:
         self._kill(job)
 
     def _cancel(self, command_id: str) -> None:
-        if command_id and command_id == self.block_id and self.block_thread is not None:
+        worker = self.block_thread
+        if command_id and command_id == self.block_id and worker is not None:
             self._emit(wire.output(command_id, "\n[cancelled]\n"))
-            interrupt(self.block_thread)
+            interrupt(worker)
+            _unblock()
             return
         with self.lock:
             job = self.jobs.get(command_id)

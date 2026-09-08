@@ -5,11 +5,21 @@ from typing import Any
 from unsafie_sdk import blobs
 from unsafie_sdk.chrome import actions
 from unsafie_sdk.chrome import browser as engine
-from unsafie_sdk.chrome.cdp import CdpError
+from unsafie_sdk.chrome.cdp import Cdp, CdpError
+from unsafie_sdk.chrome.ws import WsError
 from unsafie_sdk.errors import UnsafieError
 from unsafie_wire import markers
 
 SHOTS = "shots"
+STALE = (
+    "closed the devtools connection",
+    "stopped answering",
+    "did not answer",
+    "no page to drive",
+    "cannot reach the browser",
+)
+
+_open: dict[str, Any] = {}
 
 
 def _state() -> dict:
@@ -19,24 +29,69 @@ def _state() -> dict:
     return state
 
 
-def _session():
-    return engine.session(_state())
+def _session() -> Cdp:
+    """The devtools connection of this machine, opened once and kept.
+
+    Reconnecting per call cost three round trips (Page/Runtime/DOM.enable) on every
+    goto, click and shot, and every one of them was another chance to hang.
+    """
+    state = _state()
+    cached = _open.get("cdp")
+    if cached is not None and _open.get("port") == state["port"]:
+        return cached
+    detach()
+    cdp, _ = engine.session(state)
+    _open["cdp"] = cdp
+    _open["port"] = state["port"]
+    return cdp
+
+
+def detach() -> None:
+    """Drop the devtools connection. Safe to call from another thread."""
+    cdp = _open.pop("cdp", None)
+    _open.pop("port", None)
+    if cdp is None:
+        return
+    try:
+        cdp.close()
+    except Exception:  # noqa: BLE001 - the point is to free the socket, not to succeed
+        return
+
+
+def _stale(problem: Exception) -> bool:
+    text = str(problem).lower()
+    return any(word in text for word in STALE)
 
 
 def _act(work, *args, **kwargs) -> Any:
-    cdp, _ = _session()
-    try:
-        return work(cdp, *args, **kwargs)
-    except CdpError as broken:
-        raise UnsafieError(str(broken)) from None
-    finally:
-        cdp.close()
+    last: Exception | None = None
+    for attempt in (1, 2):
+        try:
+            cdp = _session()
+        except engine.BrowserError as broken:
+            raise UnsafieError(f"cannot reach the browser: {broken}") from None
+        try:
+            return work(cdp, *args, **kwargs)
+        except CdpError as broken:
+            if attempt == 1 and _stale(broken):
+                detach()
+                last = broken
+                continue
+            raise UnsafieError(str(broken)) from None
+        except (WsError, OSError) as broken:
+            detach()
+            if attempt == 1:
+                last = broken
+                continue
+            raise UnsafieError(f"the browser connection broke: {broken}") from None
+    raise UnsafieError(f"the browser connection broke: {last}")
 
 
 def start(profile: str | None = None, *, size: str = "1920x1080", headless: bool = False) -> dict:
     """Start Chrome on this machine. A profile keeps cookies and logins between sessions."""
     if engine.load() is not None:
         return {"running": True, **_state()}
+    detach()
     try:
         state = engine.launch(profile, size, headless)
     except engine.BrowserError as broken:
@@ -44,11 +99,17 @@ def start(profile: str | None = None, *, size: str = "1920x1080", headless: bool
             str(broken), "every pool machine has Chrome; on your own box install it first"
         ) from None
     engine.save(state)
+    if not headless and state.get("headless"):
+        print(
+            "note: no X display came up, so Chrome runs headless — the desktop link will be "
+            "empty. Run `unsafie-machine setup xvfb kasmvnc` on this machine."
+        )
     return state
 
 
 def stop(*, save_profile: bool = True) -> dict:
     """Close Chrome; the profile is stored so the next session starts logged in."""
+    detach()
     state = engine.load()
     if state is None:
         return {"running": False}
@@ -109,15 +170,19 @@ def evaluate(expression: str) -> Any:
 
 
 def shot(*, full: bool = False, send: bool = False, caption: str | None = None) -> str:
-    """Take a screenshot. It comes back to the model as a picture; send=True also posts it."""
+    """Take a screenshot. It comes back to the model as a picture; send=True also posts it.
+
+    The marker is printed last: a call that dies after the screenshot would lose the
+    picture anyway, because a failed call may only carry text back to the model.
+    """
     data = _act(actions.screenshot, full)
     key = f"{SHOTS}/{int(time.time() * 1000)}.png"
     blobs.put(key, data)
-    print(markers.image(key, "image/png", caption))
     if send:
         from unsafie_sdk import chat
 
         chat.send_photo(data, caption=caption)
+    print(markers.image(key, "image/png", caption))
     return key
 
 

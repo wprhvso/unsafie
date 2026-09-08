@@ -14,6 +14,7 @@ PONG = 0xA
 FIN = 0x80
 MASK = 0x80
 HANDSHAKE_LIMIT = 65536
+GOODBYE = 1.0
 
 
 class WsError(RuntimeError):
@@ -138,6 +139,8 @@ class WebSocket:
                 chunk = self.sock.recv(65536)
             except TimeoutError:
                 raise WsError("the browser stopped answering") from None
+            except OSError as broken:
+                raise WsError(f"the browser connection was closed: {broken}") from None
             if not chunk:
                 return None
             self._buffer += chunk
@@ -145,11 +148,25 @@ class WebSocket:
         return taken
 
     def close(self) -> None:
+        """Close, and make sure a read blocked in another thread comes back.
+
+        A plain close() only drops this reference: a thread already inside recv keeps
+        waiting on the kernel. shutdown() is what wakes it, and that is the only way
+        to unstick a block that hung on a browser that stopped talking.
+        """
         try:
+            self.sock.settimeout(GOODBYE)
             self.sock.sendall(bytes([FIN | CLOSE, MASK | 0]) + os.urandom(4))
         except OSError:
             pass
-        self.sock.close()
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        try:
+            self.sock.close()
+        except OSError:
+            pass
 
 
 def json_get(url: str, timeout: float = 10.0) -> object:

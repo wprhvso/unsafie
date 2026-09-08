@@ -51,6 +51,20 @@
     return first ?? '';
   }
 
+  function firstText(blocks) {
+    for (const block of blocks ?? []) {
+      if (block?.type === 'text' && block.text) return block.text;
+    }
+    return '';
+  }
+
+  function lastLine(text) {
+    const lines = String(text ?? '')
+      .split('\n')
+      .filter((line) => line.trim());
+    return lines.length ? lines[lines.length - 1] : '';
+  }
+
   function clock(iso) {
     if (!iso) return '';
     const date = new Date(iso);
@@ -86,10 +100,13 @@
     item.type === 'tool' || item.type === 'raw' ? item.name : (TITLES[item.type] ?? item.type)
   );
   const structured = $derived(item.type === 'prompt' ? decode(item.text) : null);
+  const broke = $derived(item.type === 'tool' && item.phase === 'done' && item.ok === false);
   const sub = $derived.by(() => {
     switch (item.type) {
       case 'tool':
-        return short(headline(item.input) || item.args, 90);
+        return broke
+          ? short(lastLine(firstText(item.output)) || headline(item.input), 90)
+          : short(headline(item.input) || item.args, 90);
       case 'error':
         return short(item.message, 90);
       case 'note':
@@ -152,7 +169,7 @@
       <button class="head" onclick={toggle} aria-expanded={open}>
         <span class="caret" class:open>▸</span>
         <span class="title" class:mono={item.type === 'tool'}>{title}</span>
-        {#if sub}<span class="sub">{sub}</span>{/if}
+        {#if sub}<span class="sub" class:broke>{sub}</span>{/if}
         <span class="spacer"></span>
         {#if item.type === 'tool'}
           <span class="state {item.phase}">
@@ -428,6 +445,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+  }
+
+  .sub.broke {
+    color: var(--bad);
   }
 
   .spacer {
