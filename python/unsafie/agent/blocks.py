@@ -70,8 +70,6 @@ class Runner:
         self.ctx = ctx
         self.recorder = recorder
         self.blocks: list[Block] = []
-        self.lock = asyncio.Lock()
-        self.tasks: set[asyncio.Task] = set()
         self._cli_token: str | None = None
 
     @property
@@ -81,6 +79,10 @@ class Runner:
     @property
     def stopped(self) -> bool:
         return any(block.stopped for block in self.blocks)
+
+    @property
+    def replied(self) -> bool:
+        return any(block.sent for block in self.blocks)
 
     async def _ensure_token(self) -> str:
         if self._cli_token is None:
@@ -93,16 +95,12 @@ class Runner:
             )
         return self._cli_token
 
-    def start(self, code: str) -> Block:
+    async def run(self, code: str) -> Block:
         index = len(self.blocks) + 1
         block = Block(index=index, code=code)
         self.blocks.append(block)
         self.recorder.code_started(index, code, "local")
-        task = asyncio.create_task(
-            self._run(block), name=f"bash:{self.ctx.turn_id}:{block.index}"
-        )
-        self.tasks.add(task)
-        task.add_done_callback(self.tasks.discard)
+        await self._run(block)
         return block
 
     async def _nag(self, block: Block) -> None:
@@ -129,95 +127,94 @@ class Runner:
             )
 
     async def _run(self, block: Block) -> None:
-        async with self.lock:
-            if self.stopped:
-                block.error = "turn stopped"
-                block.seconds = time.monotonic() - block.started_at
-                self._finished(block)
-                return
-            token = await self._ensure_token()
-            bash_bin = shutil.which("bash") or "/bin/bash"
-            if not os.path.exists(bash_bin) and not shutil.which("bash"):
-                block.error = "bash not available"
-                block.exit_code = 127
-                block.seconds = time.monotonic() - block.started_at
-                self._finished(block)
-                return
-
-            env = dict(os.environ)
-            extra_paths = [
-                str(Path(sys.prefix) / "bin"),
-                str(Path(sys.executable).parent),
-                str(Path.home() / ".cargo" / "bin"),
-                str(Path.home() / ".local" / "bin"),
-                "/usr/local/bin",
-                "/opt/homebrew/bin",
-            ]
-            env["PATH"] = ":".join(p for p in extra_paths if p) + ":" + env.get("PATH", "")
-            env["UNSAFIE_API"] = settings.public_base_url or f"http://{settings.host}:{settings.port}"
-            env["UNSAFIE_TOKEN"] = token
-            env["UNSAFIE_CHAT"] = str(self.ctx.chat_id)
-            env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
-
-            watch = asyncio.create_task(
-                self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
-            )
-            started = time.monotonic()
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    bash_bin,
-                    "-c",
-                    block.code,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-                raw_out, raw_err = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=settings.agent_block_timeout,
-                )
-                combined = (
-                    raw_out.decode("utf-8", "replace")
-                    + ("\n" + raw_err.decode("utf-8", "replace") if raw_err else "")
-                )
-                block.exit_code = proc.returncode
-            except TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
-                block.exit_code = 124
-                combined = ""
-            except FileNotFoundError:
-                block.error = "bash executable 'bash' not found"
-                block.exit_code = 127
-                combined = ""
-            except asyncio.CancelledError:
-                block.error = "stopped by the user"
-                block.seconds = time.monotonic() - block.started_at
-                self._finished(block)
-                raise
-            except Exception as broken:
-                block.error = f"{type(broken).__name__}: {broken}"
-                block.seconds = time.monotonic() - block.started_at
-                logger.exception("%s bash block %s could not run", self.ctx.prefix, block.index)
-                self._finished(block)
-                return
-            finally:
-                watch.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await watch
-
-            if len(combined) > settings.pool_max_output:
-                combined = combined[: settings.pool_max_output]
-                block.truncated = True
-
-            body, found = markers.split(combined)
-            block.output = body
-            block.seconds = time.monotonic() - started
-            await self._decorate(block, found)
+        if self.stopped:
+            block.error = "turn stopped"
+            block.seconds = time.monotonic() - block.started_at
             self._finished(block)
+            return
+        token = await self._ensure_token()
+        bash_bin = shutil.which("bash") or "/bin/bash"
+        if not os.path.exists(bash_bin) and not shutil.which("bash"):
+            block.error = "bash not available"
+            block.exit_code = 127
+            block.seconds = time.monotonic() - block.started_at
+            self._finished(block)
+            return
+
+        env = dict(os.environ)
+        extra_paths = [
+            str(Path(sys.prefix) / "bin"),
+            str(Path(sys.executable).parent),
+            str(Path.home() / ".cargo" / "bin"),
+            str(Path.home() / ".local" / "bin"),
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+        ]
+        env["PATH"] = ":".join(p for p in extra_paths if p) + ":" + env.get("PATH", "")
+        env["UNSAFIE_API"] = settings.public_base_url or f"http://{settings.host}:{settings.port}"
+        env["UNSAFIE_TOKEN"] = token
+        env["UNSAFIE_CHAT"] = str(self.ctx.chat_id)
+        env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
+
+        watch = asyncio.create_task(
+            self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
+        )
+        started = time.monotonic()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                bash_bin,
+                "-c",
+                block.code,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            raw_out, raw_err = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=settings.agent_block_timeout,
+            )
+            combined = (
+                raw_out.decode("utf-8", "replace")
+                + ("\n" + raw_err.decode("utf-8", "replace") if raw_err else "")
+            )
+            block.exit_code = proc.returncode
+        except TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
+            block.exit_code = 124
+            combined = ""
+        except FileNotFoundError:
+            block.error = "bash executable 'bash' not found"
+            block.exit_code = 127
+            combined = ""
+        except asyncio.CancelledError:
+            block.error = "stopped by the user"
+            block.seconds = time.monotonic() - block.started_at
+            self._finished(block)
+            raise
+        except Exception as broken:
+            block.error = f"{type(broken).__name__}: {broken}"
+            block.seconds = time.monotonic() - block.started_at
+            logger.exception("%s bash block %s could not run", self.ctx.prefix, block.index)
+            self._finished(block)
+            return
+        finally:
+            watch.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await watch
+
+        if len(combined) > settings.pool_max_output:
+            combined = combined[: settings.pool_max_output]
+            block.truncated = True
+
+        body, found = markers.split(combined)
+        block.output = body
+        block.seconds = time.monotonic() - started
+        await self._decorate(block, found)
+        self._finished(block)
 
     async def _decorate(self, block: Block, found: list[markers.Block]) -> None:
         for item in found:
@@ -287,11 +284,6 @@ class Runner:
             block.error or f"exit={block.exit_code} in {block.seconds:.1f}s",
         )
 
-    async def settle(self) -> list[dict]:
-        if self.tasks:
-            await asyncio.gather(*list(self.tasks), return_exceptions=True)
-        return self.content()
-
     def content(self) -> list[dict]:
         if not self.blocks:
             return []
@@ -302,6 +294,5 @@ class Runner:
                 parts.extend(block.images)
         return parts
 
-    @property
-    def replied(self) -> bool:
-        return any(block.sent for block in self.blocks)
+    async def settle(self) -> list[dict]:
+        return self.content()

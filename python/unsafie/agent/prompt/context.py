@@ -10,7 +10,7 @@ from unsafie.settings import settings
 from unsafie.ssh import binding
 
 REMINDER = (
-    "Reminder: Write ONLY executable Bash code inside ```bash ... ``` blocks. "
+    "Reminder: Write ONLY a single executable Bash code block. "
     "Do not write prose outside code blocks. Nothing written outside code blocks reaches the user. "
     "All messages must be sent via 'unsafie chat send ...' inside your code. "
     "When finished, run 'unsafie stop' (or 'unsafie stop \"final message\"') to conclude your turn."

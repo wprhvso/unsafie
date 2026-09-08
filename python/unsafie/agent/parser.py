@@ -1,44 +1,12 @@
 import re
-from collections.abc import Callable
 
-FENCE_START_RE = re.compile(r"```(?:bash|sh|shell)?\r?\n", re.IGNORECASE)
+STRIP_START_RE = re.compile(r"^\s*```(?:bash|sh|shell)?\r?\n?", re.IGNORECASE)
+STRIP_END_RE = re.compile(r"\r?\n?```\s*$", re.IGNORECASE)
 
 
-class MarkdownCodeParser:
-    def __init__(self, on_block: Callable[[str], None]) -> None:
-        self.on_block = on_block
-        self.buffer = ""
-        self.in_block = False
-
-    def feed(self, chunk: str) -> None:
-        if not chunk:
-            return
-        self.buffer += chunk
-        self._parse()
-
-    def _parse(self) -> None:
-        while True:
-            if not self.in_block:
-                m = FENCE_START_RE.search(self.buffer)
-                if not m:
-                    break
-                self.in_block = True
-                self.buffer = self.buffer[m.end():]
-            else:
-                idx = self.buffer.find("```")
-                if idx == -1:
-                    break
-                code = self.buffer[:idx]
-                self.in_block = False
-                self.buffer = self.buffer[idx + 3:]
-                stripped = code.strip()
-                if stripped:
-                    self.on_block(stripped)
-
-    def close(self) -> None:
-        if self.in_block:
-            code = self.buffer.strip()
-            self.in_block = False
-            self.buffer = ""
-            if code:
-                self.on_block(code)
+def extract_code(text: str | None) -> str:
+    if not text:
+        return ""
+    code = STRIP_START_RE.sub("", text)
+    code = STRIP_END_RE.sub("", code)
+    return code.strip()
