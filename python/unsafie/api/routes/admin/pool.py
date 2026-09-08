@@ -117,6 +117,14 @@ async def list_machines() -> dict:
     return {"machines": [_machine(row) for row in rows], "capacity": await registry.counted()}
 
 
+@router.post("/machines/recycle", response_model=Ok)
+async def recycle_all():
+    names = [row.name for row in await registry.live()]
+    for name in names:
+        await leases.destroy(name, "pool wiped by the operator")
+    return Ok(detail=f"destroyed {len(names)}")
+
+
 @router.post("/machines/{name}/recycle", response_model=Ok)
 async def recycle(name: str):
     if await registry.machine(name) is None:

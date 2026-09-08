@@ -75,6 +75,12 @@
       await Promise.all([machines.reload(), capacity.reload()]);
     });
 
+  const recycleAll = () =>
+    guard(async () => {
+      await admin.post('/pool/machines/recycle');
+      await Promise.all([machines.reload(), capacity.reload()]);
+    });
+
   const toggleCi = (repo) =>
     guard(async () => {
       await admin.post(`/pool/ci/${repo.repo}/enable?on=${!repo.enabled}`);
@@ -157,6 +163,15 @@
   </Panel>
 
   <Panel title="Machines">
+    {#snippet actions()}
+      <button
+        class="danger"
+        onclick={recycleAll}
+        disabled={busy || !(machines.data?.machines?.length > 0)}
+      >
+        Destroy all
+      </button>
+    {/snippet}
     <Loader state={machines} empty="No machines alive.">
       <table>
         <thead><tr><th>machine</th><th>alias</th><th>state</th><th>user</th><th>boot</th><th>started</th><th></th></tr></thead>
@@ -171,7 +186,11 @@
               </td>
               <td class="small muted">{machine.boot_seconds ? `${Math.round(machine.boot_seconds)}s` : '—'}</td>
               <td class="small muted">{when(machine.started_at)}</td>
-              <td><Confirm label="Destroy" onconfirm={() => recycle(machine.name)} /></td>
+              <td>
+                <button class="danger" onclick={() => recycle(machine.name)} disabled={busy}>
+                  Destroy
+                </button>
+              </td>
             </tr>
           {/each}
         </tbody>

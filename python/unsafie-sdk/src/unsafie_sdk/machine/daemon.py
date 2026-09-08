@@ -105,6 +105,8 @@ class Daemon:
         self.block_id = ""
         self.block_thread: threading.Thread | None = None
         self.blocks: queue.Queue[dict] = queue.Queue()
+        self.rebirth = threading.Lock()
+        self.generation = 0
 
     # registration ---------------------------------------------------------
 
@@ -139,7 +141,39 @@ class Daemon:
         self.poll_timeout = float(answer.get("poll") or self.poll_timeout)
         self.beat = float(answer.get("heartbeat") or self.beat)
         self.workdir.mkdir(parents=True, exist_ok=True)
+        self.generation += 1
         _log(f"registered as {self.name}, booted in {boot if boot is None else round(boot, 1)}s")
+
+    def recover(self, seen: int) -> bool:
+        """Take a new identity after the server forgot this machine.
+
+        A restart of unsafie — or a wiped redis — makes the server answer 401/410 to a
+        machine it no longer knows. The runner is still perfectly alive, so instead of
+        leaving it registers again and keeps serving; only an explicit shutdown frame or
+        a refusal of the worker token ends the job.
+        """
+        with self.rebirth:
+            if seen != self.generation:
+                return True
+            if self.stop.is_set():
+                return False
+            _log("the server no longer knows this machine, registering again")
+            try:
+                self.register()
+            except urllib.error.HTTPError as refused:
+                if refused.code in (401, 403):
+                    self.reason = "the donor is gone"
+                    _log(f"the pool refused this runner: {refused.code}")
+                    self.stop.set()
+                    return False
+                _log(f"register: {refused.code}")
+                time.sleep(RETRY_MAX)
+                return True
+            except Exception as broken:  # noqa: BLE001 - a runner never dies of a hiccup
+                _log(f"register: {broken}")
+                time.sleep(RETRY_MAX)
+                return True
+            return True
 
     # lifecycle ------------------------------------------------------------
 
@@ -171,6 +205,7 @@ class Daemon:
 
     def _loop(self) -> None:
         while not self.stop.is_set():
+            seen = self.generation
             try:
                 answer = self.link.call(
                     "GET",
@@ -180,8 +215,8 @@ class Daemon:
                 )
             except urllib.error.HTTPError as refused:
                 if refused.code in (401, 410):
-                    self.reason = "dropped by the server"
-                    _log(f"the server let this machine go: {refused.code}")
+                    if self.recover(seen):
+                        continue
                     return
                 _log(f"poll: {refused.code}")
                 time.sleep(RETRY_MIN)
@@ -441,7 +476,6 @@ class Daemon:
             self.link.call("POST", f"/machines/{self.name}/output", body={"frames": frames})
         except urllib.error.HTTPError as refused:
             if refused.code in (401, 410):
-                self.stop.set()
                 return
             _log(f"output: {refused.code}")
         except (urllib.error.URLError, TimeoutError, OSError) as unreachable:
@@ -457,12 +491,11 @@ class Daemon:
 
     def _heartbeat(self) -> None:
         while not self.stop.wait(self.beat):
+            seen = self.generation
             try:
                 self.link.call("POST", f"/machines/{self.name}/heartbeat", body={})
             except urllib.error.HTTPError as refused:
-                if refused.code in (401, 410):
-                    self.reason = "dropped by the server"
-                    self.stop.set()
+                if refused.code in (401, 410) and not self.recover(seen):
                     return
             except (urllib.error.URLError, TimeoutError, OSError):
                 continue

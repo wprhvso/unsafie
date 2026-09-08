@@ -283,6 +283,8 @@ async def ensure(
 
 
 async def reap() -> int:
+    if time.monotonic() - registry.BOOTED < settings.pool_machine_ttl:
+        return 0
     released = 0
     idle_limit = settings.pool_lease_idle
     await _close_stray_leases()

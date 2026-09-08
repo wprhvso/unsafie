@@ -14,6 +14,8 @@ from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
+BOOTED = time.monotonic()
+
 
 def new_name() -> str:
     return "m-" + secrets.token_hex(4)
@@ -49,12 +51,25 @@ async def register(
     return machine
 
 
+async def revive(name: str) -> dict | None:
+    row = await machine(name)
+    if row is None or row.gone_at is not None:
+        return None
+    payload = {"state": row.state, "seen": time.time()}
+    redis = cluster.client()
+    await redis.set(keys.machine(name), json.dumps(payload), ex=int(settings.pool_machine_ttl))
+    if row.state == MachineState.IDLE:
+        await redis.zadd(keys.idle(), {name: time.time()})
+    logger.info("pool machine %s revived from the database as %s", name, row.state)
+    return payload
+
+
 async def heartbeat(name: str, state: str | None = None) -> bool:
     redis = cluster.client()
     stored = await redis.get(keys.machine(name))
-    if stored is None:
+    payload = json.loads(stored) if stored is not None else await revive(name)
+    if payload is None:
         return False
-    payload = json.loads(stored)
     payload["seen"] = time.time()
     if state:
         payload["state"] = state
@@ -155,6 +170,8 @@ async def counted() -> dict[str, int]:
 
 
 async def reap() -> int:
+    if time.monotonic() - BOOTED < settings.pool_machine_ttl:
+        return 0
     gone = 0
     for row in await live():
         if await alive(row.name):
