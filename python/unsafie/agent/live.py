@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from redis.exceptions import RedisError
+from redis.exceptions import TimeoutError as RedisTimeout
 
 from unsafie import artifacts, cluster
 from unsafie.database.models.turn import Turn
@@ -273,7 +274,7 @@ async def history(turn_id: UUID, after: str | None = None, limit: int | None = N
 
 
 async def follow(turn_id: UUID, after: str | None = None) -> AsyncIterator[dict | str]:
-    client = cluster.client()
+    client = cluster.reader()
     key = stream_key(turn_id)
     if after is not None:
         oldest, _ = await bounds(turn_id)
@@ -281,11 +282,15 @@ async def follow(turn_id: UUID, after: str | None = None) -> AsyncIterator[dict 
             yield GAP
     cursor = after or "0-0"
     while True:
-        entries = await client.xread(
-            {key: cursor},
-            count=settings.live_batch,
-            block=int(settings.live_block * 1000),
-        )
+        try:
+            entries = await client.xread(
+                {key: cursor},
+                count=settings.live_batch,
+                block=int(settings.live_block * 1000),
+            )
+        except RedisTimeout:
+            logger.debug("live: turn=%s quiet read window", turn_id)
+            continue
         for _, items in entries or []:
             for entry_id, fields in items:
                 cursor = entry_id

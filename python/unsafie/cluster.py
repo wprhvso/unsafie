@@ -33,6 +33,7 @@ return 0
 HEALTH_CHECK = 30.0
 
 _client: Redis | None = None
+_reader: Redis | None = None
 _release = None
 _extend = None
 
@@ -59,33 +60,46 @@ def safe_url(url: str) -> str:
     return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
 
 
-async def connect() -> Redis:
-    global _client, _release, _extend
-    if _client is not None:
-        return _client
-    opened = Redis.from_url(
+def read_timeout() -> float:
+    return max(settings.events_block, settings.live_block) + settings.redis_timeout
+
+
+def _open(timeout: float) -> Redis:
+    return Redis.from_url(
         settings.redis_url,
         max_connections=settings.redis_max_connections,
-        socket_timeout=settings.redis_timeout,
+        socket_timeout=timeout,
         socket_connect_timeout=settings.redis_timeout,
         socket_keepalive=True,
         health_check_interval=HEALTH_CHECK,
         decode_responses=True,
     )
+
+
+async def connect() -> Redis:
+    global _client, _reader, _release, _extend
+    if _client is not None:
+        return _client
+    opened = _open(settings.redis_timeout)
+    reading = _open(read_timeout())
     try:
         await opened.ping()
     except (RedisError, OSError) as e:
         await opened.aclose()
+        await reading.aclose()
         raise Unavailable(f"redis at {safe_url(settings.redis_url)} is not reachable: {e}") from e
     _client = opened
+    _reader = reading
     _release = opened.register_script(RELEASE)
     _extend = opened.register_script(EXTEND)
     logger.info(
-        "redis connected: %s prefix=%s instance=%s role=%s",
+        "redis connected: %s prefix=%s instance=%s role=%s timeout=%.0fs/%.0fs",
         safe_url(settings.redis_url),
         settings.redis_prefix,
         settings.instance_id,
         settings.role,
+        settings.redis_timeout,
+        read_timeout(),
     )
     return opened
 
@@ -96,12 +110,20 @@ def client() -> Redis:
     return _client
 
 
+def reader() -> Redis:
+    if _reader is None:
+        raise Unavailable("redis is not connected")
+    return _reader
+
+
 async def close() -> None:
-    global _client, _release, _extend
+    global _client, _reader, _release, _extend
+    for pool in (_client, _reader):
+        if pool is not None:
+            await pool.aclose()
     if _client is not None:
-        await _client.aclose()
-        logger.info("redis pool closed")
-    _client = _release = _extend = None
+        logger.info("redis pools closed")
+    _client = _reader = _release = _extend = None
 
 
 async def health() -> dict:

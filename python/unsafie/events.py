@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from redis.exceptions import TimeoutError as RedisTimeout
+
 from unsafie import cluster
 from unsafie.settings import settings
 
@@ -133,7 +135,7 @@ class Bus:
         match: dict[str, Any] | None = None,
         after_id: str | None = None,
     ) -> AsyncIterator[Event | str]:
-        client = cluster.client()
+        client = cluster.reader()
         oldest, _ = await self.bounds()
         if after_id is None:
             cursor = "0-0"
@@ -142,11 +144,15 @@ class Bus:
                 yield GAP
             cursor = after_id
         while True:
-            entries = await client.xread(
-                {self.key: cursor},
-                count=settings.events_batch,
-                block=int(settings.events_block * 1000),
-            )
+            try:
+                entries = await client.xread(
+                    {self.key: cursor},
+                    count=settings.events_batch,
+                    block=int(settings.events_block * 1000),
+                )
+            except RedisTimeout:
+                logger.debug("events: quiet read window")
+                continue
             for _, items in entries or []:
                 for entry_id, fields in items:
                     cursor = entry_id

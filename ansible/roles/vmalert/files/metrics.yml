@@ -3,10 +3,16 @@ groups:
     rules:
       - alert: InstanceDown
         expr: up == 0
-        for: 2m
+        for: 5m
         labels: { severity: critical }
         annotations:
           summary: "{{ $labels.job }} is down"
+      - alert: ScrapeFlapping
+        expr: avg_over_time(up[15m]) < 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.job }} scrapes keep failing (target alive, host busy?)"
 
   - name: host
     rules:
