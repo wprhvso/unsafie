@@ -123,14 +123,27 @@ async def run(
         if runner.replied:
             result.replied = True
 
+        extra = await queue.drain(ctx.turn_id)
+
         if runner.stopped:
+            if extra is not None:
+                recorder.note("unsafie.stop_blocked", {"reason": "pending messages"})
+                logger.info(
+                    "%s turn stopped via stop(), but injecting pending messages into next step",
+                    ctx.prefix,
+                )
+                if content:
+                    content.append({"type": "text", "text": extra})
+                    messages.append({"role": "user", "content": content})
+                else:
+                    _ask(messages, extra)
+                continue
             result.replied = True
             recorder.note("unsafie.turn_stopped")
             logger.info("%s turn stopped via stop()", ctx.prefix)
             return result
 
         if content:
-            extra = await queue.drain(ctx.turn_id)
             if extra is not None:
                 recorder.note("unsafie.messages_injected")
                 logger.info("%s injecting messages that arrived mid-turn", ctx.prefix)
@@ -138,7 +151,6 @@ async def run(
             messages.append({"role": "user", "content": content})
             continue
 
-        extra = await queue.drain(ctx.turn_id)
         if extra is not None:
             recorder.note("unsafie.stop_blocked", {"reason": "pending messages"})
             _ask(messages, extra)

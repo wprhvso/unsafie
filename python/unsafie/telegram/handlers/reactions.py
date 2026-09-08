@@ -7,7 +7,7 @@ from aiogram.types import MessageReactionUpdated
 from unsafie import artifacts
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
-from unsafie.database.repositories.update import UpdateRepository
+from unsafie.database.repositories.turn import TurnRepository
 from unsafie.telegram import sender
 
 logger = logging.getLogger(__name__)
@@ -22,12 +22,12 @@ def build_reactions_router() -> Router:
             return
         chat_id = event.chat.id
         async with SessionLocal() as session:
-            turn_id = await UpdateRepository(session).turn_of(bot_id, chat_id, event.message_id)
-        if turn_id is None:
+            turn = await TurnRepository(session).owner(bot_id, chat_id, event.message_id)
+        if turn is None:
             return
-        slug = await artifacts.of_turn(turn_id)
+        slug = await artifacts.of_turn(turn.id)
         if slug is None:
-            logger.info("bot=%s chat=%s turn=%s has no live artifact", bot_id, chat_id, turn_id)
+            logger.info("bot=%s chat=%s turn=%s has no live artifact", bot_id, chat_id, turn.id)
             return
         try:
             await sender.send(
