@@ -26,6 +26,7 @@ dependencies = [
     "sqlalchemy>=2.0.52",
     "unsafie-wire",
     "uvicorn>=0.52.4",
+    "websockets[standard]>=17.1",
 ]
 
 [project.scripts]
