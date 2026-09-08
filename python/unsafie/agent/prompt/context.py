@@ -68,8 +68,8 @@ async def servers_context(ctx: Ctx) -> str:
         return ""
     listed = "; ".join(f"{host.alias} ({host.label})" for host in hosts)
     return (
-        f"SSH servers: {listed}. The private key of this user is already on the machine, so plain "
-        "ssh works; ssh.run(cmd, host) goes through the server instead."
+        f"SSH servers: {listed}. The key and these aliases are already in ~/.ssh on the machine, "
+        "so plain ssh, scp and rsync work from the shell: run(\"ssh alias 'df -h'\")."
     )
 
 

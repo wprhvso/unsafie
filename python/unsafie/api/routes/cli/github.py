@@ -149,8 +149,7 @@ async def _account(user_id: int, login: str | None):
         known = ", ".join(row.login for row in await pat.accounts_of(user_id)) or "none"
         raise HTTPException(
             400,
-            f"no github account '{login}'. Attached: {known}. Add one with github.add(token) "
-            "or /gh <token> in the chat",
+            f"no github account '{login}'. Attached: {known}. Add one with /gh <token> in the chat",
         )
     return account
 

@@ -6,7 +6,7 @@
 ```bash
 uv tool install unsafie-sdk        # или pip install unsafie-sdk
 export UNSAFIE_TOKEN=uns_…         # токен выдаёт бот командой /auth
-python -c "import unsafie_sdk as u; u.say('привет'); u.help()"
+python -c "import unsafie_sdk as u; u.say('привет')"
 ```
 
 ## Как этим пользуется агент
@@ -14,7 +14,7 @@ python -c "import unsafie_sdk as u; u.say('привет'); u.help()"
 У агента два инструмента: `python` и веб-поиск. У `python` одно поле — `code`:
 
 ```json
-{"name": "python", "input": {"code": "repo = github.clone(\"wprhvso/unsafie\")\nrun(f\"cd {repo} && pytest -q\").output[-2000:]"}}
+{"name": "python", "input": {"code": "run(\"git clone https://github.com/wprhvso/unsafie.git\")\nrun(\"cd unsafie/python && uv run pytest -q\").output[-2000:]"}}
 ```
 
 Вызов исполняется в тот момент, когда дописаны его аргументы, — не дожидаясь конца ответа. Пока
@@ -42,38 +42,42 @@ df = pd.read_csv("data.csv") # df живёт до конца аренды
 
 | группа | что там |
 |---|---|
-| `say file photo page note progress` | всё, что видит человек |
-| `chat.*` | правки, реакции, опросы, история, модерация чата |
-| `run take release fan submit machines.*` | машины пула |
-| `github.*` | несколько аккаунтов (`logins`, `use`, `current`), клон, токены, `gh` |
-| `browser.*` | настоящий Chrome: навигация, клики, текст, `shot()`, живой десктоп |
-| `ssh.*` | боевые серверы пользователя; приватный ключ уже лежит на машине |
+| `say file photo page note` | всё, что видит человек |
+| `chat.* pages.*` | правки, реакции, история, страницы-артефакты |
+| `run take release fan submit machines.* quota install` | машины пула |
+| `github.logins use token` | какой аккаунт GitHub говорит сейчас |
+| `browser.*` | настоящий Chrome: навигация, клики, текст, `evaluate`, `shot()`, живой десктоп |
 | `store.* kv secrets` | состояние, переживающее машину |
-| `ci.*` | CI репозиториев на пуле |
-| `automation.*` | расписания, вотчи, подписки, таймзона |
-| `install setup fetch net.*` | пакеты, тулчейны, чтение веба |
+| `ci.* automation.*` | CI на пуле, расписания, вотчи, подписки, таймзона |
+| `fetch net.*` | чтение веба |
 
-`u.help()` печатает то же самое одной таблицей, а полная спецификация лежит в описании
-инструмента — `python/unsafie/agent/request.py`, константа `PYTHON_TOOL_DESCRIPTION`.
+Обёрток над тем, что и так есть в шелле, в SDK нет: `git`, `gh`, `ssh`, `scp`, `docker`, `curl`
+стоят на машине и уже авторизованы — их зовут напрямую, `run("gh pr create --fill")`. Полная
+спецификация — в описании инструмента (`python/unsafie/agent/request.py`, константа
+`PYTHON_TOOL_DESCRIPTION`); других списков нет, чтобы им некуда было разъехаться.
 
 ## Несколько GitHub-аккаунтов
 
 ```python
 github.logins()          # ['wprhvso', 'alice']
-github.use("alice")      # дальше всё говорит от имени alice
-github.clone("alice/app")
+github.use("alice")      # git и gh с этого момента говорят от имени alice
+run("git clone https://github.com/alice/app.git")
 github.use(None)         # обратно к первому
 ```
 
-Токен того же логина заменяет прежний, токен другого логина встаёт рядом. Удалить —
-`github.forget("alice")` или `/gh rm alice` в чате.
+`use()` переписывает `~/.git-credentials` и `GH_TOKEN`, поэтому переключение видно и в шелле, а
+не только в питоне. `github.token(repo)` отдаёт токен для `curl` и API: скоуп репозитория, если
+там стоит GitHub App, иначе личный токен аккаунта.
 
-## Ключ SSH
+Токен того же логина заменяет прежний, токен другого логина встаёт рядом. Добавить и удалить —
+`/gh ТОКЕН` и `/gh rm alice` в чате.
 
-При выдаче аренды машина забирает приватный ключ владельца и кладёт его в `~/.ssh/id_ed25519`
-(0600) вместе с `known_hosts` его серверов. Поэтому в коде работают и `ssh user@host`, и
-`git clone git@github.com:…`. Через сервер то же самое делает `ssh.run(cmd, host="prod")` — это
-полезно, когда нужно, чтобы команда шла из бота, а не с машины.
+## Свои серверы
+
+При выдаче аренды машина забирает приватный ключ владельца в `~/.ssh/id_ed25519` (0600),
+`known_hosts` его серверов и по блоку `Host` на каждый алиас. Поэтому из кода работают обычные
+`ssh prod 'df -h'`, `scp`, `rsync` и `git clone git@github.com:…` — отдельного модуля `ssh` в SDK
+нет. Когда команда должна идти с сервера бота, а не с машины, остаётся HTTP: `POST /ssh/run`.
 
 ## Настройки
 
@@ -85,6 +89,5 @@ github.use(None)         # обратно к первому
 | `api` | `UNSAFIE_API` |
 | `chat` | `UNSAFIE_CHAT` |
 | `machine` | `UNSAFIE_MACHINE` |
-| `admin` | `UNSAFIE_ADMIN_TOKEN` |
 
 На машине пула всё это уже проставлено демоном.

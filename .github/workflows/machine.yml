@@ -44,10 +44,8 @@ jobs:
 
       - name: bring the desktop along
         run: |
-          sudo -E env "PATH=$PATH" python3 -c "
-          from unsafie_sdk.packages import setup
-          print(setup('xvfb', 'kasmvnc', 'tools'))
-          " || echo "::warning::the desktop came up short, the machine still serves"
+          sudo -E env "PATH=$PATH" "$(command -v unsafie-machine)" setup xvfb kasmvnc tools \
+            || echo "::warning::the desktop came up short, the machine still serves"
 
       - name: serve
         env:

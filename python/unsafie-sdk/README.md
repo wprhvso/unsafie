@@ -15,11 +15,10 @@ u.say("готово")                        # a message into the chat
 u.page("# отчёт\n\nвсё сошлось")       # a web page, returns its link
 box = u.take(1)[0]                     # a machine from the pool
 box.run("uname -a").output             # a command on it
-u.github.use("wprhvso")                # pick which account speaks
-u.github.clone("wprhvso/unsafie")      # a real checkout
+u.github.use("wprhvso")                # git and gh now speak as this account
+box.run("git clone https://github.com/wprhvso/unsafie.git")
 u.browser.start(); u.browser.goto("https://example.com"); u.browser.shot()
 u.install("pandas"); import pandas     # packages on the fly, with uv
-u.help()                               # the map of everything
 ```
 
 The same package runs the machine itself: `unsafie-machine serve` registers the job as a machine

@@ -40,7 +40,9 @@ def start(profile: str | None = None, *, size: str = "1920x1080", headless: bool
     try:
         state = engine.launch(profile, size, headless)
     except engine.BrowserError as broken:
-        raise UnsafieError(str(broken), "install what is missing: packages.setup('chrome', 'xvfb')") from None
+        raise UnsafieError(
+            str(broken), "every pool machine has Chrome; on your own box install it first"
+        ) from None
     engine.save(state)
     return state
 
@@ -58,18 +60,6 @@ def stop(*, save_profile: bool = True) -> dict:
     return {"stopped": True}
 
 
-def status() -> dict:
-    """Is Chrome running here, on what profile, and what is open."""
-    state = engine.load()
-    if state is None:
-        return {"running": False}
-    try:
-        url, name = _act(lambda cdp: (actions.current_url(cdp), actions.title(cdp)))
-    except UnsafieError:
-        url, name = "-", "-"
-    return {**state, "running": True, "url": url, "title": name}
-
-
 def goto(url: str, *, wait: str = "load", timeout: float = 30.0) -> str:
     """Open a url and wait for it."""
     return str(_act(actions.goto, url, wait, timeout).get("url") or url)
@@ -80,11 +70,6 @@ def click(selector: str, *, button: str = "left", clicks: int = 1) -> None:
     _act(actions.click, selector, button, clicks)
 
 
-def hover(selector: str) -> None:
-    """Move the cursor over an element."""
-    _act(actions.hover, selector)
-
-
 def type(selector: str, text: str, *, clear: bool = False) -> None:  # noqa: A001
     """Type text into a field."""
     _act(actions.type_text, selector, text, clear)
@@ -93,16 +78,6 @@ def type(selector: str, text: str, *, clear: bool = False) -> None:  # noqa: A00
 def press(combination: str) -> None:
     """Press a key or a combination: press('Enter'), press('ctrl+l')."""
     _act(actions.press, combination)
-
-
-def select(selector: str, value: str) -> None:
-    """Pick an option in a select."""
-    _act(actions.select, selector, value)
-
-
-def scroll(selector: str | None = None, *, by: int | None = None) -> None:
-    """Scroll to an element or by a number of pixels."""
-    _act(actions.scroll, selector, by)
 
 
 def wait(selector: str | None = None, *, url: str | None = None, js: str | None = None,
@@ -128,35 +103,8 @@ def html(selector: str | None = None) -> str:
     return str(_act(actions.html_of, selector))
 
 
-def markdown(selector: str | None = None) -> str:
-    """The page as markdown — cheaper to read than raw html."""
-    from unsafie_sdk.net import to_markdown
-
-    return to_markdown(html(selector))
-
-
-def attr(selector: str, name: str) -> str | None:
-    """One attribute of an element."""
-    return _act(actions.attribute, selector, name)
-
-
-def value(selector: str) -> str:
-    """The value of a field."""
-    return str(_act(actions.value_of, selector))
-
-
-def url() -> str:
-    """The current url."""
-    return str(_act(actions.current_url))
-
-
-def title() -> str:
-    """The title of the page."""
-    return str(_act(actions.title))
-
-
 def evaluate(expression: str) -> Any:
-    """Evaluate javascript in the page and return the result."""
+    """Run javascript in the page and return the result: evaluate("document.title")."""
     return _act(actions.evaluate, expression)
 
 
@@ -209,11 +157,6 @@ def restore(name: str) -> Path:
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
         archive.extractall(engine.PROFILES, filter="data")
     return engine.PROFILES / name
-
-
-def downloads() -> Path:
-    """Where Chrome puts what the page downloads."""
-    return Path(getattr(engine, "DOWNLOADS", Path.home() / "Downloads"))
 
 
 def _pack(folder: Path) -> bytes:

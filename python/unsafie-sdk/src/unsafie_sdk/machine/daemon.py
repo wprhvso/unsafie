@@ -243,12 +243,18 @@ class Daemon:
     def _settle(self) -> None:
         """Everything the owner expects to find on a machine of theirs."""
         try:
-            from unsafie_sdk import ssh
+            from unsafie_sdk.machine import keys
 
-            ssh.install()
-            _log("the owner's ssh key is in place")
+            aliases = keys.install()
+            _log(f"the owner's ssh key is in place: {', '.join(aliases) or 'no hosts yet'}")
         except Exception as broken:  # noqa: BLE001 - a machine without a key still works
             _log(f"no ssh key on this machine: {broken}")
+        try:
+            from unsafie_sdk.github import _wire
+
+            _log("github is wired for git and gh" if _wire() else "no github account yet")
+        except Exception as broken:  # noqa: BLE001 - a machine without github still works
+            _log(f"no github credentials on this machine: {broken}")
         for line in (
             ["git", "config", "--global", "user.name", "unsafie"],
             ["git", "config", "--global", "user.email", "agent@unsafie.com"],
