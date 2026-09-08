@@ -2,7 +2,7 @@ import os
 import shutil
 import subprocess
 
-TOOLCHAINS = ("chrome", "xvfb", "kasmvnc", "nix", "rust", "tools", "nu")
+TOOLCHAINS = ("chrome", "xvfb", "kasmvnc", "nix", "rust", "tools")
 KASMVNC = "1.5.0"
 
 PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
@@ -12,7 +12,6 @@ PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
     "nix": (("nix",),),
     "rust": (("cargo",),),
     "tools": (("rg",), ("jq",), ("zstd",), ("convert", "magick")),
-    "nu": (("nu",),),
 }
 
 
@@ -54,11 +53,6 @@ def _toolchain(name: str, timeout: float) -> str:
                 "curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable",
                 timeout,
             )
-        if name == "nu":
-            import asyncio
-            from unsafie.nu import ensure_nu
-            asyncio.run(ensure_nu())
-            return "installed"
     except Exception as broken:
         return f"failed: {broken}"
     return "unknown"

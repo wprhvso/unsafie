@@ -1,7 +1,7 @@
 import re
 from collections.abc import Callable
 
-FENCE_START_RE = re.compile(r"```(?:nu|nushell)?\r?\n", re.IGNORECASE)
+FENCE_START_RE = re.compile(r"```(?:bash|sh|shell)?\r?\n", re.IGNORECASE)
 
 
 class MarkdownCodeParser:

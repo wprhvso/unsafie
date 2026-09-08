@@ -80,7 +80,7 @@
     <div class="card">
       <button class="head" onclick={toggle} aria-expanded={open}>
         <span class="caret" class:open>▸</span>
-        <span class="title mono">Nu [#{item.index}]</span>
+        <span class="title mono">Bash [#{item.index}]</span>
         <span class="machine-tag mono">{item.machine || 'local'}</span>
         <span class="spacer"></span>
         <span class="status-tag {item.status}">
@@ -94,8 +94,8 @@
 
       <div class="code-box">
         <div class="box-head">
-          <span class="muted tiny">Nushell Code</span>
-          <Copy text={item.code} label="Copy Nushell Code" />
+          <span class="muted tiny">Bash Code</span>
+          <Copy text={item.code} label="Copy Bash Code" />
         </div>
         <pre class="source"><code>{item.code}</code></pre>
       </div>

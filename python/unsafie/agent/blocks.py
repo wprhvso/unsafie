@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import shutil
 import sys
 import time
 from dataclasses import dataclass, field
@@ -12,7 +13,6 @@ from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.log import short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
-from unsafie.nu import ensure_nu
 from unsafie.pool import blobs
 from unsafie.settings import settings
 from unsafie_wire import markers
@@ -99,7 +99,7 @@ class Runner:
         self.blocks.append(block)
         self.recorder.code_started(index, code, "local")
         task = asyncio.create_task(
-            self._run(block), name=f"nu:{self.ctx.turn_id}:{block.index}"
+            self._run(block), name=f"bash:{self.ctx.turn_id}:{block.index}"
         )
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
@@ -111,7 +111,7 @@ class Runner:
             await asyncio.sleep(NAG_EVERY)
             waited += NAG_EVERY
             logger.warning(
-                "%s nushell block %s has been running for %.0fs",
+                "%s bash block %s has been running for %.0fs",
                 self.ctx.prefix,
                 block.index,
                 waited,
@@ -136,10 +136,9 @@ class Runner:
                 self._finished(block)
                 return
             token = await self._ensure_token()
-            try:
-                nu_bin = await ensure_nu()
-            except Exception as e:
-                block.error = f"nushell not available: {e}"
+            bash_bin = shutil.which("bash") or "/bin/bash"
+            if not os.path.exists(bash_bin) and not shutil.which("bash"):
+                block.error = "bash not available"
                 block.exit_code = 127
                 block.seconds = time.monotonic() - block.started_at
                 self._finished(block)
@@ -149,7 +148,6 @@ class Runner:
             extra_paths = [
                 str(Path(sys.prefix) / "bin"),
                 str(Path(sys.executable).parent),
-                str(Path(nu_bin).parent),
                 str(Path.home() / ".cargo" / "bin"),
                 str(Path.home() / ".local" / "bin"),
                 "/usr/local/bin",
@@ -162,12 +160,12 @@ class Runner:
             env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
 
             watch = asyncio.create_task(
-                self._nag(block), name=f"nu-slow:{self.ctx.turn_id}:{block.index}"
+                self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
             )
             started = time.monotonic()
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    nu_bin,
+                    bash_bin,
                     "-c",
                     block.code,
                     stdout=asyncio.subprocess.PIPE,
@@ -192,7 +190,7 @@ class Runner:
                 block.exit_code = 124
                 combined = ""
             except FileNotFoundError:
-                block.error = "nushell executable 'nu' not found"
+                block.error = "bash executable 'bash' not found"
                 block.exit_code = 127
                 combined = ""
             except asyncio.CancelledError:
@@ -203,7 +201,7 @@ class Runner:
             except Exception as broken:
                 block.error = f"{type(broken).__name__}: {broken}"
                 block.seconds = time.monotonic() - block.started_at
-                logger.exception("%s nushell block %s could not run", self.ctx.prefix, block.index)
+                logger.exception("%s bash block %s could not run", self.ctx.prefix, block.index)
                 self._finished(block)
                 return
             finally:
@@ -283,7 +281,7 @@ class Runner:
             images=block.images,
         )
         logger.info(
-            "%s nushell block %s: %s",
+            "%s bash block %s: %s",
             self.ctx.prefix,
             block.index,
             block.error or f"exit={block.exit_code} in {block.seconds:.1f}s",

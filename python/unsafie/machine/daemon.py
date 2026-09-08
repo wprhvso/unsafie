@@ -131,7 +131,7 @@ class Daemon:
 
     def _dispatch(self, raw: dict) -> None:
         kind = str(raw.get("kind") or "")
-        if kind == wire.FrameKind.COMMAND:
+        if kind in (wire.FrameKind.COMMAND, wire.FrameKind.PYTHON):
             if raw.get("tunnel"):
                 from unsafie.machine.tunnel import serve_tunnel
                 channel_id = str(raw["tunnel"].get("channel") or "")
@@ -142,8 +142,6 @@ class Daemon:
                 threading.Thread(target=serve_tunnel, args=(url, kind_t, port), daemon=True).start()
                 return
             threading.Thread(target=self._execute, args=(raw,), daemon=True).start()
-        elif kind == wire.FrameKind.PYTHON:
-            threading.Thread(target=self._execute_nu, args=(raw,), daemon=True).start()
         elif kind == wire.FrameKind.ASSIGN:
             self.lease = {
                 "token": str(raw.get("token") or ""),
@@ -162,36 +160,14 @@ class Daemon:
 
     def _execute(self, raw: dict) -> None:
         cmd_id = str(raw.get("id") or "")
-        cmd = str(raw.get("command") or "")
+        cmd = str(raw.get("command") or raw.get("code") or "")
         if not cmd_id or not cmd:
             return
         started = time.monotonic()
+        bash_bin = shutil.which("bash") or "/bin/bash"
         try:
             proc = subprocess.Popen(
-                ["/bin/bash", "-lc", cmd],
-                cwd=str(self.workdir),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-            out, _ = proc.communicate(timeout=float(raw.get("timeout") or 600.0))
-            text = out.decode(errors="replace")
-            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
-            self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
-        except Exception as e:
-            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
-            self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
-
-    def _execute_nu(self, raw: dict) -> None:
-        cmd_id = str(raw.get("id") or "")
-        code = str(raw.get("code") or "")
-        if not cmd_id or not code:
-            return
-        started = time.monotonic()
-        nu_bin = shutil.which("nu") or "nu"
-        try:
-            proc = subprocess.Popen(
-                [nu_bin, "-c", code],
+                [bash_bin, "-lc", cmd],
                 cwd=str(self.workdir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
