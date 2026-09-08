@@ -3,66 +3,10 @@
   import Copy from './Copy.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
-  import Output from './Output.svelte';
-  import Tree from './Tree.svelte';
 
   let { item, open = false, ontoggle } = $props();
 
-  const NOTABLE_STOP = new Set(['max_tokens', 'refusal', 'model_context_window_exceeded']);
-
-  const TITLES = {
-    prompt: 'Request',
-    think: 'Reasoning',
-    text: 'Assistant',
-    reply: 'Sent to the chat',
-    note: 'Note',
-    error: 'Error',
-    end: 'Finished'
-  };
-
-
-  const BLANK = {
-    summarized: 'The API returned no summary for this block.',
-    updates: 'Empty by design: display = updates returns progress notes, not the reasoning.',
-    omitted: 'Empty by design: display = omitted drops the reasoning.',
-    off: 'The request carries no thinking.display, so the reasoning comes back empty.'
-  };
-
-  const HEADLINE = [
-    'path',
-    'query',
-    'command',
-    'url',
-    'repo',
-    'title',
-    'name',
-    'text',
-    'message',
-    'body'
-  ];
-
-  function headline(input) {
-    if (!input || typeof input !== 'object') return '';
-    for (const key of HEADLINE) {
-      if (typeof input[key] === 'string' && input[key].trim()) return input[key];
-    }
-    const first = Object.values(input).find((v) => typeof v === 'string' && v.trim());
-    return first ?? '';
-  }
-
-  function firstText(blocks) {
-    for (const block of blocks ?? []) {
-      if (block?.type === 'text' && block.text) return block.text;
-    }
-    return '';
-  }
-
-  function lastLine(text) {
-    const lines = String(text ?? '')
-      .split('\n')
-      .filter((line) => line.trim());
-    return lines.length ? lines[lines.length - 1] : '';
-  }
+  const toggle = () => ontoggle?.(item.id);
 
   function clock(iso) {
     if (!iso) return '';
@@ -70,210 +14,211 @@
     return Number.isNaN(+date) ? '' : date.toLocaleTimeString(undefined, { hour12: false });
   }
 
-  function took(ms) {
-    if (ms === null || ms === undefined) return '';
-    return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)} s`;
+  function took(seconds) {
+    if (seconds === null || seconds === undefined) return '';
+    return seconds < 1 ? `${Math.round(seconds * 1000)} ms` : `${Number(seconds).toFixed(2)} s`;
   }
-
-  function tokens(usage) {
-    if (!usage) return '';
-    const parts = [];
-    if (usage.input_tokens) parts.push(`in ${usage.input_tokens.toLocaleString()}`);
-    if (usage.cache_read_input_tokens)
-      parts.push(`cached ${usage.cache_read_input_tokens.toLocaleString()}`);
-    if (usage.output_tokens) parts.push(`out ${usage.output_tokens.toLocaleString()}`);
-    return parts.join(' · ');
-  }
-
-  function decode(text) {
-    try {
-      const value = JSON.parse(text);
-      return value && typeof value === 'object' ? value : null;
-    } catch {
-      return null;
-    }
-  }
-
-  const icon = $derived(item.type === 'tool' || item.type === 'raw' ? 'tool' : item.type);
-  const title = $derived(
-    item.type === 'tool' || item.type === 'raw' ? item.name : (TITLES[item.type] ?? item.type)
-  );
-  const structured = $derived(item.type === 'prompt' ? decode(item.text) : null);
-  const broke = $derived(item.type === 'tool' && item.phase === 'done' && item.ok === false);
-  const sub = $derived.by(() => {
-    switch (item.type) {
-      case 'tool':
-        return broke
-          ? short(lastLine(firstText(item.output)) || headline(item.input), 90)
-          : short(headline(item.input) || item.args, 90);
-      case 'error':
-        return short(item.message, 90);
-      case 'note':
-        return item.name;
-      case 'prompt':
-        return short(structured?.text ?? item.text, 90);
-      default:
-        return '';
-    }
-  });
-  const sent = $derived(item.display || 'off');
-  const wanted = $derived(item.configured || 'off');
-  const refused = $derived(wanted !== 'off' && wanted !== sent);
-  const blank = $derived(
-    refused
-      ? `display = ${wanted} is configured, but the API refused it: the request went without it and the block comes back empty.`
-      : (BLANK[sent] ?? BLANK.off)
-  );
-  const mode = $derived(
-    item.thinking === 'off' ? 'thinking off' : `thinking ${item.thinking} · display ${sent}`
-  );
-  const tone = $derived(
-    item.type === 'error' || item.ok === false || item.status === 'failed'
-      ? 'bad'
-      : item.type === 'end' || item.ok === true
-        ? 'ok'
-        : ''
-  );
-  const toggle = () => ontoggle?.(item.id);
 </script>
 
 {#if item.type === 'step'}
   <div class="divider step">
     <Icon name="step" size={13} />
     <span class="label">Step {item.step}</span>
-    {#if NOTABLE_STOP.has(item.stop)}<span class="muted tiny">stop: {item.stop}</span>{/if}
-    {#if item.usage}<span class="muted tiny">{tokens(item.usage)}</span>{/if}
     <span class="line"></span>
     <time class="muted tiny">{clock(item.at)}</time>
   </div>
+
 {:else if item.type === 'attempt'}
   <div class="divider attempt">
     <Icon name="attempt" size={13} />
     <span class="label">Attempt {item.attempt}</span>
     {#if item.model}<span class="chip mono">{item.model}</span>{/if}
     {#if item.effort}<span class="chip">effort {item.effort}</span>{/if}
-    {#if item.thinking}<span class="chip">{mode}</span>{/if}
-    {#if refused}<span class="chip warn">display {wanted} refused</span>{/if}
-    {#if item.tools}<span class="muted tiny">{item.tools} tools</span>{/if}
     <span class="line"></span>
     <time class="muted tiny">{clock(item.at)}</time>
   </div>
-{:else}
-  <article class="entry {item.type} {tone}" class:open class:busy={item.streaming}>
+
+{:else if item.type === 'think'}
+  <article class="entry think" class:open class:busy={item.streaming}>
     <div class="rail">
-      <span class="bead"><Icon name={icon} size={12} /></span>
+      <span class="bead"><Icon name="think" size={12} /></span>
+    </div>
+    <div class="card">
+      <button class="head" onclick={toggle} aria-expanded={open}>
+        <span class="caret" class:open>▸</span>
+        <span class="title">Reasoning</span>
+        {#if item.signature}
+          <span class="sig-pill" title="Cryptographic proof of internal reasoning state">
+            🔒 Signed
+          </span>
+        {/if}
+        <span class="spacer"></span>
+        <span class="muted tiny nowrap">{item.text?.length?.toLocaleString() ?? 0} chars</span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </button>
+
+      <div class="thought" class:clamped={!open}>
+        {item.text || (item.streaming ? 'Thinking…' : 'No reasoning text.')}
+      </div>
+
+      {#if item.signature && open}
+        <div class="signature-bar">
+          <span class="muted tiny">Signature:</span>
+          <code class="sig-preview" title={item.signature}>{item.signature.slice(0, 32)}…</code>
+          <Copy text={item.signature} label="Copy Thought Signature" />
+        </div>
+      {/if}
+    </div>
+  </article>
+
+{:else if item.type === 'code'}
+  <article class="entry code {item.status}" class:open>
+    <div class="rail">
+      <span class="bead code-bead"><Icon name="code" size={13} /></span>
     </div>
 
     <div class="card">
       <button class="head" onclick={toggle} aria-expanded={open}>
         <span class="caret" class:open>▸</span>
-        <span class="title" class:mono={item.type === 'tool'}>{title}</span>
-        {#if sub}<span class="sub" class:broke>{sub}</span>{/if}
+        <span class="title mono">Python [#{item.index}]</span>
+        <span class="machine-tag mono">{item.machine || 'sandbox'}</span>
         <span class="spacer"></span>
-        {#if item.type === 'tool'}
-          <span class="state {item.phase}">
-            {item.phase === 'done' ? (item.ok ? 'ok' : 'failed') : item.phase}
-          </span>
-          {#if item.ms !== null && item.ms !== undefined}
-            <span class="muted tiny nowrap">{took(item.ms)}</span>
-          {/if}
-        {/if}
-        {#if item.type === 'think' && item.text}
-          <span class="muted tiny nowrap">{item.text.length.toLocaleString()} chars</span>
+        <span class="status-tag {item.status}">
+          {item.status === 'running' ? 'running…' : item.status === 'ok' ? 'ok' : `exit ${item.exit_code ?? 1}`}
+        </span>
+        {#if item.seconds !== null}
+          <span class="muted tiny nowrap">{took(item.seconds)}</span>
         {/if}
         <time class="muted tiny nowrap">{clock(item.at)}</time>
       </button>
 
-      {#if item.type === 'think'}
-        {#if item.redacted}
-          <p class="muted small pad">The model encrypted this block; the API returns no text.</p>
-        {:else if item.text}
-          <div class="thought" class:clamped={!open}>{item.text}</div>
-          {#if open}
-            <div class="foot"><Copy text={item.text} label="Copy the reasoning" /></div>
-          {/if}
-        {:else if item.hidden || !item.streaming}
-          <p class="muted small pad">{blank}</p>
-        {:else}
-          <p class="muted small pad">Thinking…</p>
-        {/if}
-      {:else if item.type === 'text' || item.type === 'reply'}
-        <div class="prose">
-          <Markdown source={item.text} streaming={item.streaming} />
+      <!-- Блок с исходным кодом Python -->
+      <div class="code-box">
+        <div class="box-head">
+          <span class="muted tiny">Python Code</span>
+          <Copy text={item.code} label="Copy Python Code" />
         </div>
-        {#if open}
-          <div class="details">
-            {#if item.messageIds?.length}
-              <p class="muted tiny">telegram message ids: {item.messageIds.join(', ')}</p>
-            {/if}
-            {#if item.kind}<p class="muted tiny">kind: {item.kind}</p>{/if}
-            <pre class="source">{item.text}</pre>
-            <div class="foot"><Copy text={item.text} label="Copy the source" /></div>
+        <pre class="source"><code>{item.code}</code></pre>
+      </div>
+
+      <!-- Консольный вывод REPL (stdout / stderr) -->
+      {#if item.output || item.error || item.images?.length}
+        <div class="output-box">
+          <div class="box-head">
+            <span class="muted tiny">Terminal Output</span>
+            {#if item.output}<Copy text={item.output} label="Copy Output" />{/if}
           </div>
-        {/if}
-      {:else if item.type === 'tool' && open}
-        <div class="body">
-          <div class="section">
-            <h4>Input</h4>
-            {#if item.input}
-              <Tree value={item.input} />
-            {:else if item.args}
-              <pre class="source">{item.args}</pre>
-            {:else}
-              <p class="muted small">Arguments are still streaming in…</p>
-            {/if}
-          </div>
-          {#if item.phase === 'done'}
-            <div class="section">
-              <h4>Output</h4>
-              <Output blocks={item.output ?? []} />
+
+          {#if item.output}
+            <pre class="terminal">{item.output}</pre>
+          {/if}
+
+          {#if item.error}
+            <div class="error-box">{item.error}</div>
+          {/if}
+
+          {#if item.images?.length}
+            <div class="images-grid">
+              {#each item.images as img}
+                <img src="data:{img.media_type || 'image/png'};base64,{img.data}" alt="Output plot" />
+              {/each}
             </div>
           {/if}
-          <div class="section meta">
-            <span class="muted tiny mono">{item.callId ?? '—'}</span>
-            <span class="muted tiny">step {item.step}</span>
-            {#if item.server}<span class="muted tiny">server tool</span>{/if}
-          </div>
-        </div>
-      {:else if item.type === 'prompt' && open}
-        <div class="body">
-          {#if structured}
-            <Tree value={structured} />
-          {:else}
-            <pre class="source">{item.text}</pre>
-          {/if}
-        </div>
-      {:else if item.type === 'raw' && open}
-        <div class="body">
-          {#if item.block}
-            <Tree value={item.block} />
-          {:else}
-            <p class="muted small">The API sent a <code>{item.name}</code> block with no payload.</p>
-          {/if}
-        </div>
-      {:else if item.type === 'note' && open}
-        <div class="body">
-          {#if item.attributes && Object.keys(item.attributes).length}
-            <Tree value={item.attributes} />
-          {:else}
-            <p class="muted small">No attributes.</p>
-          {/if}
-        </div>
-      {:else if item.type === 'error' && open}
-        <div class="body">
-          {#if item.errorType}<p class="muted tiny">{item.errorType}</p>{/if}
-          <pre class="source">{item.message}</pre>
-        </div>
-      {:else if item.type === 'end'}
-        <div class="body">
-          <p class="small">
-            {item.status}{item.steps ? ` · ${item.steps} steps` : ''}{item.charge
-              ? ` · $${(Number(item.charge) / UNITS_PER_USD).toFixed(4)} charged`
-              : ''}{item.cost ? ` · $${Number(item.cost).toFixed(4)} api` : ''}
-          </p>
-          {#if item.note}<pre class="source">{item.note}</pre>{/if}
         </div>
       {/if}
+    </div>
+  </article>
+
+{:else if item.type === 'text' || item.type === 'reply'}
+  <article class="entry {item.type}" class:open>
+    <div class="rail">
+      <span class="bead"><Icon name={item.type === 'reply' ? 'reply' : 'text'} size={12} /></span>
+    </div>
+    <div class="card">
+      <button class="head" onclick={toggle} aria-expanded={open}>
+        <span class="caret" class:open>▸</span>
+        <span class="title">{item.type === 'reply' ? 'Sent to chat' : 'Model Output'}</span>
+        <span class="spacer"></span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </button>
+      <div class="prose">
+        <Markdown source={item.text} streaming={item.streaming} />
+      </div>
+      {#if open && item.type === 'reply' && item.messageIds?.length}
+        <div class="details">
+          <p class="muted tiny">Telegram message IDs: {item.messageIds.join(', ')}</p>
+        </div>
+      {/if}
+    </div>
+  </article>
+
+{:else if item.type === 'prompt'}
+  <article class="entry prompt" class:open>
+    <div class="rail"><span class="bead"><Icon name="prompt" size={12} /></span></div>
+    <div class="card">
+      <button class="head" onclick={toggle} aria-expanded={open}>
+        <span class="caret" class:open>▸</span>
+        <span class="title">User Prompt</span>
+        <span class="sub">{short(item.text, 80)}</span>
+        <span class="spacer"></span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </button>
+      {#if open}
+        <div class="body">
+          <pre class="source">{item.text}</pre>
+        </div>
+      {/if}
+    </div>
+  </article>
+
+{:else if item.type === 'note'}
+  <article class="entry note" class:open>
+    <div class="rail"><span class="bead"><Icon name="note" size={12} /></span></div>
+    <div class="card">
+      <button class="head" onclick={toggle} aria-expanded={open}>
+        <span class="caret" class:open>▸</span>
+        <span class="title">Note: {item.name}</span>
+        <span class="spacer"></span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </button>
+      {#if open && item.attributes}
+        <div class="body">
+          <pre class="source">{JSON.stringify(item.attributes, null, 2)}</pre>
+        </div>
+      {/if}
+    </div>
+  </article>
+
+{:else if item.type === 'error'}
+  <article class="entry error bad open">
+    <div class="rail"><span class="bead"><Icon name="error" size={12} /></span></div>
+    <div class="card">
+      <div class="head">
+        <span class="title">Error</span>
+        <span class="spacer"></span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </div>
+      <div class="body error-box">{item.message}</div>
+    </div>
+  </article>
+
+{:else if item.type === 'end'}
+  <article class="entry end {item.status === 'ok' ? 'ok' : 'bad'}">
+    <div class="rail"><span class="bead"><Icon name="end" size={12} /></span></div>
+    <div class="card">
+      <div class="head">
+        <span class="title">Finished: {item.status}</span>
+        <span class="spacer"></span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </div>
+      <div class="body">
+        <p class="small">
+          {item.steps ?? 0} steps
+          {#if item.charge} · ${(Number(item.charge) / UNITS_PER_USD).toFixed(4)} charged{/if}
+          {#if item.cost} · ${Number(item.cost).toFixed(4)} API{/if}
+        </p>
+        {#if item.note}<pre class="source">{item.note}</pre>{/if}
+      </div>
     </div>
   </article>
 {/if}
@@ -283,11 +228,9 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin: 1.1rem 0 0.5rem;
+    margin: 1rem 0 0.4rem;
     color: var(--muted);
-    flex-wrap: wrap;
   }
-
   .divider .label {
     font-size: 0.78rem;
     font-weight: 600;
@@ -295,14 +238,12 @@
     text-transform: uppercase;
     color: var(--text);
   }
-
   .divider .line {
     flex: 1;
     min-width: 1rem;
     height: 1px;
     background: var(--border);
   }
-
   .divider.attempt .label {
     color: var(--warn);
   }
@@ -315,24 +256,17 @@
     background: var(--panel);
   }
 
-  .chip.warn {
-    color: var(--warn);
-    border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
-  }
-
   .entry {
     display: grid;
     grid-template-columns: 1.6rem 1fr;
     gap: 0.5rem;
-    margin: 0.3rem 0;
+    margin: 0.4rem 0;
   }
-
   .rail {
     position: relative;
     display: flex;
     justify-content: center;
   }
-
   .rail::before {
     content: '';
     position: absolute;
@@ -341,7 +275,6 @@
     width: 1px;
     background: var(--border);
   }
-
   .bead {
     position: relative;
     display: flex;
@@ -356,21 +289,18 @@
     color: var(--muted);
   }
 
-  .entry.think .bead {
-    color: var(--live-think);
-    border-color: color-mix(in srgb, var(--live-think) 45%, var(--border));
-  }
-
-  .entry.tool .bead {
+  .entry.code .code-bead {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   }
-
+  .entry.think .bead {
+    color: var(--live-think, #8250df);
+    border-color: color-mix(in srgb, var(--live-think, #8250df) 45%, var(--border));
+  }
   .entry.reply .bead {
     color: var(--ok);
     border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
   }
-
   .entry.error .bead,
   .entry.bad .bead {
     color: var(--bad);
@@ -380,22 +310,17 @@
   .entry.busy .bead {
     animation: pulse 1.4s ease-in-out infinite;
   }
-
   @keyframes pulse {
-    50% {
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
-    }
+    50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); }
   }
 
   .card {
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--panel);
     overflow: hidden;
     min-width: 0;
-    transition: border-color 0.12s ease;
   }
-
   .entry.open .card,
   .card:hover {
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
@@ -408,35 +333,28 @@
     width: 100%;
     padding: 0.45rem 0.6rem;
     border: 0;
-    border-radius: 0;
     background: none;
     color: inherit;
     text-align: left;
     cursor: pointer;
     min-width: 0;
   }
-
   .head:hover {
     background: color-mix(in srgb, var(--accent) 5%, transparent);
-    color: inherit;
   }
-
   .caret {
     color: var(--muted);
     font-size: 0.7rem;
     transition: transform 0.12s ease;
   }
-
   .caret.open {
     transform: rotate(90deg);
   }
-
   .title {
     font-weight: 600;
     font-size: 0.88rem;
     flex: 0 0 auto;
   }
-
   .sub {
     color: var(--muted);
     font-size: 0.82rem;
@@ -445,43 +363,65 @@
     white-space: nowrap;
     min-width: 0;
   }
-
-  .sub.broke {
-    color: var(--bad);
-  }
-
   .spacer {
     flex: 1;
     min-width: 0.3rem;
   }
 
-  .state {
+  .machine-tag {
+    font-size: 0.72rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--accent);
+  }
+
+  .status-tag {
     font-size: 0.72rem;
     padding: 0.05rem 0.4rem;
     border-radius: 999px;
     background: color-mix(in srgb, var(--muted) 15%, transparent);
     color: var(--muted);
-    flex: 0 0 auto;
   }
-
-  .state.running,
-  .state.writing {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
-    color: var(--accent);
-  }
-
-  .entry.ok .state.done {
+  .status-tag.ok {
     background: color-mix(in srgb, var(--ok) 16%, transparent);
     color: var(--ok);
   }
-
-  .entry.bad .state.done {
+  .status-tag.failed {
     background: color-mix(in srgb, var(--bad) 16%, transparent);
     color: var(--bad);
   }
+  .status-tag.running {
+    background: color-mix(in srgb, var(--warn) 16%, transparent);
+    color: var(--warn);
+  }
+
+  .sig-pill {
+    font-size: 0.7rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--live-think, #8250df) 14%, transparent);
+    color: var(--live-think, #8250df);
+    border: 1px solid color-mix(in srgb, var(--live-think, #8250df) 30%, transparent);
+  }
+
+  .signature-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-top: 1px dashed var(--border);
+    background: var(--live-sunken);
+  }
+  .sig-preview {
+    font-size: 0.75rem;
+    color: var(--muted);
+    background: none;
+    padding: 0;
+  }
 
   .thought {
-    padding: 0 0.7rem 0.6rem;
+    padding: 0.4rem 0.7rem 0.6rem;
     font-size: 0.84rem;
     line-height: 1.55;
     color: var(--muted);
@@ -489,86 +429,86 @@
     overflow-wrap: anywhere;
     font-style: italic;
   }
-
   .thought.clamped {
     display: -webkit-box;
-    -webkit-line-clamp: 5;
-    line-clamp: 5;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
+  .code-box,
+  .output-box {
+    border-top: 1px solid var(--border);
+  }
+
+  .box-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    background: var(--live-sunken);
+    border-bottom: 1px solid var(--border);
+  }
+
+  pre.source {
+    margin: 0;
+    padding: 0.6rem 0.7rem;
+    background: transparent;
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  pre.terminal {
+    margin: 0;
+    padding: 0.6rem 0.7rem;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    max-height: 28rem;
+  }
+
+  .error-box {
+    padding: 0.5rem 0.7rem;
+    color: var(--bad);
+    font-size: 0.82rem;
+    background: color-mix(in srgb, var(--bad) 10%, transparent);
+    white-space: pre-wrap;
+  }
+
+  .images-grid {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    background: #0d1117;
+    border-top: 1px solid var(--border);
+  }
+  .images-grid img {
+    max-width: 100%;
+    border-radius: 4px;
+    border: 1px solid #30363d;
+  }
+
   .prose {
-    padding: 0 0.7rem 0.6rem;
+    padding: 0.4rem 0.7rem 0.6rem;
     font-size: 0.9rem;
     line-height: 1.55;
   }
-
   .body,
   .details {
-    padding: 0.1rem 0.7rem 0.7rem;
+    padding: 0.5rem 0.7rem;
     border-top: 1px solid var(--border);
-    margin-top: 0.1rem;
   }
 
-  .section + .section {
-    margin-top: 0.7rem;
-  }
-
-  h4 {
-    margin: 0.5rem 0 0.3rem;
-    font-size: 0.72rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--muted);
-    font-weight: 600;
-  }
-
-  .meta {
-    display: flex;
-    gap: 0.7rem;
-    flex-wrap: wrap;
-    padding-top: 0.4rem;
-    border-top: 1px dashed var(--border);
-  }
-
-  .source {
-    margin: 0.2rem 0;
-    padding: 0.6rem 0.7rem;
-    background: var(--live-sunken);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    max-height: 26rem;
-    overflow: auto;
-    font-size: 0.8rem;
-  }
-
-  .pad {
-    padding: 0 0.7rem 0.6rem;
-    margin: 0;
-  }
-
-  .foot {
-    display: flex;
-    justify-content: flex-end;
-    padding: 0 0.7rem 0.5rem;
-  }
-
-  .tiny {
-    font-size: 0.73rem;
-  }
-
-  code {
-    padding: 0.05rem 0.25rem;
-    border-radius: 4px;
-    background: var(--live-sunken);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .entry.busy .bead {
-      animation: none;
-    }
-  }
+  .tiny { font-size: 0.73rem; }
+  .small { font-size: 0.85rem; }
+  .mono { font-family: var(--mono); }
+  .nowrap { white-space: nowrap; }
 </style>

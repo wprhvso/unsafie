@@ -8,66 +8,21 @@ from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
-LIST_LIMIT = 200
-
 
 def log_reply(reply, prefix: str) -> None:
     logger.info(
-        "%s model=%s stop=%s text_len=%s thoughts_len=%s",
+        "%s model=%s stop=%s text_len=%s thoughts_len=%s signatures=%s",
         prefix,
         reply.model,
         reply.stop_reason,
         len(reply.text),
         len(reply.thoughts),
+        len(reply.thought_signatures),
     )
     if reply.thoughts:
         logger.debug("%s thoughts: %s", prefix, short(reply.thoughts))
     if reply.text:
         logger.info("%s text: %s", prefix, short(reply.text))
-
-
-def shrink(value, limit: int):
-    if isinstance(value, str):
-        body, cut = stream.clip(value, limit)
-        return f"{body}…(+{cut} chars)" if cut else body
-    if isinstance(value, dict):
-        return {key: shrink(item, limit) for key, item in value.items()}
-    if isinstance(value, list):
-        head = [shrink(item, limit) for item in value[:LIST_LIMIT]]
-        if len(value) > LIST_LIMIT:
-            head.append(f"…(+{len(value) - LIST_LIMIT} more)")
-        return head
-    return value
-
-
-def _output(content) -> list[dict]:
-    if isinstance(content, str):
-        body, cut = stream.clip(content)
-        item = {"type": "text", "text": body}
-        if cut:
-            item["cut"] = cut
-        return [item]
-    out: list[dict] = []
-    for block in content or []:
-        if not isinstance(block, dict):
-            continue
-        kind = block.get("type")
-        if kind == "text":
-            body, cut = stream.clip(block.get("text") or "")
-            item = {"type": "text", "text": body}
-            if cut:
-                item["cut"] = cut
-            out.append(item)
-        elif kind == "image":
-            source = block.get("source") or {}
-            data = source.get("data") or ""
-            item = {"type": "image", "media_type": source.get("media_type"), "size": len(data)}
-            if settings.live_images and 0 < len(data) <= settings.live_image_bytes:
-                item["data"] = data
-            out.append(item)
-        else:
-            out.append({"type": kind or "unknown"})
-    return out
 
 
 class Recorder:
@@ -94,6 +49,9 @@ class Recorder:
         elif name == "thought_delta":
             thought = data.get("thought") or ""
             self.live.append("block.think", self.steps, 0, thought)
+        elif name == "thought_signature":
+            signature = data.get("signature") or ""
+            self.live.emit("block.signature", step=self.steps, signature=signature)
         elif name == "text_delta":
             text = data.get("text") or ""
             self.live.append("block.text", self.steps, 0, text)
@@ -125,27 +83,46 @@ class Recorder:
                 blocks=blocks,
             )
 
-    def tool_started(self, call_id: str, name: str, args: dict) -> None:
+    def code_started(self, index: int, code: str, machine: str = "") -> None:
         if self.live is not None:
             self.live.emit(
-                "tool.start",
+                "code.start",
                 step=self.steps,
-                call_id=call_id,
-                name=name,
-                input=shrink(args, settings.live_max_text),
+                index=index,
+                code=code,
+                machine=machine,
             )
 
-    def tool_finished(self, call_id: str, name: str, result: dict, ms: float) -> None:
+    def code_finished(
+        self,
+        index: int,
+        machine: str,
+        exit_code: int | None,
+        output: str,
+        seconds: float,
+        error: str | None = None,
+        images: list[dict] | None = None,
+    ) -> None:
         if self.live is not None:
             self.live.emit(
-                "tool.end",
+                "code.end",
                 step=self.steps,
-                call_id=call_id,
-                name=name,
-                ok=not result.get("is_error"),
-                ms=round(ms, 1),
-                output=_output(result.get("output")),
+                index=index,
+                machine=machine,
+                exit_code=exit_code,
+                output=output,
+                seconds=round(seconds, 3),
+                error=error,
+                images=images or [],
             )
+
+    def tool_started(self, call_id: str, name: str, args: dict) -> None:
+        # Обратная совместимость
+        pass
+
+    def tool_finished(self, call_id: str, name: str, result: dict, ms: float) -> None:
+        # Обратная совместимость
+        pass
 
     def note(self, name: str, attributes: dict | None = None) -> None:
         telemetry.event(name, attributes)

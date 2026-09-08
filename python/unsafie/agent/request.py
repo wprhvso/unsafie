@@ -19,10 +19,13 @@ def safety_settings() -> list[dict[str, str]]:
 
 
 def generation_config(effort: str | None, max_tokens: int) -> dict[str, Any]:
-    level = (effort or settings.gemini_thinking_level).upper()
+    level = (effort or settings.gemini_thinking_level).lower()
     return {
         "maxOutputTokens": max_tokens,
-        "thinkingConfig": {"thinkingLevel": level},
+        "thinkingConfig": {
+            "thinkingLevel": level,
+            "includeThoughts": True,
+        },
     }
 
 
@@ -51,6 +54,20 @@ def _extract_parts(content: Any) -> list[dict[str, Any]]:
             if item:
                 parts.append({"text": item})
         elif isinstance(item, dict):
+            # Сохраняем исходные части Gemini (рассуждения и сигнатуры) для сохранения контекста в истории
+            if "thought" in item or "thoughtSignature" in item or "signature" in item:
+                part_dict: dict[str, Any] = {}
+                if "text" in item and item["text"]:
+                    part_dict["text"] = item["text"]
+                if item.get("thought") is True:
+                    part_dict["thought"] = True
+                sig = item.get("thoughtSignature") or item.get("signature")
+                if sig:
+                    part_dict["thoughtSignature"] = sig
+                if part_dict:
+                    parts.append(part_dict)
+                continue
+
             item_type = item.get("type")
             if item_type == "text":
                 text = item.get("text")

@@ -1,9 +1,6 @@
 import { UNITS_PER_USD } from '../format.js';
 import { contextLimit, contextOf, costOf } from './pricing.js';
 
-const CALL_BLOCKS = ['tool_use', 'server_tool_use'];
-const THINK_BLOCKS = ['thinking', 'redacted_thinking'];
-
 const USAGE = [
   'input_tokens',
   'output_tokens',
@@ -24,9 +21,6 @@ export function timeline() {
     turn: null,
     model: null,
     effort: null,
-    display: null,
-    configured: null,
-    thinking: null,
     steps: 0,
     calls: 0,
     cost: 0,
@@ -47,7 +41,7 @@ export function timeline() {
   });
 
   let blocks = new Map();
-  let calls = new Map();
+  let codeBlocks = new Map();
   let steps = new Map();
   let attempts = [];
   let balanceStart = null;
@@ -67,74 +61,34 @@ export function timeline() {
     state.spent = state.charge / UNITS_PER_USD + state.pending * (state.ratio ?? 1);
     if (balanceStart !== null) state.balance = Math.max(balanceStart - state.spent, 0);
   }
-  const key = (data) => `${data.step ?? 0}:${data.index ?? 0}`;
 
   function push(item) {
     state.items.push(item);
     return state.items[state.items.length - 1];
   }
 
-  function opened(id, when, data) {
-    const kind = data.type;
-    const base = {
-      id,
-      at: when,
-      step: data.step ?? 0,
-      index: data.index ?? 0,
-      streaming: true
-    };
-    let item;
-    if (CALL_BLOCKS.includes(kind)) {
-      item = {
-        ...base,
-        type: 'tool',
-        name: data.name ?? '?',
-        callId: data.id ?? null,
-        server: kind === 'server_tool_use',
-        args: '',
-        input: null,
-        output: null,
-        ok: null,
-        ms: null,
-        phase: 'writing'
-      };
-      state.calls += 1;
-    } else if (THINK_BLOCKS.includes(kind)) {
-      item = {
-        ...base,
-        type: 'think',
+  function ensureBlock(step, type) {
+    const k = `${step}:${type}`;
+    let item = blocks.get(k);
+    if (!item) {
+      item = push({
+        id: crypto.randomUUID(),
+        at: new Date().toISOString(),
+        step,
+        type,
         text: '',
-        redacted: kind === 'redacted_thinking',
-        display: state.display,
-        configured: state.configured
-      };
-    } else if (kind === 'text' || !kind) {
-      item = { ...base, type: 'text', text: '' };
-    } else {
-      item = { ...base, type: 'raw', name: kind, block: data.block ?? null };
+        signature: null,
+        streaming: true
+      });
+      blocks.set(k, item);
     }
-    const stored = push(item);
-    blocks.set(key(data), stored);
-    if (stored.callId) calls.set(stored.callId, stored);
-    return stored;
-  }
-
-  function grow(data, field) {
-    const item = blocks.get(key(data));
-    if (!item) return;
-    item[field] = (item[field] ?? '') + (data.text ?? '');
-    if (data.cut) item.cut = (item.cut ?? 0) + data.cut;
-  }
-
-  function downgraded(dropped) {
-    const fields = Array.isArray(dropped) ? dropped : [dropped];
-    if (fields.includes('thinking')) state.thinking = 'off';
-    if (fields.includes('thinking') || fields.includes('thinking.display')) state.display = 'off';
+    return item;
   }
 
   function apply(frame) {
     const data = frame.data ?? {};
-    const when = at(frame);
+    const when = at(frame) ?? new Date().toISOString();
+
     switch (frame.kind) {
       case 'turn.start':
         state.turn = { id: data.turn_id, chat: data.chat_id, resumed: data.resumed ?? 0 };
@@ -145,9 +99,6 @@ export function timeline() {
       case 'attempt.start': {
         state.model = data.model ?? state.model;
         state.effort = data.effort ?? state.effort;
-        state.display = data.display ?? state.display;
-        state.configured = data.configured ?? state.configured;
-        state.thinking = data.thinking ?? state.thinking;
         state.ratio = typeof data.ratio === 'number' ? data.ratio : state.ratio;
         if (typeof data.budget_units === 'number')
           state.budget = data.budget_units / UNITS_PER_USD + state.spent;
@@ -162,12 +113,7 @@ export function timeline() {
           attempt: data.attempt,
           model: data.model,
           effort: data.effort,
-          budget: data.budget_usd,
-          tools: data.tools,
-          servers: data.servers ?? [],
-          thinking: data.thinking,
-          display: data.display,
-          configured: data.configured
+          budget: data.budget_usd
         });
         attempts.push(item);
         break;
@@ -201,8 +147,7 @@ export function timeline() {
           at: when,
           type: 'step',
           step: data.step,
-          messages: data.messages,
-          tools: data.tools
+          messages: data.messages
         });
         steps.set(data.step, item);
         break;
@@ -213,7 +158,6 @@ export function timeline() {
         if (item) item.model = data.model;
         state.model = data.model ?? state.model;
         state.contextLimit = contextLimit(state.model);
-        seeContext(data.usage, data.model);
         break;
       }
 
@@ -239,54 +183,64 @@ export function timeline() {
         state.pending += costOf(data.usage, data.model ?? state.model);
         seeContext(data.usage, data.model);
         total();
-        (data.blocks ?? []).forEach((block, index) => {
-          const target = blocks.get(`${data.step}:${index}`);
-          if (!target) return;
-          if (block.hidden) target.hidden = true;
-          if (typeof block.chars === 'number') target.chars = block.chars;
+
+        const thinkItem = blocks.get(`${data.step}:think`);
+        if (thinkItem) thinkItem.streaming = false;
+        const textItem = blocks.get(`${data.step}:text`);
+        if (textItem) textItem.streaming = false;
+        break;
+      }
+
+      case 'block.think': {
+        const item = ensureBlock(data.step ?? state.steps, 'think');
+        item.text += (data.text ?? '');
+        break;
+      }
+
+      case 'block.signature': {
+        const item = ensureBlock(data.step ?? state.steps, 'think');
+        item.signature = data.signature;
+        break;
+      }
+
+      case 'block.text': {
+        const item = ensureBlock(data.step ?? state.steps, 'text');
+        item.text += (data.text ?? '');
+        break;
+      }
+
+      case 'code.start': {
+        state.calls += 1;
+        const item = push({
+          id: frame.id,
+          at: when,
+          type: 'code',
+          step: data.step ?? state.steps,
+          index: data.index,
+          code: data.code,
+          machine: data.machine || 'sandbox',
+          status: 'running',
+          output: '',
+          error: null,
+          exit_code: null,
+          seconds: null,
+          images: []
         });
+        codeBlocks.set(data.index, item);
         break;
       }
 
-      case 'block.open':
-        opened(frame.id, when, data);
-        break;
-
-      case 'block.text':
-      case 'block.think':
-        grow(data, 'text');
-        break;
-
-      case 'block.args':
-        grow(data, 'args');
-        break;
-
-      case 'block.close': {
-        const item = blocks.get(key(data));
+      case 'code.end': {
+        const item = codeBlocks.get(data.index);
         if (item) {
-          item.streaming = false;
-          if (item.type === 'tool' && item.phase === 'writing') item.phase = 'ready';
+          item.status = (data.exit_code === 0 && !data.error) ? 'ok' : 'failed';
+          item.machine = data.machine || item.machine;
+          item.exit_code = data.exit_code;
+          item.output = data.output || '';
+          item.error = data.error;
+          item.seconds = data.seconds;
+          item.images = data.images ?? [];
         }
-        break;
-      }
-
-      case 'tool.start': {
-        const item = calls.get(data.call_id);
-        if (item) {
-          item.input = data.input ?? {};
-          item.phase = 'running';
-          item.startedAt = when;
-        }
-        break;
-      }
-
-      case 'tool.end': {
-        const item = calls.get(data.call_id);
-        if (!item) break;
-        item.output = data.output ?? [];
-        item.ok = data.ok !== false;
-        item.ms = data.ms;
-        item.phase = 'done';
         break;
       }
 
@@ -302,7 +256,6 @@ export function timeline() {
         break;
 
       case 'note':
-        if (data.name === 'unsafie.downgraded') downgraded(data.attributes?.dropped);
         push({ id: frame.id, at: when, type: 'note', name: data.name, attributes: data.attributes });
         break;
 
@@ -350,9 +303,9 @@ export function timeline() {
     state.contextPeak = 0;
     state.outcome = null;
     state.endedAt = null;
-    blocks = new Map();
-    calls = new Map();
-    steps = new Map();
+    blocks.clear();
+    codeBlocks.clear();
+    steps.clear();
     attempts = [];
   }
 

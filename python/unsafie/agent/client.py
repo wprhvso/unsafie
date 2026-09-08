@@ -55,19 +55,22 @@ class Reply:
     model: str = ""
     text: str = ""
     thoughts: str = ""
+    thought_signatures: list[str] = field(default_factory=list)
+    raw_parts: list[dict] = field(default_factory=list)
     stop_reason: str | None = None
     usage: dict = field(default_factory=dict)
 
     @property
     def content(self) -> list[dict]:
-        return [{"type": "text", "text": self.text}] if self.text else []
+        return self.raw_parts if self.raw_parts else ([{"type": "text", "text": self.text}] if self.text else [])
 
     @property
     def calls(self) -> list[dict]:
         return []
 
     def as_message(self) -> dict:
-        return {"role": "assistant", "content": self.text}
+        # Сохраняем raw_parts (мысли + сигнатуры + код), обеспечивая сохранение цепочки рассуждений в многоходовом диалоге
+        return {"role": "assistant", "content": self.raw_parts if self.raw_parts else self.text}
 
 
 async def session() -> aiohttp.ClientSession:
@@ -113,9 +116,18 @@ class Builder:
             content = candidate.get("content") or {}
             parts = content.get("parts") or []
             for part in parts:
+                self.reply.raw_parts.append(dict(part))
+
+                sig = part.get("thoughtSignature") or part.get("signature")
+                if sig:
+                    self.reply.thought_signatures.append(sig)
+                    if on_event:
+                        on_event("thought_signature", {"signature": sig})
+
                 text = part.get("text")
                 if not text:
                     continue
+
                 if part.get("thought") is True:
                     self.reply.thoughts += text
                     if on_event:

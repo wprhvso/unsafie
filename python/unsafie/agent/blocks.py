@@ -15,7 +15,6 @@ from unsafie_wire import markers
 
 logger = logging.getLogger(__name__)
 
-TOOL = "python"
 NAG_EVERY = 60.0
 REASON_LIMIT = 300
 
@@ -77,7 +76,7 @@ class Runner:
         index = len(self.blocks) + 1
         block = Block(index=index, code=code)
         self.blocks.append(block)
-        self.recorder.tool_started(str(index), TOOL, {"code": code})
+        self.recorder.code_started(index, code)
         task = asyncio.create_task(
             self._run(block), name=f"python:{self.ctx.turn_id}:{block.index}"
         )
@@ -198,8 +197,15 @@ class Runner:
         return text
 
     def _finished(self, block: Block) -> None:
-        result = {"output": self._body(block, limit=8000), "is_error": block.failed}
-        self.recorder.tool_finished(str(block.index), TOOL, result, block.seconds * 1000)
+        self.recorder.code_finished(
+            index=block.index,
+            machine=block.machine or "-",
+            exit_code=block.exit_code,
+            output=self._body(block, limit=8000),
+            seconds=block.seconds,
+            error=block.error,
+            images=block.images,
+        )
         logger.info(
             "%s python block %s on %s: %s",
             self.ctx.prefix,
