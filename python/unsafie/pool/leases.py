@@ -247,6 +247,13 @@ async def _close_lease(name: str, reason: str) -> None:
         await session.commit()
 
 
+async def hold(user_id: int, ref: str | None, seconds: float) -> dict:
+    machine = await resolve(user_id, ref)
+    left = await registry.hold(machine.name, seconds)
+    logger.info("pool %s held for %.0fs", machine.name, left)
+    return {"machine": machine.alias or machine.name, "seconds": left}
+
+
 async def rename(name: str, alias: str) -> None:
     async with SessionLocal() as session:
         machine = await session.scalar(select(PoolMachine).where(PoolMachine.name == name))
@@ -303,6 +310,8 @@ async def reap() -> int:
             released += 1
             continue
         quiet = (now - (await _last_seen(machine))).total_seconds()
+        if await registry.held(machine.name):
+            continue
         if machine.user_id and quiet > idle_limit and not await _busy(machine.name):
             await release(machine.user_id, machine.name, "idle")
             released += 1

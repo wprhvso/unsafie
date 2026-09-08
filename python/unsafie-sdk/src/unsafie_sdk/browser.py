@@ -134,11 +134,11 @@ def upload(selector: str, path: str | Path) -> None:
     _act(actions.upload, selector, str(Path(path).resolve()))
 
 
-def desktop() -> str:
+def desktop(hold_for: float = 600.0) -> str:
     """A link to the live desktop of this machine: the human takes the mouse."""
     from unsafie_sdk import machines
 
-    return machines.desktop()
+    return machines.desktop(hold_for=hold_for)
 
 
 def profiles() -> list[str]:

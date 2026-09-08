@@ -189,6 +189,7 @@ class Settings(BaseSettings):
     pool_heartbeat: float = 20.0
     pool_take_wait: float = 180.0
     pool_lease_idle: float = 900.0
+    pool_hold_max: float = 3_600.0
     pool_command_timeout: float = 600.0
     pool_block_timeout: float = 900.0
     pool_max_command_timeout: float = 21600.0

@@ -66,6 +66,7 @@ detail in a page and send its link.
     machines.copy("box-1:/tmp/a", "box-2:/tmp/a")
     machines.desktop() -> url                        a live desktop link for the human
     machines.terminal() -> url                       a web terminal on this machine
+    machines.hold(seconds)                           keep it from being reaped as idle
     machines.quota()                                 what is left today
 
 ## packages

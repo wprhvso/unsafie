@@ -23,6 +23,10 @@ def log(command_id: str) -> str:
     return cluster.key(NAMESPACE, "log", command_id)
 
 
+def hold(name: str) -> str:
+    return cluster.key(NAMESPACE, "hold", name)
+
+
 def pending() -> str:
     return cluster.key(NAMESPACE, "pending")
 
