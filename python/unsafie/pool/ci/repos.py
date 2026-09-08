@@ -198,6 +198,27 @@ async def running_jobs(repo_id: int) -> list[PoolCiJob]:
         return list(rows)
 
 
+async def close_orphans() -> int:
+    from unsafie.pool import registry
+
+    async with SessionLocal() as session:
+        rows = list(
+            await session.scalars(select(PoolCiJob).where(PoolCiJob.finished_at.is_(None)))
+        )
+        closed = 0
+        for row in rows:
+            if row.machine and await registry.alive(row.machine):
+                continue
+            row.status = "lost"
+            row.result = "the machine went away"
+            row.finished_at = datetime.now(UTC)
+            closed += 1
+        if closed:
+            await session.commit()
+            logger.info("pool ci: %s runner(s) written off, their machines are gone", closed)
+        return closed
+
+
 async def recent_jobs(repo_id: int, limit: int = 50) -> list[PoolCiJob]:
     async with SessionLocal() as session:
         rows = await session.scalars(

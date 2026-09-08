@@ -1,0 +1,32 @@
+name: publish
+
+on:
+  push:
+    tags: ["cli-v*"]
+  workflow_dispatch:
+
+# The machines install the CLI from whatever POOL_CLI_SPEC says: a git url by default,
+# the published package once this workflow has run at least once.
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: build the wire contract and the cli
+        run: |
+          uv build --package unsafie-wire --out-dir dist
+          uv build --package unsafie-cli --out-dir dist
+
+      - name: publish
+        run: uv publish dist/*

@@ -22,6 +22,7 @@ class CiSupervisor(Loop):
         self.tasks: dict[int, asyncio.Task] = {}
 
     async def tick(self) -> None:
+        await repos.close_orphans()
         wanted = {row.id: row for row in await repos.enabled_repos()}
         for repo_id, task in list(self.tasks.items()):
             if task.done():

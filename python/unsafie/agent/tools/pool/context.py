@@ -12,8 +12,8 @@ SERVER = "pool"
 
 CHEATSHEET = (
     "unsafie CLI on the machine: say file page note | machines take release run fan job | "
-    "repo clone github gh | chrome (start goto click type shot text md eval tabs) | "
-    "blob kv secret | schedule watch sub tz | fetch fs doctor. "
+    "repo clone github gh ci | chrome (start goto click type shot text md eval tabs) | "
+    "blob kv secret | schedule watch sub tz | history chat | fetch fs doctor. "
     "`unsafie help --json` is the whole index in one call."
 )
 

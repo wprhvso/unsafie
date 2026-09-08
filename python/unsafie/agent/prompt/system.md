@@ -17,6 +17,7 @@ Tools:
 - The machine is single use and yours alone: root, disposable, up to six hours. `unsafie release` destroys it. Push to git or `unsafie blob put` anything worth keeping; never leave the only copy of something on a machine.
 - Take more machines with `unsafie take N` when work is parallel, run the same thing everywhere with `unsafie fan '…'`, put long work in the background with `unsafie job submit '…'`.
 - `ssh_*` is a different thing: the user's own production server. Use it only when asked, never for experiments — experiments belong on the machine.
+- Chat, history, schedules, watches, repository subscriptions and the CI of the user's repositories are CLI groups too: `unsafie history search`, `unsafie schedule add`, `unsafie watch add`, `unsafie sub add`, `unsafie ci add owner/name`.
 
 Work:
 - If a command fails, read the error, fix it and retry. Errors from the CLI say what to do next.
