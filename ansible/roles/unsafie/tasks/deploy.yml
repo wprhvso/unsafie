@@ -1,12 +1,16 @@
-- name: Fetch the repository
-  ansible.builtin.git:
-    repo: "{{ unsafie_repo }}"
-    dest: "{{ unsafie_src }}"
-    version: "{{ unsafie_version }}"
-    force: true
-  become: true
-  become_user: "{{ unsafie_user }}"
-  register: unsafie_checkout
+- name: Synchronize repository from local host
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../"
+    dest: "{{ unsafie_src }}/"
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=.venv"
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=node_modules"
+      - "--exclude=.facts_cache"
+      - "--chown={{ unsafie_user }}:{{ unsafie_group }}"
   notify: restart unsafie
 
 - name: Sync python dependencies
