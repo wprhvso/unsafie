@@ -284,12 +284,6 @@ class Daemon:
             _log(f"the owner's ssh key is in place: {', '.join(aliases) or 'no hosts yet'}")
         except Exception as broken:  # noqa: BLE001 - a machine without a key still works
             _log(f"no ssh key on this machine: {broken}")
-        try:
-            from unsafie_sdk.github import _wire
-
-            _log("github is wired for git and gh" if _wire() else "no github account yet")
-        except Exception as broken:  # noqa: BLE001 - a machine without github still works
-            _log(f"no github credentials on this machine: {broken}")
         for line in (
             ["git", "config", "--global", "user.name", "unsafie"],
             ["git", "config", "--global", "user.email", "agent@unsafie.com"],
@@ -297,6 +291,12 @@ class Daemon:
             ["git", "config", "--global", "--add", "safe.directory", "*"],
         ):
             subprocess.run(line, check=False, capture_output=True)
+        try:
+            from unsafie_sdk.github import _wire
+
+            _log("github is wired for git and gh" if _wire() else "no github account yet")
+        except Exception as broken:  # noqa: BLE001 - a machine without github still works
+            _log(f"no github credentials on this machine: {broken}")
 
     def _environment(self) -> dict[str, str]:
         env = {"UNSAFIE_API": self.link.base, "UNSAFIE_MACHINE": self.name}

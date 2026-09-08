@@ -8,6 +8,7 @@ from unsafie.api.routes.cli.deps import Accounts, Github
 from unsafie.database import SessionLocal
 from unsafie.database.models.repo import Repo
 from unsafie.database.repositories.github import RepoRepository, UserRepoRepository
+from unsafie.database.repositories.user import UserRepository
 from unsafie.github import pat
 from unsafie.github.app import auth
 from unsafie.github.client.base import GithubHTTP
@@ -51,20 +52,31 @@ def _repo(row: Repo, alias: str | None = None) -> dict:
     }
 
 
+async def _identity(user_id: int, login: str) -> tuple[str, str]:
+    async with SessionLocal() as session:
+        user = await UserRepository(session).get(user_id)
+    if user is not None and user.git_name and user.git_email:
+        return user.git_name, user.git_email
+    return login, f"{login}@users.noreply.github.com"
+
+
 @router.get("/accounts")
 async def accounts(who: Github) -> dict:
     rows = await pat.accounts_of(who.user_id)
-    return {
-        "accounts": [
+    out = []
+    for row in rows:
+        name, email = await _identity(who.user_id, row.login)
+        out.append(
             {
                 "login": row.login,
                 "scopes": row.scopes,
                 "has_token": bool(row.token),
                 "created_at": row.created_at,
+                "name": name,
+                "email": email,
             }
-            for row in rows
-        ]
-    }
+        )
+    return {"accounts": out}
 
 
 @router.post("/accounts")
@@ -128,17 +140,25 @@ async def short_token(body: ShortToken, who: Github) -> dict:
             except GithubError as refused:
                 logger.info("installation token for %s failed: %s", body.repo, refused)
             else:
+                account = await pat.account_of(who.user_id, body.login)
+                login = account.login if account else ""
+                name, email = await _identity(who.user_id, login) if login else ("", "")
                 return {
                     "token": token,
                     "kind": "installation",
                     "repo": f"{row.owner}/{row.name}",
                     "minutes": 60,
+                    "name": name,
+                    "email": email,
                 }
     account = await _account(who.user_id, body.login)
+    name, email = await _identity(who.user_id, account.login)
     return {
         "token": account.token,
         "kind": "pat",
         "login": account.login,
+        "name": name,
+        "email": email,
         "note": "this is your personal token, not a scoped one; it lives as long as you keep it",
     }
 
