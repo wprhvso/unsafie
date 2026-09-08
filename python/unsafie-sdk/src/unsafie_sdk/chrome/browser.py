@@ -9,6 +9,7 @@ from pathlib import Path
 
 from unsafie_sdk.chrome.cdp import Cdp, CdpError
 from unsafie_sdk.chrome.ws import json_get
+from unsafie_sdk.chrome import vnc
 
 CANDIDATES = (
     "google-chrome",
@@ -65,20 +66,8 @@ def _free_port() -> int:
 
 
 def _display(size: str) -> tuple[str, subprocess.Popen | None]:
-    if os.environ.get("DISPLAY"):
-        return os.environ["DISPLAY"], None
-    xvfb = shutil.which("Xvfb")
-    if xvfb is None:
-        return "", None
-    width, _, height = size.partition("x")
-    display = ":97"
-    process = subprocess.Popen(
-        [xvfb, display, "-screen", "0", f"{width}x{height}x24", "-nolisten", "tcp"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    time.sleep(1.0)
-    return display, process
+    """A display for Chrome, with a VNC server watching it from birth."""
+    return vnc.start_display(size)
 
 
 def launch(profile: str | None, size: str, headless: bool) -> dict:
@@ -118,6 +107,7 @@ def launch(profile: str | None, size: str, headless: bool) -> dict:
         "xvfb_pid": xvfb.pid if xvfb else None,
         "headless": bool(headless or not display),
         "size": size,
+        "vnc_port": vnc.RFB_PORT if display else None,
         "started_at": time.time(),
     }
 

@@ -1,13 +1,12 @@
 import os
 import pty
-import shutil
 import socket
 import struct
 import subprocess
-import sys
 import threading
 
 from unsafie_sdk.chrome.ws import WebSocket
+from unsafie_sdk.chrome import vnc
 
 CHUNK = 65536
 VNC_WAIT = 20.0
@@ -25,6 +24,8 @@ def serve_tunnel(url: str, kind: str, port: int) -> None:
 
 
 def _tcp(link: WebSocket, port: int) -> None:
+    if port == vnc.RFB_PORT:
+        vnc.attach(vnc.DISPLAY)
     local = socket.create_connection(("127.0.0.1", port), timeout=VNC_WAIT)
     local.settimeout(None)
     stop = threading.Event()
@@ -115,27 +116,8 @@ def _resize(master: int, payload: bytes) -> None:
         return
 
 
-def start_vnc(display: str, port: int, size: str = "1920x1080") -> str:
-    binary = shutil.which("Xkasmvnc") or shutil.which("kasmvncserver")
-    if binary is None:
-        return "kasmvnc is not installed; run `unsafie setup kasmvnc`"
-    done = subprocess.run(
-        [
-            "kasmvncserver",
-            "start",
-            display,
-            "-select-de",
-            "openbox",
-            "-websocketPort",
-            str(port),
-            "-geometry",
-            size,
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if done.returncode != 0:
-        return done.stderr.strip()[:200] or "kasmvnc refused to start"
-    sys.stderr.write(f"[machine] kasmvnc on {display}, websocket port {port}\n")
-    return ""
+def start_vnc(display: str = vnc.DISPLAY, port: int = vnc.RFB_PORT, size: str = "1920x1080") -> str:
+    """Make sure a VNC server serves raw RFB on `port` for `display`."""
+    if port != vnc.RFB_PORT:
+        return f"the vnc server serves rfb on {vnc.RFB_PORT}, not {port}"
+    return vnc.attach(display, size)
