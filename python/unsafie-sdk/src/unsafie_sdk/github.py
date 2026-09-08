@@ -34,12 +34,22 @@ def token(repo: str | None = None, *, login: str | None = None) -> str:
     return str(client().call("POST", f"{BASE}/token", body)["token"])
 
 
+def identity(*, login: str | None = None) -> dict[str, str] | None:
+    """The name and email git commits are signed with: the owner of the token, not unsafie."""
+    body = {"repo": None, "login": login or _current}
+    answer = client().call("POST", f"{BASE}/token", body)
+    name, email = str(answer.get("name") or ""), str(answer.get("email") or "")
+    return {"name": name, "email": email} if name and email else None
+
+
 def _wire() -> bool:
     try:
-        secret = token()
+        answer = client().call("POST", f"{BASE}/token", {"repo": None, "login": _current})
     except UnsafieError:
         return False
+    secret = str(answer["token"])
     os.environ["GH_TOKEN"] = secret
+    _sign(str(answer.get("name") or ""), str(answer.get("email") or ""))
     home = Path(os.environ.get("HOME") or Path.home())
     store = home / ".git-credentials"
     line = f"https://x-access-token:{secret}@github.com\n"
@@ -51,3 +61,16 @@ def _wire() -> bool:
         ["git", "config", "--global", "credential.helper", "store"], check=False, capture_output=True
     )
     return True
+
+
+def _sign(name: str, email: str) -> None:
+    """Commits belong to the owner of the token, so git is told who that is."""
+    if not name or not email:
+        return
+    for line in (
+        ["git", "config", "--global", "user.name", name],
+        ["git", "config", "--global", "user.email", email],
+    ):
+        subprocess.run(line, check=False, capture_output=True)
+    os.environ["GIT_AUTHOR_NAME"] = os.environ["GIT_COMMITTER_NAME"] = name
+    os.environ["GIT_AUTHOR_EMAIL"] = os.environ["GIT_COMMITTER_EMAIL"] = email

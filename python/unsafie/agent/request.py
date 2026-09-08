@@ -85,6 +85,7 @@ authenticated. Use them through `machines.run(...)` or `subprocess` instead of l
     github.logins() -> ["alice", "bob"]     every account the user attached
     github.use("alice")                     rewires git and gh to that account
     github.token(repo=None) -> str          a token for curl and the GitHub API
+    github.identity() -> {"name","email"}   who commits are signed as: the owner of the token
 
 Work with repositories as a developer does: clone, edit files, run the tests, commit, push, open \
 a pull request with `gh`. The servers behind those ssh aliases are production: only when asked, \
