@@ -50,16 +50,8 @@ def current_url(cdp: Cdp) -> str:
     return str(evaluate(cdp, "location.href") or "")
 
 
-def title(cdp: Cdp) -> str:
-    return str(evaluate(cdp, "document.title") or "")
-
-
 def _quote(value: str) -> str:
     return json.dumps(value)
-
-
-def find(cdp: Cdp, selector: str) -> bool:
-    return bool(evaluate(cdp, f"!!document.querySelector({_quote(selector)})"))
 
 
 def wait_for(cdp: Cdp, selector: str, state: str = "visible", timeout: float = 30.0) -> None:
@@ -137,11 +129,6 @@ def click(cdp: Cdp, selector: str, button: str = "left", clicks: int = 1) -> Non
         )
 
 
-def hover(cdp: Cdp, selector: str) -> None:
-    x, y = centre(cdp, selector)
-    cdp.call("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y})
-
-
 def type_text(cdp: Cdp, selector: str, text: str, clear: bool = False) -> None:
     wipe = "e.value = '';" if clear else ""
     focus = (
@@ -211,28 +198,6 @@ def press(cdp: Cdp, combination: str) -> None:
         )
 
 
-def select(cdp: Cdp, selector: str, value: str) -> None:
-    done = evaluate(
-        cdp,
-        f"(() => {{ const e = document.querySelector({_quote(selector)});"
-        f" if (!e) return false; e.value = {_quote(value)};"
-        " e.dispatchEvent(new Event('change', {bubbles: true})); return true; }})()",
-    )
-    if not done:
-        raise CdpError(f"no element matches {selector}")
-
-
-def scroll(cdp: Cdp, selector: str | None, by: int | None) -> None:
-    if selector:
-        evaluate(
-            cdp,
-            f"(() => {{ const e = document.querySelector({_quote(selector)});"
-            " if (e) e.scrollIntoView({block: 'center'}); })()",
-        )
-        return
-    evaluate(cdp, f"window.scrollBy(0, {int(by or 400)})")
-
-
 def text_of(cdp: Cdp, selector: str) -> str:
     value = evaluate(
         cdp,
@@ -255,25 +220,6 @@ def html_of(cdp: Cdp, selector: str | None) -> str:
             raise CdpError(f"no element matches {selector}")
         return str(value)
     return str(evaluate(cdp, "document.documentElement.outerHTML") or "")
-
-
-def attribute(cdp: Cdp, selector: str, name: str) -> str | None:
-    return evaluate(
-        cdp,
-        f"(() => {{ const e = document.querySelector({_quote(selector)});"
-        f" return e ? e.getAttribute({_quote(name)}) : null; }})()",
-    )
-
-
-def value_of(cdp: Cdp, selector: str) -> str:
-    value = evaluate(
-        cdp,
-        f"(() => {{ const e = document.querySelector({_quote(selector)});"
-        " return e ? e.value : null; })()",
-    )
-    if value is None:
-        raise CdpError(f"no element matches {selector}")
-    return str(value)
 
 
 def screenshot(cdp: Cdp, full: bool = False) -> bytes:

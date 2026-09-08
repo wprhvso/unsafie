@@ -8,6 +8,7 @@ from unsafie_sdk.machine.daemon import serve
 USAGE = """unsafie-machine — what a pool machine runs for itself
 
   unsafie-machine serve                         become a machine of the pool
+  unsafie-machine setup xvfb kasmvnc tools      install the toolchains of a machine
   unsafie-machine put <key> <file>              store a file under a key
   unsafie-machine get <key> <file>              write a stored file here
   unsafie-machine ci-runner --jit <config>      become a github runner for one job
@@ -38,6 +39,13 @@ def main() -> int:
             return 2
         api = _flag(argv, "--api") or setting("api") or DEFAULT_API
         return serve(api, token)
+    if action == "setup":
+        from unsafie_sdk.machine.toolchains import TOOLCHAINS, setup
+
+        wanted = [name for name in argv[1:] if not name.startswith("-")] or list(TOOLCHAINS)
+        for name, outcome in setup(*wanted).items():
+            sys.stdout.write(f"{name}: {outcome}\n")
+        return 0
     if action in ("put", "get"):
         from unsafie_sdk import store
 

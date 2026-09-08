@@ -12,13 +12,12 @@ from unsafie_sdk.errors import LimitReached, NotAuthorized, NotFound, Refused, U
 DEFAULT_API = "https://unsafie.com"
 TIMEOUT = 120.0
 USER_AGENT = "unsafie-sdk"
-KEYS = ("token", "api", "chat", "machine", "admin")
+KEYS = ("token", "api", "chat", "machine")
 ENV = {
     "token": "UNSAFIE_TOKEN",
     "api": "UNSAFIE_API",
     "chat": "UNSAFIE_CHAT",
     "machine": "UNSAFIE_MACHINE",
-    "admin": "UNSAFIE_ADMIN_TOKEN",
 }
 
 
@@ -155,9 +154,3 @@ def client() -> Client:
         _shared = Client()
     return _shared
 
-
-def admin_client() -> Client:
-    token = setting("admin")
-    if not token:
-        raise NotAuthorized("no operator token", "set UNSAFIE_ADMIN_TOKEN to use admin.*")
-    return Client(token=token, prefix="/api/admin")

@@ -4,7 +4,7 @@ auth-issued =
     ```
     uv tool install unsafie-sdk
     export UNSAFIE_TOKEN=ВСТАВЬ UNSAFIE_API={ $api }
-    python -c "import unsafie_sdk as u; u.help()"
+    python -c "import unsafie_sdk as u; u.say('привет')"
     ```
 auth-empty =
     Токенов пока нет.
