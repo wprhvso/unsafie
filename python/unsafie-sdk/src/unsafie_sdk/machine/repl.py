@@ -80,9 +80,9 @@ class Repl:
         sys.stdout = sys.stderr = writer
         try:
             value = self._execute(code, timeout)
-        except BaseException:  # noqa: BLE001 - the traceback is the answer
+        except BaseException as failure:  # noqa: BLE001 - the traceback is the answer
             sys.stdout, sys.stderr = stdout, stderr
-            text = traceback.format_exc()
+            text = _traceback(failure)
             self.sink(text if text.endswith("\n") else text + "\n")
             return Outcome(False, time.monotonic() - started, error=_last_line(text))
         finally:
@@ -138,6 +138,17 @@ def interrupt(thread: threading.Thread) -> bool:
         ctypes.c_ulong(thread.ident), ctypes.py_object(KeyboardInterrupt)
     )
     return raised == 1
+
+
+def _traceback(failure: BaseException) -> str:
+    """The traceback as the author of the block should see it: without this file in the way."""
+    here = __file__
+    entries = traceback.extract_tb(failure.__traceback__)
+    kept = [entry for entry in entries if entry.filename != here]
+    lines = ["Traceback (most recent call last):\n"]
+    lines += traceback.format_list(kept or entries)
+    lines += traceback.format_exception_only(type(failure), failure)
+    return "".join(lines)
 
 
 def _short(text: str) -> str:
