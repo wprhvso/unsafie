@@ -202,7 +202,7 @@ class Settings(BaseSettings):
     pool_workflow: str = "unsafie.yml"
     pool_repo_name: str = "unsafie-pool"
     pool_sdk_spec: str = (
-        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-sdk"
+        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python"
     )
     pool_wire_spec: str = (
         "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-wire"

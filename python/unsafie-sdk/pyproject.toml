@@ -1,0 +1,21 @@
+[project]
+name = "unsafie-sdk"
+version = "0.1.0"
+dependencies = [
+    "unsafie-wire",
+    "unsafie",
+]
+
+[project.scripts]
+unsafie-machine = "unsafie.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "unsafie_sdk"
+
+[tool.uv.sources]
+unsafie = { workspace = true }
+unsafie-wire = { workspace = true }

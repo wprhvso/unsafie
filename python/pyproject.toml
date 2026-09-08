@@ -32,6 +32,7 @@ dependencies = [
 [project.scripts]
 unsafie-server = "unsafie:main"
 unsafie = "unsafie.cli:main"
+unsafie-machine = "unsafie.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
@@ -42,10 +43,11 @@ module-name = "unsafie"
 module-root = ""
 
 [tool.uv.workspace]
-members = ["unsafie-wire"]
+members = ["unsafie-wire", "unsafie-sdk"]
 
 [tool.uv.sources]
 unsafie-wire = { workspace = true }
+unsafie-sdk = { workspace = true }
 
 [dependency-groups]
 dev = ["basedpyright>=1.39", "ruff>=0.16"]
@@ -62,4 +64,4 @@ ignore = ["E501"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body", "fastapi.Path"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["unsafie", "unsafie_wire"]
+known-first-party = ["unsafie", "unsafie_wire", "unsafie_sdk"]
