@@ -2,15 +2,17 @@ import asyncio
 import contextlib
 import logging
 import os
-import shutil
+import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from unsafie import tokens
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.log import short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
+from unsafie.nu import ensure_nu
 from unsafie.pool import blobs
 from unsafie.settings import settings
 from unsafie_wire import markers
@@ -134,15 +136,34 @@ class Runner:
                 self._finished(block)
                 return
             token = await self._ensure_token()
+            try:
+                nu_bin = await ensure_nu()
+            except Exception as e:
+                block.error = f"nushell not available: {e}"
+                block.exit_code = 127
+                block.seconds = time.monotonic() - block.started_at
+                self._finished(block)
+                return
+
             env = dict(os.environ)
+            extra_paths = [
+                str(Path(sys.prefix) / "bin"),
+                str(Path(sys.executable).parent),
+                str(Path(nu_bin).parent),
+                str(Path.home() / ".cargo" / "bin"),
+                str(Path.home() / ".local" / "bin"),
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+            ]
+            env["PATH"] = ":".join(p for p in extra_paths if p) + ":" + env.get("PATH", "")
             env["UNSAFIE_API"] = settings.public_base_url or f"http://{settings.host}:{settings.port}"
             env["UNSAFIE_TOKEN"] = token
             env["UNSAFIE_CHAT"] = str(self.ctx.chat_id)
             env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
+
             watch = asyncio.create_task(
                 self._nag(block), name=f"nu-slow:{self.ctx.turn_id}:{block.index}"
             )
-            nu_bin = shutil.which("nu") or "nu"
             started = time.monotonic()
             try:
                 proc = await asyncio.create_subprocess_exec(
