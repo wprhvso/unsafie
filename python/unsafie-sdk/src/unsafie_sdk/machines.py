@@ -187,7 +187,7 @@ def cancel(job: str) -> dict:
 
 def copy(source: str, target: str) -> dict:
     """Copy a file between machines: copy('box-1:/tmp/a', 'box-2:/tmp/a')."""
-    from unsafie_sdk import store
+    from unsafie_sdk import blobs
 
     def split(reference: str) -> tuple[str | None, str]:
         name, sep, path = reference.partition(":")
@@ -199,13 +199,13 @@ def copy(source: str, target: str) -> dict:
     if source_machine:
         run(f"unsafie-machine put {key} {source_path}", machine=source_machine).check()
     else:
-        store.put(key, open(source_path, "rb").read())
+        blobs.put(key, open(source_path, "rb").read())
     if target_machine:
         run(f"unsafie-machine get {key} {target_path}", machine=target_machine).check()
     else:
         with open(target_path, "wb") as handle:
-            handle.write(store.get(key))
-    store.delete(key)
+            handle.write(blobs.get(key))
+    blobs.delete(key)
     return {"from": source, "to": target}
 
 

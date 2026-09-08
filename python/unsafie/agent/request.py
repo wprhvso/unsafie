@@ -15,66 +15,72 @@ PYTHON_TOOL_NAME = "python"
 
 PYTHON_TOOL_DESCRIPTION = '''Run python on a machine of your own and get back everything it printed.
 
-This is how you act and how you speak. The chat receives exactly what this code sends with \
-`say`, `file` and `page` — nothing else. Your own text never reaches anybody.
+This is how you act and how you speak. The chat receives exactly what this code sent with \
+`chat.send`, `chat.send_file` and `pages.create` — nothing else. Your own text never reaches anybody.
 
 # The interpreter
 
 - One machine per chat, taken automatically on your first call. Fresh Ubuntu with root, a desktop \
-already up (Xvfb and KasmVNC), Chrome, docker, git, gh, ripgrep, jq, uv and python. Every machine of the \
-pool is identical and fully equipped. It is single use: `release()` destroys it, and GitHub ends \
-the job after six hours anyway.
+already up (Xvfb and KasmVNC), Chrome, docker, git, gh, ripgrep, jq, uv and python. Every machine \
+of the pool is identical and fully equipped. It is single use: `machines.release()` destroys it, \
+and GitHub ends the job after six hours anyway.
 - The namespace is a living REPL. Variables, imports, open files and objects survive between \
 calls and between messages within a turn. `_` is the value of the last expression.
 - Top level `await` works. A bare expression on the last line is echoed, as in a REPL.
 - Calls run in order, one after another, never overlapping — but a call starts the moment you \
 finish writing it, while you are still composing the rest of the message.
 - If the code raises, the traceback comes back as the result. Read it and fix it in the next call.
-- Anything worth keeping must leave the machine: `git push`, `store.put(...)`, `kv['x'] = ...`.
-- Long work: `submit("...")` in the background, `machines.logs(job, follow=True)` to read it.
+- Anything worth keeping must leave the machine: `git push`, or a file sent into the chat.
+- Long work: `machines.submit("...")` in the background, `machines.logs(job, follow=True)` to read it.
 
 # The SDK
 
-Everything below is already imported. No import is needed; the module is also available as \
-`unsafie` and `u`. This description is the whole map: if a name is not here, it is not there.
+Everything below is already imported. No import is needed; the package is also available as \
+`unsafie` and `u`. Every name lives in a module — nothing is at the top level. This description \
+is the whole map: if a name is not here, it is not there.
 
-## Talking to the user
+## chat
 
-    say(text, reply_to=None, buttons=None, silent=False)  markdown message — the only way to speak
-    photo(path_or_bytes, caption=None)                    a picture into the chat
-    file(path_or_bytes, caption=None, kind="document")    document | photo | video | audio | voice
-    page(markdown, title=None) -> url                     publish a long result as a web page
-    note(text)                                            a line into the live log, not the chat
+    chat.send(text, reply_to=None, buttons=None, silent=False)   markdown — the only way to speak
+    chat.send_photo(path_or_bytes, caption=None)                 a picture into the chat
+    chat.send_file(path_or_bytes, caption=None, kind="document") document | photo | video | audio | voice
     chat.edit(id, text) / chat.delete(id) / chat.react(id, "👍") / chat.pin(id)
     chat.history("query", limit=20) / chat.info()
+
+`chat.send` is the only thing the user sees. One user message deserves one reply message: put \
+detail in a page and send its link.
+
+## pages
+
+    pages.create(markdown, title=None) -> url     publish a long result as a web page
     pages.listing() / pages.update(slug, markdown) / pages.delete(slug)
 
-`say` is the only thing the user sees. One user message deserves one reply message: put detail \
-in a page and send its link.
+## machines
 
-## The pool
-
-    run(command, machine=None, timeout=None) -> Run   shell on your machine; .output .exit_code .ok .check()
-    take(n) -> [Machine]                              more machines, each single use
-    release(name_or_none)                             give one back (it is destroyed)
-    fan(command) -> {machine: Run}                    the same command on all of them
-    submit(command, count=1) -> [job]                 background work
+    machines.run(command, machine=None, timeout=None) -> Run  shell; .output .exit_code .ok .check()
+    machines.take(n) -> [Machine]                    more machines, each single use
+    machines.release(name_or_none)                   give one back (it is destroyed)
+    machines.fan(command) -> {machine: Run}          the same command on all of them
+    machines.submit(command, count=1) -> [job]       background work
     machines.listing() / machines.logs(job, follow=True) / machines.cancel(job)
     machines.copy("box-1:/tmp/a", "box-2:/tmp/a")
-    machines.desktop() -> url                         a live desktop link for the human
-    machines.terminal() -> url                        a web terminal on this machine
-    quota()                                           what is left today
-    install("pandas", "httpx")                        into this interpreter with uv, then import it
+    machines.desktop() -> url                        a live desktop link for the human
+    machines.terminal() -> url                       a web terminal on this machine
+    machines.quota()                                 what is left today
+
+## packages
+
+    packages.install("pandas", "httpx")   into this interpreter with uv, then import it
 
 ## The shell is the rest of the SDK
 
 git, gh, ssh, docker, curl, psql and everything else are on the machine already, and already \
-authenticated. Use them through `run(...)` or `subprocess` instead of looking for a wrapper.
+authenticated. Use them through `machines.run(...)` or `subprocess` instead of looking for a wrapper.
 
-    run("git clone https://github.com/owner/name.git")  credentials sit in ~/.git-credentials
-    run("gh pr create --fill")                          GH_TOKEN is the user's own token
-    run("ssh prod 'df -h'")                             the owner's key and host aliases are in ~/.ssh
-    run("scp report.pdf prod:/srv/www/")                same key, plain scp and rsync
+    machines.run("git clone https://github.com/owner/name.git")  credentials in ~/.git-credentials
+    machines.run("gh pr create --fill")                          GH_TOKEN is the user's own token
+    machines.run("ssh prod 'df -h'")                             the owner's key and aliases in ~/.ssh
+    machines.run("scp report.pdf prod:/srv/www/")                same key, plain scp and rsync
 
     github.logins() -> ["alice", "bob"]     every account the user attached
     github.use("alice")                     rewires git and gh to that account
@@ -84,45 +90,22 @@ Work with repositories as a developer does: clone, edit files, run the tests, co
 a pull request with `gh`. The servers behind those ssh aliases are production: only when asked, \
 never for experiments — experiments belong on the machine, which is disposable.
 
-## Browser
+## browser
 
     browser.start(profile=None, headless=False)   a real Chrome on the machine
     browser.goto(url) / click(sel) / type(sel, text) / press("Enter") / wait(sel, timeout=30)
     browser.text(sel) / html(sel) / evaluate(js)  evaluate() covers the rest of the page
-    browser.shot(full=False, send=False) -> key   a screenshot; you see it, send=True posts it too
+    browser.shot(full=False, send=False)          a screenshot; you see it, send=True posts it too
     browser.cookies() / upload(sel, path) / profiles() / restore(name) / stop(save_profile=True)
     browser.desktop() -> url                      hand the mouse to the human when a login blocks you
 
 A profile keeps cookies between sessions, so a site the human logged into once stays logged in.
 
-## State that outlives the machine
-
-    store.put(key, data) / store.get(key) / store.text(key) / store.download(key, path)
-    store.listing(prefix) / store.delete(key)
-    kv["plan"] = "step 2"   ·   kv["plan"]   ·   kv.keys()
-    secrets["OPENAI_API_KEY"]   ·   secrets.environ()      API keys, never printed into the chat
-
-## CI and automation
-
-    ci.add("owner/name", label="pool") -> {..., "snippet": "runs-on: pool"}
-    ci.status(repo) / ci.jobs(repo) / ci.remove(repo)
-    automation.schedule(text, when="18:00" | cron="0 9 * * 1-5" | every="6h", task=False)
-    automation.watch(name, command, ">90", every="5m", host="prod")
-    automation.subscribe("ci", "owner/name", branch="main")
-    automation.timezone("Europe/Moscow")
-
-## Reading the web
-
-    fetch(url) -> markdown        ·   net.get_json(url)      plus web search, which is a real tool
-
 # How to write a call
 
 - Keep each call small and readable: one step, and print what matters. The result you get back is \
 what the code printed, so print deliberately rather than dumping everything.
-- Destructive or irreversible things — deleting, force pushing, restarting services, writing to \
-other people — only at an explicit request. When in doubt ask through `say(...)` with buttons.
-- Secrets stay in `secrets`; never print them, never paste them into a page or a message.
-- If a call fails because a package is missing, `install("...")` in the next one and go on.
+- If a call fails because a package is missing, `packages.install("...")` in the next one and go on.
 - Never claim you sent, published, pushed or saved anything before the call that did it has come \
 back with its result.'''
 

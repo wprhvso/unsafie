@@ -20,7 +20,7 @@ def _turn() -> str | None:
     return os.environ.get("UNSAFIE_TURN") or None
 
 
-def say(
+def send(
     text: str,
     *,
     reply_to: int | None = None,
@@ -42,7 +42,7 @@ def say(
     return client().call("POST", "/chat/messages", body)
 
 
-def file(
+def send_file(
     path: str | Path | bytes,
     *,
     name: str | None = None,
@@ -75,9 +75,9 @@ def file(
     return client().call("POST", "/chat/files", body)
 
 
-def photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs) -> dict:
+def send_photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs) -> dict:
     """Send an image as a photo."""
-    return file(path, caption=caption, kind="photo", **kwargs)
+    return send_file(path, caption=caption, kind="photo", **kwargs)
 
 
 def edit(message_id: int, text: str, *, buttons: Any = None) -> dict:
@@ -109,9 +109,6 @@ def pin(message_id: int, *, silent: bool = True) -> dict:
     return client().call("POST", f"/chat/pins/{message_id}", {"silent": silent, "unpin": False})
 
 
-def note(text: str) -> None:
-    """Write a line into the live log of this turn: the human sees it, the chat does not."""
-    client().call("POST", "/chat/notes", {"text": text, "turn": _turn()})
 
 
 def history(query: str | None = None, *, limit: int = 20, since: str | None = None, **kwargs):

@@ -47,16 +47,16 @@ def main() -> int:
             sys.stdout.write(f"{name}: {outcome}\n")
         return 0
     if action in ("put", "get"):
-        from unsafie_sdk import store
+        from unsafie_sdk import blobs
 
         if len(argv) < 3:
             sys.stderr.write(USAGE)
             return 2
         key, path = argv[1], Path(argv[2])
         if action == "put":
-            store.put(key, path)
+            blobs.put(key, path)
         else:
-            store.download(key, path)
+            blobs.download(key, path)
         return 0
     if action == "ci-runner":
         from unsafie_sdk.machine.runner import run_runner

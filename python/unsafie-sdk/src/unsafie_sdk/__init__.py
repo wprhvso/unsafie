@@ -4,24 +4,12 @@ Inside the agent's REPL every name below is already imported. On a laptop:
 
     pip install unsafie-sdk        # or uv tool install unsafie-sdk
     export UNSAFIE_TOKEN=uns_…     # the bot gives you one with /auth
-    python -c "import unsafie_sdk as u; u.say('hi')"
+    python -c "import unsafie_sdk as u; u.chat.send('hi')"
 
-The full map lives in the description of the `python` tool — that is the one place
-the agent reads it from, so it never drifts from what the library actually does.
+Everything lives in a module: chat, machines, browser, github, pages, packages.
 """
 
-from unsafie_sdk import (
-    automation,
-    browser,
-    chat,
-    ci,
-    github,
-    machines,
-    net,
-    pages,
-    store,
-)
-from unsafie_sdk.chat import file, note, photo, say
+from unsafie_sdk import browser, chat, github, machines, packages, pages
 from unsafie_sdk.client import Client, client, setting
 from unsafie_sdk.errors import (
     LimitReached,
@@ -30,22 +18,11 @@ from unsafie_sdk.errors import (
     Refused,
     UnsafieError,
 )
-from unsafie_sdk.machines import fan, release, run, submit, take
-from unsafie_sdk.net import fetch
-from unsafie_sdk.packages import install
-from unsafie_sdk.store import kv, secrets
-
-page = pages.create
 
 
 def me() -> dict:
     """Who this token belongs to, which machine it drives and what the limits are."""
     return client().call("GET", "/me")
-
-
-def quota() -> dict:
-    """Machines, minutes and priority left for this account today."""
-    return machines.quota()
 
 
 __all__ = [
@@ -55,31 +32,13 @@ __all__ = [
     "NotFound",
     "Refused",
     "UnsafieError",
-    "automation",
     "browser",
     "chat",
-    "ci",
     "client",
-    "fan",
-    "fetch",
-    "file",
     "github",
-    "install",
-    "kv",
     "machines",
     "me",
-    "net",
-    "note",
-    "page",
+    "packages",
     "pages",
-    "photo",
-    "quota",
-    "release",
-    "run",
-    "say",
-    "secrets",
     "setting",
-    "store",
-    "submit",
-    "take",
 ]
