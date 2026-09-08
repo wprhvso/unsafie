@@ -7,12 +7,14 @@ from typing import Any
 from unsafie_sdk.client import client
 from unsafie_sdk.errors import UnsafieError
 
+BASE = "/github"
+
 _current: str | None = None
 
 
 def accounts() -> list[dict]:
     """Every GitHub account attached to this user: login, scopes, whether a token is stored."""
-    return client().call("GET", "/accounts").get("accounts", [])
+    return client().call("GET", f"{BASE}/accounts").get("accounts", [])
 
 
 def logins() -> list[str]:
@@ -38,20 +40,20 @@ def current() -> str | None:
 
 def add(token: str) -> dict:
     """Attach a personal access token. Same login replaces its token, a new login sits beside it."""
-    return client().call("POST", "/accounts", {"token": token})
+    return client().call("POST", f"{BASE}/accounts", {"token": token})
 
 
 def forget(login: str) -> dict:
     """Detach an account by login."""
     if _current == login:
         use(None)
-    return client().call("DELETE", f"/accounts/{login}")
+    return client().call("DELETE", f"{BASE}/accounts/{login}")
 
 
 def token(repo: str | None = None, *, login: str | None = None) -> str:
     """A token for git, gh or curl: scoped to the repository when the App is installed there."""
     body = {"repo": repo, "login": login or _current}
-    return str(client().call("POST", "/token", body)["token"])
+    return str(client().call("POST", f"{BASE}/token", body)["token"])
 
 
 def api(path: str, method: str = "GET", body: dict | None = None, **params) -> Any:
@@ -63,27 +65,27 @@ def api(path: str, method: str = "GET", body: dict | None = None, **params) -> A
         "params": params or None,
         "login": _current,
     }
-    return client().call("POST", "/api", payload).get("result")
+    return client().call("POST", f"{BASE}/api", payload).get("result")
 
 
 def repos(limit: int = 100) -> list[dict]:
     """Repositories this user has bound to the bot."""
-    return client().call("GET", "/repos", params={"limit": limit}).get("repos", [])
+    return client().call("GET", f"{BASE}/repos", params={"limit": limit}).get("repos", [])
 
 
 def bind(ref: str, alias: str | None = None) -> dict:
     """Bind a repository so webhooks and CI can reach it."""
-    return client().call("POST", "/repos", {"ref": ref, "alias": alias})
+    return client().call("POST", f"{BASE}/repos", {"ref": ref, "alias": alias})
 
 
 def unbind(ref: str) -> dict:
     """Unbind a repository."""
-    return client().call("DELETE", f"/repos/{ref}")
+    return client().call("DELETE", f"{BASE}/repos/{ref}")
 
 
-def sync() -> list[dict]:
-    """Refresh the list of repositories from GitHub."""
-    return client().call("POST", "/repos/sync").get("repos", [])
+def sync() -> dict:
+    """Refresh the list of repositories from GitHub. Returns {'account': login, 'repos': n}."""
+    return client().call("POST", f"{BASE}/repos/sync")
 
 
 def clone(repo: str, directory: str | Path | None = None, *, branch: str | None = None, depth=None):

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from unsafie_sdk.client import client
+from unsafie_sdk.errors import NotFound
 
 
 def put(key: str, data: bytes | str | Path) -> dict:
@@ -44,19 +45,17 @@ def delete(key: str) -> dict:
     return client().call("DELETE", f"/blobs/{key}")
 
 
-def url(key: str, minutes: int = 60) -> str:
-    """A link to a stored blob that the human can open."""
-    return str(client().call("GET", f"/blobs/{key}/url", params={"minutes": minutes})["url"])
-
-
 class Kv:
     """Small values that outlive the machine: kv['plan'] = 'step 2'."""
 
     def get(self, key: str, default: Any = None) -> Any:
-        found = client().call("GET", f"/kv/{key}", params={"missing": "null"})
-        if found is None or found.get("value") is None:
+        try:
+            found = client().call("GET", f"/kv/{key}")
+        except NotFound:
             return default
-        raw = found["value"]
+        raw = (found or {}).get("value")
+        if raw is None:
+            return default
         try:
             return json.loads(raw)
         except (TypeError, ValueError):
@@ -64,12 +63,12 @@ class Kv:
 
     def set(self, key: str, value: Any) -> Any:
         body = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
-        client().call("POST", "/kv", {"key": key, "value": body})
+        client().call("PUT", f"/kv/{key}", {"value": body})
         return value
 
     def keys(self, prefix: str = "") -> list[str]:
         answer = client().call("GET", "/kv", params={"prefix": prefix})
-        return [row["key"] for row in answer.get("items", [])]
+        return sorted((answer or {}).get("values", {}))
 
     def delete(self, key: str) -> dict:
         return client().call("DELETE", f"/kv/{key}")
@@ -94,7 +93,7 @@ class Secrets:
         return str(client().call("GET", f"/secrets/{name}")["value"])
 
     def set(self, name: str, value: str) -> dict:
-        return client().call("POST", "/secrets", {"name": name, "value": value})
+        return client().call("PUT", f"/secrets/{name}", {"value": value})
 
     def names(self) -> list[str]:
         return [row["name"] for row in client().call("GET", "/secrets").get("secrets", [])]
@@ -106,8 +105,11 @@ class Secrets:
         """Put secrets into os.environ and return them."""
         import os
 
-        wanted = names or tuple(self.names())
-        out = {name: self.get(name) for name in wanted}
+        if names:
+            out = {name: self.get(name) for name in names}
+        else:
+            answer = client().call("GET", "/secrets/values")
+            out = dict((answer or {}).get("values", {}))
         os.environ.update(out)
         return out
 
