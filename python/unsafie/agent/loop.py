@@ -123,6 +123,12 @@ async def run(
         if runner.replied:
             result.replied = True
 
+        if runner.stopped:
+            result.replied = True
+            recorder.note("unsafie.turn_stopped")
+            logger.info("%s turn stopped via stop()", ctx.prefix)
+            return result
+
         if content:
             extra = await queue.drain(ctx.turn_id)
             if extra is not None:

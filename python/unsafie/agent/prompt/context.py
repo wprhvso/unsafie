@@ -14,7 +14,7 @@ REMINDER = (
     "Reminder: Write ONLY executable Python code inside ```python ... ``` blocks. "
     "Do not write prose outside code blocks. Nothing written outside code blocks reaches the user. "
     "All messages must be sent via chat.send(...) inside your code. "
-    "Do not conclude until you have called chat.send(...) with your answer."
+    "When finished, call stop() (or stop('final message')) to conclude your turn."
 )
 
 

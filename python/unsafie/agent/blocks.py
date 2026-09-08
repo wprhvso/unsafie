@@ -32,6 +32,7 @@ class Block:
     error: str | None = None
     images: list[dict] = field(default_factory=list)
     sent: bool = False
+    stopped: bool = False
 
     @property
     def ok(self) -> bool:
@@ -72,6 +73,10 @@ class Runner:
     def count(self) -> int:
         return len(self.blocks)
 
+    @property
+    def stopped(self) -> bool:
+        return any(block.stopped for block in self.blocks)
+
     def start(self, code: str) -> Block:
         index = len(self.blocks) + 1
         block = Block(index=index, code=code)
@@ -110,6 +115,11 @@ class Runner:
 
     async def _run(self, block: Block) -> None:
         async with self.lock:
+            if self.stopped:
+                block.error = "turn stopped"
+                block.seconds = time.monotonic() - block.started_at
+                self._finished(block)
+                return
             try:
                 machine = await leases.ensure(
                     self.ctx.user_id, self.ctx.chat_id, self.ctx.turn_id, self.ctx.bot_id
@@ -158,6 +168,15 @@ class Runner:
         for item in found:
             if item.kind == markers.BlockKind.SENT:
                 block.sent = True
+            elif item.kind == markers.BlockKind.STOP:
+                block.stopped = True
+                block.sent = True
+                live.emit(
+                    self.ctx.turn_id,
+                    "note",
+                    name="unsafie.turn_stopped",
+                    attributes={"index": block.index, "message": item.data.get("message")},
+                )
             elif item.kind == markers.BlockKind.IMAGE:
                 rendered = await self._image(block, item)
                 if rendered is not None:

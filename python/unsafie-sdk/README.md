@@ -12,6 +12,9 @@ export UNSAFIE_TOKEN=uns_…         # the bot gives you one with /auth
 import unsafie_sdk as u
 
 u.chat.send("готово")                  # a message into the chat
+u.stop()                               # conclude the turn
+# or:
+u.stop("готово")                       # send message and conclude the turn
 u.pages.create("# отчёт\n\nвсё сошлось")  # a web page, returns its link
 box = u.machines.take(1)[0]            # a machine from the pool
 box.run("uname -a").output             # a command on it

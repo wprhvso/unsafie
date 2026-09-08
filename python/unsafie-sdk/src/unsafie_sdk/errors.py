@@ -19,3 +19,11 @@ class LimitReached(UnsafieError):
 
 class Refused(UnsafieError):
     pass
+
+
+class StopTurn(BaseException):
+    """Raised by stop() to terminate the agent's turn immediately."""
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(message or "")
+        self.message = message

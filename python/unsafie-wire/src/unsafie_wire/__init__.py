@@ -24,7 +24,9 @@ from unsafie_wire.markers import (
     note,
     parse_line,
     result,
+    sent,
     split,
+    stop,
 )
 
 VERSION = "0.1.0"
@@ -53,6 +55,8 @@ __all__ = [
     "output",
     "parse_line",
     "result",
+    "sent",
     "shutdown",
     "split",
+    "stop",
 ]

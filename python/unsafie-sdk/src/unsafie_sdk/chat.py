@@ -5,6 +5,7 @@ from typing import Any
 
 from unsafie_sdk.client import client, setting
 from unsafie_sdk.errors import UnsafieError
+from unsafie_wire import markers
 
 MEDIA = ("document", "photo", "video", "audio", "voice", "animation", "sticker")
 
@@ -39,7 +40,9 @@ def send(
         "silent": silent,
         "turn": _turn(),
     }
-    return client().call("POST", "/chat/messages", body)
+    res = client().call("POST", "/chat/messages", body)
+    print(markers.sent(), flush=True)
+    return res
 
 
 def send_file(
@@ -72,7 +75,9 @@ def send_file(
         "chat_id": _chat(chat),
         "turn": _turn(),
     }
-    return client().call("POST", "/chat/files", body)
+    res = client().call("POST", "/chat/files", body)
+    print(markers.sent(), flush=True)
+    return res
 
 
 def send_photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs) -> dict:
@@ -109,8 +114,6 @@ def pin(message_id: int, *, silent: bool = True) -> dict:
     return client().call("POST", f"/chat/pins/{message_id}", {"silent": silent, "unpin": False})
 
 
-
-
 def history(query: str | None = None, *, limit: int = 20, since: str | None = None, **kwargs):
     """Search this chat, or read the last messages when no query is given."""
     if query:
@@ -122,3 +125,10 @@ def history(query: str | None = None, *, limit: int = 20, since: str | None = No
 def info(chat: int | str | None = None) -> dict:
     """Type, title, description, member count and pinned message of the chat."""
     return client().call("GET", "/chat/info", params={"chat_id": _chat(chat)})
+
+
+def stop(message: str | None = None) -> None:
+    """Conclude the turn immediately."""
+    from unsafie_sdk.stop import stop as _stop
+
+    _stop(message)

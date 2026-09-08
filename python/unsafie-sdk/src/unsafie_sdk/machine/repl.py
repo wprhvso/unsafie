@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from unsafie_sdk.errors import StopTurn
+
 MAX_REPR = 8000
 
 
@@ -80,6 +82,9 @@ class Repl:
         sys.stdout = sys.stderr = writer
         try:
             value = self._execute(code, timeout)
+        except StopTurn:
+            sys.stdout, sys.stderr = stdout, stderr
+            return Outcome(True, time.monotonic() - started)
         except BaseException as failure:  # noqa: BLE001 - the traceback is the answer
             sys.stdout, sys.stderr = stdout, stderr
             text = _traceback(failure)

@@ -15,6 +15,7 @@ class BlockKind(StrEnum):
     RESULT = "result"
     PROGRESS = "progress"
     ERROR = "error"
+    STOP = "stop"
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,3 +77,11 @@ def link(url: str, title: str | None = None) -> str:
 
 def result(value: Any) -> str:
     return emit(BlockKind.RESULT, value=value)
+
+
+def sent() -> str:
+    return emit(BlockKind.SENT)
+
+
+def stop(message: str | None = None) -> str:
+    return emit(BlockKind.STOP, message=message)

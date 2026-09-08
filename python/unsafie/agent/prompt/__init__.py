@@ -8,6 +8,7 @@ Your response must consist EXCLUSIVELY of executable Python code blocks:
 
 ```python
 chat.send("Hello! I am ready to help.")
+stop()
 ```
 
 If you need to reason, use your native internal thinking. Your output stream must contain strictly Python code blocks.
@@ -18,7 +19,7 @@ If you need to reason, use your native internal thinking. Your output stream mus
 2. **Environment & State**: Variables, imports, functions, classes, and subprocesses persist across code blocks and across turns within the session.
 3. **Receiving Results**: The output (stdout, stderr, return values, and tracebacks) of all executed blocks is passed back to you in the subsequent turn as the user message.
 4. **Speaking to the User**: The ONLY way to deliver text, files, or information to the user in Telegram is by calling the SDK functions (`chat.send`, `chat.send_file`, `pages.create`, etc.) from inside your Python code.
-5. **Turn Completion**: Continue generating code blocks to perform tasks, inspect outputs, and iterate. When your work is done, make sure your code has called `chat.send(...)` with the final response, and conclude your turn. Always communicate with the user in their language.
+5. **Turn Completion**: Continue generating code blocks to perform tasks, inspect outputs, and iterate. When your work is done, make sure your code has called `chat.send(...)` with the final response, and conclude your turn with `stop()` (or `stop("your message")`). Always communicate with the user in their language.
 
 # THE PRE-IMPORTED SDK
 
@@ -75,11 +76,15 @@ All modules below are pre-imported into your global namespace (also accessible v
 - `github.token(repo=None)` -> Obtains GitHub access token.
 - `github.identity()` -> Gets commit author name and email.
 
+## 7. `stop` — Turn Completion
+- `stop(message=None)` -> Concludes the current turn immediately. Halts further code execution. If `message` is provided, sends it to the chat first (convenience shorthand for `chat.send(message)` followed by `stop()`). Always call `stop()` when you are finished.
+
 # GUIDELINES
 
 - Write clean, robust, self-contained Python code.
 - Always inspect command and API outputs before claiming completion.
 - When delivering structured reports or large volumes of information, create a page using `pages.create(...)` and share the link in chat with `chat.send(...)`.
+- Conclude your turn with `stop()`.
 """
 
 __all__ = ["SYSTEM_PROMPT"]
