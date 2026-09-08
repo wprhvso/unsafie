@@ -19,6 +19,9 @@ from unsafie_wire import channel as wire
 logger = logging.getLogger(__name__)
 
 CHUNK_WAIT = 5.0
+# A blocking pop must come back before the socket timeout of the shared client does,
+# otherwise redis-py raises a TimeoutError instead of handing over an empty answer.
+BLOCK = max(1, int(min(CHUNK_WAIT, settings.redis_timeout - 1)))
 
 
 @dataclass
@@ -110,7 +113,7 @@ async def collect(
     pieces: list[str] = []
     size = 0
     while time.monotonic() - started < timeout:
-        popped = await redis.blpop([keys.outbox(command_id)], timeout=int(CHUNK_WAIT))
+        popped = await redis.blpop([keys.outbox(command_id)], timeout=BLOCK)
         if popped is None:
             if not await registry.alive(machine):
                 result.output = "".join(pieces)

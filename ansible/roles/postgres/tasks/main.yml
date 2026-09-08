@@ -64,7 +64,7 @@
       - option: log_timezone
         value: UTC
       - option: log_line_prefix
-        value: "'%m [%p] %q%u@%d '"
+        value: "%m [%p] %q%u@%d "
       - option: log_checkpoints
         value: "on"
       - option: log_lock_waits
