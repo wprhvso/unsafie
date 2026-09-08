@@ -209,7 +209,7 @@ class Settings(BaseSettings):
     pool_max_blob_item: int = 134_217_728
     pool_boot_grace: float = 900.0
     pool_cache_url: str = ""
-    pool_vnc_port: int = 8444
+    pool_vnc_port: int = 5900
     pool_desktop_ttl: float = 7_200.0
     pool_tunnel_wait: float = 30.0
     pool_ci_enabled: bool = True

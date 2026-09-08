@@ -44,8 +44,11 @@ jobs:
 
       - name: bring the desktop along
         run: |
-          sudo -E env "PATH=$PATH" "$(command -v unsafie-machine)" setup xvfb kasmvnc tools \
-            || echo "::warning::the desktop came up short, the machine still serves"
+          sudo -E env "PATH=$PATH" "$(command -v unsafie-machine)" setup xvfb kasmvnc tools
+          command -v Xkasmvnc >/dev/null || command -v x11vnc >/dev/null || {
+            echo "::error::no vnc server on the machine, the desktop link would be dead"
+            exit 1
+          }
 
       - name: serve
         env:

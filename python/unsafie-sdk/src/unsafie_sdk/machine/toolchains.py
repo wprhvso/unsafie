@@ -23,7 +23,7 @@ def _toolchain(name: str, timeout: float) -> str:
         if name == "chrome":
             return _apt(["chromium-browser"], timeout)
         if name == "xvfb":
-            return _apt(["xvfb", "openbox", "x11-utils", "xauth", "xfonts-base"], timeout)
+            return _apt(["xvfb", "openbox", "x11-utils", "xauth", "xfonts-base", "x11vnc"], timeout)
         if name == "tools":
             return _apt(["ripgrep", "fd-find", "jq", "zstd", "p7zip-full", "imagemagick"], timeout)
         if name == "kasmvnc":
