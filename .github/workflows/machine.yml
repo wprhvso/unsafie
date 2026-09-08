@@ -45,10 +45,14 @@ jobs:
       - name: bring the desktop along
         run: |
           sudo -E env "PATH=$PATH" "$(command -v unsafie-machine)" setup xvfb kasmvnc tools
-          command -v Xkasmvnc >/dev/null || command -v x11vnc >/dev/null || {
-            echo "::error::no vnc server on the machine, the desktop link would be dead"
-            exit 1
-          }
+          for tool in Xvfb x11vnc openbox; do
+            command -v "$tool" >/dev/null || {
+              echo "::error::$tool is missing after setup, the desktop link would be dead"
+              exit 1
+            }
+          done
+          command -v Xkasmvnc >/dev/null \
+            || echo "::warning::no KasmVNC, the desktop falls back to Xvfb plus x11vnc"
 
       - name: serve
         env:

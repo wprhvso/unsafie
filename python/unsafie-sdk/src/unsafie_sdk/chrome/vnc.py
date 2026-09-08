@@ -16,6 +16,9 @@ import time
 RFB_PORT = 5900
 DISPLAY = ":97"
 WAIT = 15.0
+BOOT = 10.0
+SIZE = "1920x1080"
+SOCKETS = "/tmp/.X11-unix"
 
 
 def rfb_port(display: str = DISPLAY) -> int:
@@ -25,13 +28,35 @@ def rfb_port(display: str = DISPLAY) -> int:
 
 def listening(port: int, timeout: float = WAIT) -> bool:
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    while True:
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=1.0):
                 return True
         except OSError:
+            if time.monotonic() >= deadline:
+                return False
             time.sleep(0.25)
-    return False
+
+
+def running(display: str) -> bool:
+    """Whether an X server already owns that display."""
+    number = display.lstrip(":").split(".")[0]
+    return bool(number) and os.path.exists(f"{SOCKETS}/X{number}")
+
+
+def ensure(size: str = SIZE, display: str = DISPLAY) -> str:
+    """Guarantee a desktop with raw RFB on RFB_PORT. Returns "" or the reason it failed."""
+    if listening(RFB_PORT, 0.5):
+        return ""
+    existing = os.environ.get("DISPLAY") or (display if running(display) else "")
+    if existing:
+        return attach(existing, size)
+    name, _ = start_display(size, display)
+    if not name:
+        return "no display server here; run `unsafie-machine setup xvfb kasmvnc`"
+    if listening(RFB_PORT, BOOT):
+        return ""
+    return f"display {name} is up but nothing serves rfb on {RFB_PORT}"
 
 
 def start_display(size: str, display: str = DISPLAY) -> tuple[str, subprocess.Popen | None]:
@@ -40,10 +65,13 @@ def start_display(size: str, display: str = DISPLAY) -> tuple[str, subprocess.Po
     Returns the display name and the process owning it (None when we joined a
     display that was already there).
     """
-    if os.environ.get("DISPLAY"):
-        existing = os.environ["DISPLAY"]
+    existing = os.environ.get("DISPLAY")
+    if existing:
         attach(existing, size)
         return existing, None
+    if running(display):
+        attach(display, size)
+        return display, None
     width, _, height = size.partition("x")
     kasm = shutil.which("Xkasmvnc")
     if kasm:
@@ -66,7 +94,7 @@ def start_display(size: str, display: str = DISPLAY) -> tuple[str, subprocess.Po
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        if listening(RFB_PORT):
+        if listening(RFB_PORT, BOOT):
             _decorate(display)
             return display, process
         process.terminate()
@@ -78,22 +106,21 @@ def start_display(size: str, display: str = DISPLAY) -> tuple[str, subprocess.Po
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep(1.0)
+    _await(display)
     _decorate(display)
     attach(display, size)
     return display, process
 
 
-def attach(display: str, size: str = "1920x1080") -> str:
+def attach(display: str, size: str = SIZE) -> str:
     """Put a VNC server on a display that already exists (x11vnc)."""
-    try:
-        with socket.create_connection(("127.0.0.1", RFB_PORT), timeout=0.5):
-            return ""
-    except OSError:
-        pass
+    if listening(RFB_PORT, 0.5):
+        return ""
+    if not running(display):
+        return f"there is no X display on {display}"
     x11vnc = shutil.which("x11vnc")
     if x11vnc is None:
-        return "no x11vnc and no kasmvnc here; run `unsafie setup kasmvnc`"
+        return "x11vnc is not installed; run `unsafie-machine setup xvfb`"
     subprocess.Popen(
         [
             x11vnc,
@@ -110,7 +137,16 @@ def attach(display: str, size: str = "1920x1080") -> str:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    return "" if listening(RFB_PORT) else "the vnc server did not come up"
+    return "" if listening(RFB_PORT, BOOT) else "x11vnc did not come up"
+
+
+def _await(display: str, timeout: float = BOOT) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if running(display):
+            return True
+        time.sleep(0.2)
+    return False
 
 
 def _decorate(display: str) -> None:

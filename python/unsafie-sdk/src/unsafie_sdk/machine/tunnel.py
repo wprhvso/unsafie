@@ -31,11 +31,9 @@ def serve_tunnel(url: str, kind: str, port: int) -> None:
 
 def dial(port: int) -> socket.socket:
     if port == vnc.RFB_PORT:
-        problem = vnc.attach(vnc.DISPLAY)
+        problem = vnc.ensure()
         if problem and not vnc.listening(vnc.RFB_PORT, 2.0):
-            raise TunnelError(
-                f"no desktop on this machine ({problem}); start one with browser.start()"
-            )
+            raise TunnelError(f"no desktop on this machine: {problem}")
     try:
         local = socket.create_connection(("127.0.0.1", port), timeout=DIAL_WAIT)
     except OSError as broken:
@@ -136,4 +134,4 @@ def start_vnc(display: str = vnc.DISPLAY, port: int = vnc.RFB_PORT, size: str = 
     """Make sure a VNC server serves raw RFB on `port` for `display`."""
     if port != vnc.RFB_PORT:
         return f"the vnc server serves rfb on {vnc.RFB_PORT}, not {port}"
-    return vnc.attach(display, size)
+    return vnc.ensure(size, display)

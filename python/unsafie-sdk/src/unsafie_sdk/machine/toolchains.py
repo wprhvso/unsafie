@@ -7,6 +7,15 @@ import subprocess
 TOOLCHAINS = ("chrome", "xvfb", "kasmvnc", "nix", "rust", "tools")
 KASMVNC = "1.5.0"
 
+PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "chrome": (("google-chrome", "chromium", "chromium-browser"),),
+    "xvfb": (("Xvfb",), ("x11vnc",), ("openbox",), ("xauth",)),
+    "kasmvnc": (("Xkasmvnc", "kasmvncserver"),),
+    "nix": (("nix",),),
+    "rust": (("cargo",),),
+    "tools": (("rg",), ("jq",), ("zstd",), ("convert", "magick")),
+}
+
 
 def setup(*what: str, timeout: float = 1800.0) -> dict[str, str]:
     """Install toolchains on this machine: chrome, xvfb, kasmvnc, nix, rust, tools."""
@@ -16,8 +25,18 @@ def setup(*what: str, timeout: float = 1800.0) -> dict[str, str]:
     return {name: _toolchain(name, timeout) for name in what}
 
 
+def missing(name: str) -> list[str]:
+    """Which pieces of a toolchain are not on this machine."""
+    absent = []
+    for group in PROBES.get(name, ()):
+        if not any(shutil.which(binary) for binary in group):
+            absent.append(" | ".join(group))
+    return absent
+
+
 def _toolchain(name: str, timeout: float) -> str:
-    if _already(name):
+    absent = missing(name)
+    if not absent:
         return "already there"
     try:
         if name == "chrome":
@@ -41,18 +60,6 @@ def _toolchain(name: str, timeout: float) -> str:
     except (OSError, subprocess.SubprocessError) as broken:
         return f"failed: {broken}"
     return "unknown"
-
-
-def _already(name: str) -> bool:
-    probes = {
-        "chrome": ("google-chrome", "chromium", "chromium-browser"),
-        "xvfb": ("Xvfb",),
-        "kasmvnc": ("Xkasmvnc", "kasmvncserver"),
-        "nix": ("nix",),
-        "rust": ("cargo",),
-        "tools": ("rg", "jq"),
-    }.get(name, ())
-    return any(shutil.which(binary) for binary in probes)
 
 
 def _sudo(line: list[str]) -> list[str]:
@@ -89,10 +96,10 @@ def _kasmvnc(timeout: float) -> str:
     target = f"/tmp/{package}"
     fetched = subprocess.run(
         ["curl", "-fsSL", "--retry", "3", "-o", target, url],
-        capture_output=True, check=False, timeout=timeout,
+        capture_output=True, text=True, check=False, timeout=timeout,
     )
     if fetched.returncode != 0:
-        return "could not download KasmVNC"
+        return f"could not download {url}: {fetched.stderr.strip()[-200:] or 'curl failed'}"
     return _apt([target], timeout)
 
 
