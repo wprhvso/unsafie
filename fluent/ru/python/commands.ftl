@@ -5,7 +5,7 @@ commands-start =
     /stop — остановить: реплаем на сообщение — то, что запустило оно, без реплая — вообще всё
     /budget — баланс и лимит на ход
     /effort — усилие на размышления
-    /model — модель Claude
+    /model — модель Gemini
     /gh — токен GitHub и репозитории
     /ssh — серверы по SSH
     /pool — машины пула и раннеры CI
@@ -33,7 +33,7 @@ commands-model-status =
     /model default — вернуть модель по умолчанию
 commands-model-set = Модель: { $model }
 commands-model-reset = Снова модель по умолчанию: { $model }
-commands-model-usage = Имя модели — буквы, цифры, точки и дефисы, например /model claude-opus-5
+commands-model-usage = Имя модели — буквы, цифры, точки и дефисы, например /model gemini-3.1-pro-preview
 commands-effort-status =
     Усилие: { $effort }
     По умолчанию: { $default }
