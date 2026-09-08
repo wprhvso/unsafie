@@ -1,3 +1,4 @@
+from unsafie.database.models.api_token import ApiToken, TokenKind
 from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.bot import Bot
 from unsafie.database.models.chat import Chat
@@ -7,6 +8,20 @@ from unsafie.database.models.credential import AnthropicCredential, CredentialKi
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.models.installation import Installation, InstallationAccount
+from unsafie.database.models.pool import (
+    CommandStatus,
+    MachineState,
+    PoolBlob,
+    PoolCiJob,
+    PoolCiRepo,
+    PoolCommand,
+    PoolDonor,
+    PoolLease,
+    PoolMachine,
+    PoolUsage,
+    UserKv,
+    UserSecret,
+)
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.scheduled_task import ScheduledTask, TaskKind
@@ -23,10 +38,12 @@ from unsafie.database.models.worktree import Worktree
 
 __all__ = [
     "AnthropicCredential",
+    "ApiToken",
     "Artifact",
     "ArtifactKind",
     "Bot",
     "Chat",
+    "CommandStatus",
     "CommitLog",
     "Config",
     "CredentialKind",
@@ -35,6 +52,15 @@ __all__ = [
     "GithubSubscription",
     "Installation",
     "InstallationAccount",
+    "MachineState",
+    "PoolBlob",
+    "PoolCiJob",
+    "PoolCiRepo",
+    "PoolCommand",
+    "PoolDonor",
+    "PoolLease",
+    "PoolMachine",
+    "PoolUsage",
     "Repo",
     "Response",
     "ResponseKind",
@@ -42,13 +68,16 @@ __all__ = [
     "SshHost",
     "SshWatch",
     "TaskKind",
+    "TokenKind",
     "Transaction",
     "Turn",
     "TurnMessages",
     "TurnStatus",
     "Update",
     "User",
+    "UserKv",
     "UserRepo",
+    "UserSecret",
     "WatchMode",
     "WebhookDelivery",
     "Worktree",

@@ -1,0 +1,67 @@
+name: unsafie
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: fast keeps the boot under a minute, full brings the desktop with it
+        type: choice
+        options: [fast, full]
+        default: fast
+        required: false
+
+jobs:
+  machine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: mark the start
+        run: echo "UNSAFIE_BOOT_STARTED=$(date +%s)" >>"$GITHUB_ENV"
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: point the tools at the caches
+        env:
+          CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
+        run: |
+          if [ -z "$CACHE_URL" ]; then
+            echo "no cache configured, everything comes from upstream"
+            exit 0
+          fi
+          {
+            echo "UV_INDEX_URL=$CACHE_URL/pypi/simple"
+            echo "PIP_INDEX_URL=$CACHE_URL/pypi/simple"
+            echo "npm_config_registry=$CACHE_URL/npm"
+          } >>"$GITHUB_ENV"
+          echo "cache: $CACHE_URL"
+
+      - name: install the sdk
+        env:
+          SPEC: ${{ secrets.UNSAFIE_SDK_SPEC }}
+          WIRE: ${{ secrets.UNSAFIE_WIRE_SPEC }}
+        run: |
+          if [ -n "$WIRE" ]; then
+            uv tool install --with "$WIRE" "${SPEC:-unsafie-sdk}"
+          else
+            uv tool install "${SPEC:-unsafie-sdk}"
+          fi
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - name: bring the desktop along
+        if: inputs.profile == 'full'
+        run: |
+          sudo -E env "PATH=$PATH" python3 -c "
+          from unsafie_sdk.packages import setup
+          print(setup('xvfb', 'kasmvnc', 'tools'))
+          " || echo "::warning::the full profile came up short, the machine still serves"
+
+      - name: serve
+        env:
+          UNSAFIE_API: ${{ secrets.UNSAFIE_URL }}
+          UNSAFIE_WORKER_TOKEN: ${{ secrets.UNSAFIE_WORKER_TOKEN }}
+          UNSAFIE_CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
+        run: |
+          sudo -E env "PATH=$PATH" "UNSAFIE_BOOT_STARTED=$UNSAFIE_BOOT_STARTED" \
+            "$(command -v unsafie-machine)" serve --profile "${{ inputs.profile || 'fast' }}"

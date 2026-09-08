@@ -43,8 +43,22 @@ def check_token(token: str) -> bool:
     return secrets.compare_digest(token.strip(), settings.admin_token)
 
 
+def _presented(request: Request) -> str | None:
+    header = request.headers.get("x-admin-token")
+    if header:
+        return header
+    authorization = request.headers.get("authorization") or ""
+    if authorization.lower().startswith("bearer "):
+        return authorization[7:]
+    return None
+
+
 async def admin_required(request: Request) -> None:
     if not settings.admin_token:
         raise HTTPException(503, "ADMIN_TOKEN is not configured on the server")
-    if not verify(request.cookies.get(COOKIE)):
-        raise HTTPException(401, "not authenticated")
+    if verify(request.cookies.get(COOKIE)):
+        return
+    presented = _presented(request)
+    if presented and check_token(presented):
+        return
+    raise HTTPException(401, "not authenticated")

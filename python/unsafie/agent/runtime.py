@@ -15,7 +15,7 @@ from unsafie.agent import billing, credentials, live, loop, queue, request, segm
 from unsafie.agent.prompt import SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.request import DEFAULT_EFFORT
-from unsafie.agent.tools import ToolContext, build_tools, enabled
+from unsafie.agent.session import Ctx
 from unsafie.agent.trace import Recorder
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
@@ -106,7 +106,7 @@ class Meter:
         return delta
 
 
-async def _bill(ctx: ToolContext, credential, result: loop.Result, meter: Meter) -> int:
+async def _bill(ctx: Ctx, credential, result: loop.Result, meter: Meter) -> int:
     leftover = result.cost_usd - meter.segment
     if leftover > 0:
         await meter.take(leftover)
@@ -147,9 +147,8 @@ async def _punish(credential, result: loop.Result) -> None:
 
 
 async def _execute(
-    ctx: ToolContext,
+    ctx: Ctx,
     messages: list[dict],
-    servers: list[str],
     system_prompt: str,
     held: billing.Hold,
 ) -> Outcome:
@@ -184,7 +183,6 @@ async def _execute(
                 logger.warning("%s stopped: nothing left to spend (%s)", prefix, empty)
                 return Outcome("ok" if spent else empty, cost_usd=spent)
 
-            definitions, tools = build_tools(ctx, servers)
             applied = request.applied_thinking(model) or {}
             telemetry.set_attrs(
                 attempt_span,
@@ -196,12 +194,11 @@ async def _execute(
                     attrs.THINKING: applied.get("type", "off"),
                     attrs.THINKING_DISPLAY: applied.get("display", "off"),
                     attrs.BUDGET_USD: left,
-                    attrs.SERVERS: servers or None,
                 },
             )
             logger.info(
                 "%s attempt=%s credential=%s(%s) model=%s effort=%s thinking=%s/%s ratio=%s "
-                "budget=%.6f messages=%s tools=%s servers=%s",
+                "budget=%.6f messages=%s",
                 prefix,
                 attempt,
                 credential.id,
@@ -213,8 +210,6 @@ async def _execute(
                 ratio,
                 left,
                 len(messages),
-                len(definitions),
-                servers,
             )
 
             live.emit(
@@ -227,8 +222,6 @@ async def _execute(
                 ratio=ratio,
                 budget_units=held.units,
                 balance_units=held.balance,
-                tools=len(definitions),
-                servers=servers,
                 thinking=applied.get("type", "off"),
                 display=applied.get("display", "off"),
                 configured=settings.claude_thinking_display or "off",
@@ -254,8 +247,6 @@ async def _execute(
                     prompt=system_prompt,
                     effort=effort,
                     budget_usd=left,
-                    definitions=definitions,
-                    tools=tools,
                     recorder=Recorder(prefix, live.of(ctx.turn_id)),
                     on_cost=meter.take,
                 )
@@ -369,7 +360,7 @@ def _failure_text(locale: str, outcome: Outcome) -> str:
 
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
-    ctx = ToolContext(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
+    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
     prefix = ctx.prefix
     history = await segments.load(turn)
     system_prompt = history.system or SYSTEM_PROMPT
@@ -416,13 +407,12 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
                 with telemetry.span("agent.context"):
                     async with SessionLocal() as session:
-                        servers = await enabled(session, ctx)
-                        context = await build_context(session, ctx, servers)
+                        context = await build_context(session, ctx)
                 messages.append(request.user(prompt, context))
                 async with billing.hold(turn.user_id, turn.id) as held:
                     telemetry.annotate(**{attrs.LOCKED: held.units})
                     while True:
-                        outcome = await _execute(ctx, messages, servers, system_prompt, held)
+                        outcome = await _execute(ctx, messages, system_prompt, held)
                         if outcome.status != "ok":
                             await queue.clear(turn.id)
                             note = (

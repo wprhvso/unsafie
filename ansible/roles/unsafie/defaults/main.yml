@@ -31,6 +31,15 @@ unsafie_memory_max: 3G
 unsafie_default_locale: en
 unsafie_default_timezone: UTC
 
+unsafie_pool_enabled: true
+unsafie_pool_ci_enabled: true
+unsafie_pool_max_machines: 3
+unsafie_pool_warm_min: 3
+unsafie_pool_warm_max: 10
+unsafie_pool_lease_idle: 900
+unsafie_pool_sdk_spec: "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-sdk"
+unsafie_pool_wire_spec: "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-wire"
+
 unsafie_service_name: unsafie
 unsafie_environment: prod
 unsafie_otel_enabled: true

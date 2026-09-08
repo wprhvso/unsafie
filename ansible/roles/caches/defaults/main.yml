@@ -1,0 +1,9 @@
+caches_domain: "cache.{{ domain }}"
+caches_root: /var/cache/unsafie
+caches_gradle_dir: "{{ caches_root }}/gradle"
+caches_proxy_dir: "{{ caches_root }}/proxy"
+caches_proxy_size: 20g
+caches_proxy_inactive: 30d
+caches_gradle_user: gradle
+caches_gradle_password: ""
+caches_max_body: 512m

@@ -10,6 +10,8 @@ from unsafie.agent import turns
 from unsafie.agent.client import close_session as close_anthropic
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
+from unsafie.api.routes.cli import cli_router
+from unsafie.api.routes.machines import router as machines_router
 from unsafie.api.routes.public import artifact_router, public_router
 from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
@@ -18,6 +20,8 @@ from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.worker import worker
 from unsafie.janitor import janitor
 from unsafie.log import setup
+from unsafie.pool.ci.supervisor import ci_supervisor
+from unsafie.pool.keeper import keeper
 from unsafie.presence import presence
 from unsafie.scheduler.runner import runner
 from unsafie.settings import settings
@@ -31,7 +35,7 @@ setup()
 telemetry.setup()
 logger = logging.getLogger(__name__)
 
-LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence)
+LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor)
 
 
 @asynccontextmanager
@@ -94,6 +98,8 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(public_router)
 app.include_router(admin_router)
+app.include_router(cli_router)
+app.include_router(machines_router)
 
 
 @app.get("/health")

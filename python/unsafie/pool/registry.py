@@ -1,0 +1,178 @@
+import json
+import logging
+import secrets
+import time
+from datetime import UTC, datetime
+
+from sqlalchemy import func, select, update
+
+from unsafie import cluster
+from unsafie.database import SessionLocal
+from unsafie.database.models.pool import MachineState, PoolMachine
+from unsafie.pool import keys
+from unsafie.settings import settings
+
+logger = logging.getLogger(__name__)
+
+
+def new_name() -> str:
+    return "m-" + secrets.token_hex(4)
+
+
+async def register(
+    donor_id: int | None,
+    run_id: int | None,
+    profile: str,
+    facts: dict,
+    boot_seconds: float | None,
+) -> PoolMachine:
+    name = new_name()
+    async with SessionLocal() as session:
+        machine = PoolMachine(
+            name=name,
+            donor_id=donor_id,
+            run_id=run_id,
+            profile=profile or "fast",
+            state=MachineState.IDLE,
+            facts=facts or {},
+            boot_seconds=boot_seconds,
+        )
+        session.add(machine)
+        await session.commit()
+        await session.refresh(machine)
+    redis = cluster.client()
+    await redis.set(
+        keys.machine(name),
+        json.dumps({"state": MachineState.IDLE, "seen": time.time()}),
+        ex=int(settings.pool_machine_ttl),
+    )
+    await redis.zadd(keys.idle(), {name: time.time()})
+    logger.info("pool machine %s registered donor=%s run=%s", name, donor_id, run_id)
+    return machine
+
+
+async def heartbeat(name: str, state: str | None = None) -> bool:
+    redis = cluster.client()
+    stored = await redis.get(keys.machine(name))
+    if stored is None:
+        return False
+    payload = json.loads(stored)
+    payload["seen"] = time.time()
+    if state:
+        payload["state"] = state
+    await redis.set(keys.machine(name), json.dumps(payload), ex=int(settings.pool_machine_ttl))
+    return True
+
+
+async def alive(name: str) -> bool:
+    return bool(await cluster.client().exists(keys.machine(name)))
+
+
+async def state_of(name: str) -> str | None:
+    stored = await cluster.client().get(keys.machine(name))
+    if stored is None:
+        return None
+    return str(json.loads(stored).get("state"))
+
+
+async def mark(name: str, state: str) -> None:
+    redis = cluster.client()
+    stored = await redis.get(keys.machine(name))
+    payload = json.loads(stored) if stored else {"seen": time.time()}
+    payload["state"] = state
+    await redis.set(keys.machine(name), json.dumps(payload), ex=int(settings.pool_machine_ttl))
+    if state == MachineState.IDLE:
+        await redis.zadd(keys.idle(), {name: time.time()})
+    else:
+        await redis.zrem(keys.idle(), name)
+
+
+async def grab_idle() -> str | None:
+    redis = cluster.client()
+    while True:
+        found = await redis.zpopmin(keys.idle(), 1)
+        if not found:
+            return None
+        name = found[0][0]
+        if await alive(name):
+            return str(name)
+        await forget(str(name), "vanished before it was taken")
+
+
+async def idle_count(profile: str | None = None) -> int:
+    redis = cluster.client()
+    if profile is None:
+        return int(await redis.zcard(keys.idle()))
+    names = [str(name) for name in await redis.zrange(keys.idle(), 0, -1)]
+    if not names:
+        return 0
+    async with SessionLocal() as session:
+        found = await session.scalar(
+            select(func.count())
+            .select_from(PoolMachine)
+            .where(PoolMachine.name.in_(names), PoolMachine.profile == profile)
+        )
+    return int(found or 0)
+
+
+async def forget(name: str, reason: str) -> None:
+    redis = cluster.client()
+    await redis.zrem(keys.idle(), name)
+    await redis.delete(keys.machine(name))
+    await redis.delete(keys.inbox(name))
+    async with SessionLocal() as session:
+        await session.execute(
+            update(PoolMachine)
+            .where(PoolMachine.name == name, PoolMachine.gone_at.is_(None))
+            .values(state=MachineState.GONE, gone_at=datetime.now(UTC), gone_reason=reason[:64])
+        )
+        await session.commit()
+    logger.info("pool machine %s gone: %s", name, reason)
+
+
+async def machine(name: str) -> PoolMachine | None:
+    async with SessionLocal() as session:
+        return await session.scalar(select(PoolMachine).where(PoolMachine.name == name))
+
+
+async def live() -> list[PoolMachine]:
+    async with SessionLocal() as session:
+        rows = await session.scalars(
+            select(PoolMachine)
+            .where(PoolMachine.gone_at.is_(None))
+            .order_by(PoolMachine.started_at)
+        )
+        return list(rows)
+
+
+async def of_user(user_id: int) -> list[PoolMachine]:
+    async with SessionLocal() as session:
+        rows = await session.scalars(
+            select(PoolMachine)
+            .where(
+                PoolMachine.user_id == user_id,
+                PoolMachine.gone_at.is_(None),
+                PoolMachine.state == MachineState.LEASED,
+            )
+            .order_by(PoolMachine.leased_at)
+        )
+        return list(rows)
+
+
+async def counted() -> dict[str, int]:
+    machines = await live()
+    counts: dict[str, int] = {"idle": 0, "leased": 0, "ci": 0, "booting": 0}
+    for row in machines:
+        counts[row.state] = counts.get(row.state, 0) + 1
+    counts["total"] = len(machines)
+    return counts
+
+
+async def reap() -> int:
+    gone = 0
+    for row in await live():
+        if await alive(row.name):
+            continue
+        await forget(row.name, "no heartbeat")
+        gone += 1
+    return gone

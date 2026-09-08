@@ -1,0 +1,78 @@
+- name: Install the tools the caches need
+  ansible.builtin.apt:
+    name:
+      - apache2-utils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the cache directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0750"
+  loop:
+    - "{{ caches_root }}"
+    - "{{ caches_proxy_dir }}"
+    - "{{ caches_gradle_dir }}"
+
+- name: Write the credentials of the gradle cache
+  when: caches_gradle_password | length > 0
+  community.general.htpasswd:
+    path: /etc/nginx/gradle.htpasswd
+    name: "{{ caches_gradle_user }}"
+    password: "{{ caches_gradle_password }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+
+- name: Say that the gradle cache stays closed without a password
+  when: caches_gradle_password | length == 0
+  ansible.builtin.debug:
+    msg: "caches_gradle_password is empty: the gradle cache will refuse every write"
+
+- name: Declare the proxy cache zone
+  ansible.builtin.copy:
+    dest: /etc/nginx/conf.d/caches.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # managed by ansible
+      proxy_cache_path {{ caches_proxy_dir }} levels=2:2 keys_zone=artifacts:64m
+          max_size={{ caches_proxy_size }} inactive={{ caches_proxy_inactive }} use_temp_path=off;
+  notify: reload nginx
+
+- name: Write the shared caching snippet
+  ansible.builtin.copy:
+    dest: /etc/nginx/snippets/artifact-cache.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # managed by ansible
+      proxy_cache artifacts;
+      proxy_cache_key $scheme$proxy_host$uri$is_args$args;
+      proxy_cache_valid 200 206 302 {{ caches_proxy_inactive }};
+      proxy_cache_valid 404 1m;
+      proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+      proxy_cache_lock on;
+      proxy_cache_revalidate on;
+      proxy_ssl_server_name on;
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";
+      proxy_set_header Accept-Encoding "";
+      proxy_intercept_errors off;
+      add_header X-Cache $upstream_cache_status always;
+  notify: reload nginx
+
+- name: Install the cache vhost
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-enabled/{{ caches_domain }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload nginx

@@ -19,6 +19,7 @@
     ['/admin/schedule', 'Schedule'],
     ['/admin/watches', 'Watches'],
     ['/admin/ssh', 'SSH'],
+    ['/admin/pool', 'Pool'],
     ['/admin/artifacts', 'Artifacts'],
     ['/admin/stats', 'Stats']
   ];

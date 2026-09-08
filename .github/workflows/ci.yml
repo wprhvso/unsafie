@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: sync
+        run: uv sync --all-packages
+
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: types
+        run: uv run basedpyright
+
+      - name: the sdk and the prompt hold together
+        run: |
+          uv run python -c "
+          import unsafie_sdk
+          from unsafie.agent.prompt import SYSTEM_PROMPT
+          missing = [name for name in unsafie_sdk.__all__ if not hasattr(unsafie_sdk, name)]
+          assert not missing, missing
+          for word in ('say(', 'page(', 'run(', 'install(', 'github.use', 'browser.shot'):
+              assert word in SYSTEM_PROMPT, word
+          print('sdk', len(unsafie_sdk.__all__), 'names; prompt', len(SYSTEM_PROMPT), 'chars')
+          "
+
+      - name: migrations match the models
+        run: uv run python -c "import unsafie.database.models"
