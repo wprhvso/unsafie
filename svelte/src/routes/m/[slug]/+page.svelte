@@ -36,7 +36,7 @@
   }
 
   async function startDesktop() {
-    const { default: RFB } = await import('@novnc/novnc/lib/rfb.js');
+    const { default: RFB } = await import('@novnc/novnc');
     const client = new RFB(screen, socketUrl(), { wsProtocols: ['binary'] });
     client.scaleViewport = true;
     client.resizeSession = true;

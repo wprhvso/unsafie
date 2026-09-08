@@ -209,6 +209,8 @@ class Settings(BaseSettings):
     pool_boot_grace: float = 900.0
     pool_warm_min: int = 3
     pool_warm_max: int = 10
+    pool_warm_full: int = 0
+    pool_cache_url: str = ""
     pool_vnc_port: int = 8444
     pool_desktop_ttl: float = 7_200.0
     pool_tunnel_wait: float = 30.0

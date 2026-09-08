@@ -2,6 +2,13 @@ name: unsafie
 
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: fast keeps the boot under a minute, full brings the desktop with it
+        type: choice
+        options: [fast, full]
+        default: fast
+        required: false
 
 jobs:
   machine:
@@ -15,6 +22,21 @@ jobs:
         with:
           enable-cache: true
 
+      - name: point the tools at the caches
+        env:
+          CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
+        run: |
+          if [ -z "$CACHE_URL" ]; then
+            echo "no cache configured, everything comes from upstream"
+            exit 0
+          fi
+          {
+            echo "UV_INDEX_URL=$CACHE_URL/pypi/simple"
+            echo "PIP_INDEX_URL=$CACHE_URL/pypi/simple"
+            echo "npm_config_registry=$CACHE_URL/npm"
+          } >>"$GITHUB_ENV"
+          echo "cache: $CACHE_URL"
+
       - name: install the cli
         env:
           SPEC: ${{ secrets.UNSAFIE_CLI_SPEC }}
@@ -27,10 +49,17 @@ jobs:
           fi
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
+      - name: bring the desktop along
+        if: inputs.profile == 'full'
+        run: |
+          sudo -E env "PATH=$PATH" "$(command -v unsafie)" setup xvfb kasmvnc tools || \
+            echo "::warning::the full profile came up short, the machine still serves"
+
       - name: serve
         env:
           UNSAFIE_API: ${{ secrets.UNSAFIE_URL }}
           UNSAFIE_WORKER_TOKEN: ${{ secrets.UNSAFIE_WORKER_TOKEN }}
+          UNSAFIE_CACHE_URL: ${{ secrets.UNSAFIE_CACHE_URL }}
         run: |
           sudo -E env "PATH=$PATH" "UNSAFIE_BOOT_STARTED=$UNSAFIE_BOOT_STARTED" \
-            "$(command -v unsafie)" serve --profile fast
+            "$(command -v unsafie)" serve --profile "${{ inputs.profile || 'fast' }}"

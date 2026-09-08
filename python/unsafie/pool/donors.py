@@ -22,6 +22,7 @@ SECRET_URL = "UNSAFIE_URL"
 SECRET_TOKEN = "UNSAFIE_WORKER_TOKEN"
 SECRET_SPEC = "UNSAFIE_CLI_SPEC"
 SECRET_WIRE = "UNSAFIE_WIRE_SPEC"
+SECRET_CACHE = "UNSAFIE_CACHE_URL"
 
 
 class DonorError(OpsError):
@@ -143,16 +144,15 @@ async def bootstrap(login: str, worker_token: str | None = None) -> dict:
         logger.info("pool donor %s: repository %s created", login, donor.repo)
     branch = repo.get("default_branch") or "main"
     await _put_workflow(http, donor.repo, branch, donor.workflow)
-    await _put_secrets(
-        http,
-        donor.repo,
-        {
-            SECRET_URL: settings.public_origin,
-            SECRET_TOKEN: worker_token,
-            SECRET_SPEC: settings.pool_cli_spec,
-            SECRET_WIRE: settings.pool_wire_spec,
-        },
-    )
+    secrets_to_seal = {
+        SECRET_URL: settings.public_origin,
+        SECRET_TOKEN: worker_token,
+        SECRET_SPEC: settings.pool_cli_spec,
+        SECRET_WIRE: settings.pool_wire_spec,
+    }
+    if settings.pool_cache_url:
+        secrets_to_seal[SECRET_CACHE] = settings.pool_cache_url.rstrip("/")
+    await _put_secrets(http, donor.repo, secrets_to_seal)
     await note(donor.id, "ready")
     return {"repo": donor.repo, "branch": branch, "workflow": donor.workflow}
 

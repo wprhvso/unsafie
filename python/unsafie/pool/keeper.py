@@ -53,11 +53,13 @@ async def reconcile(donor: PoolDonor) -> dict:
     if missing:
         repo = await http.request("GET", f"/repos/{donor.repo}")
         branch = repo.get("default_branch") or "main"
-        for _ in range(min(missing, settings.pool_launch_burst)):
+        full_short = max(0, settings.pool_warm_full - await registry.idle_count("full"))
+        for index in range(min(missing, settings.pool_launch_burst)):
+            profile = "full" if index < full_short else "fast"
             await http.request(
                 "POST",
                 f"/repos/{donor.repo}/actions/workflows/{donor.workflow}/dispatches",
-                json_body={"ref": branch},
+                json_body={"ref": branch, "inputs": {"profile": profile}},
             )
             launched += 1
     await donors.note(donor.id, "ready")

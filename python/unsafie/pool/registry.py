@@ -4,7 +4,7 @@ import secrets
 import time
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from unsafie import cluster
 from unsafie.database import SessionLocal
@@ -99,8 +99,20 @@ async def grab_idle() -> str | None:
         await forget(str(name), "vanished before it was taken")
 
 
-async def idle_count() -> int:
-    return int(await cluster.client().zcard(keys.idle()))
+async def idle_count(profile: str | None = None) -> int:
+    redis = cluster.client()
+    if profile is None:
+        return int(await redis.zcard(keys.idle()))
+    names = [str(name) for name in await redis.zrange(keys.idle(), 0, -1)]
+    if not names:
+        return 0
+    async with SessionLocal() as session:
+        found = await session.scalar(
+            select(func.count())
+            .select_from(PoolMachine)
+            .where(PoolMachine.name.in_(names), PoolMachine.profile == profile)
+        )
+    return int(found or 0)
 
 
 async def forget(name: str, reason: str) -> None:

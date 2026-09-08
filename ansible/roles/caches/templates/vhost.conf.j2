@@ -1,0 +1,77 @@
+# managed by ansible
+server {
+    listen 80;
+    server_name {{ caches_domain }};
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{ caches_domain }};
+
+    include {{ tls_snippet }};
+
+    client_max_body_size {{ caches_max_body }};
+    access_log /var/log/nginx/caches.log main buffer=16k flush=5s;
+
+    # Everything below is a read-through cache of public artifacts: a machine in the
+    # pool lives for one lease, so it downloads the same files over and over.
+    location /pypi/simple/ {
+        rewrite ^/pypi/simple/(.*)$ /simple/$1 break;
+        proxy_pass https://pypi.org;
+        include /etc/nginx/snippets/artifact-cache.conf;
+        proxy_set_header Host pypi.org;
+    }
+
+    location /pypi/files/ {
+        rewrite ^/pypi/files/(.*)$ /$1 break;
+        proxy_pass https://files.pythonhosted.org;
+        include /etc/nginx/snippets/artifact-cache.conf;
+        proxy_set_header Host files.pythonhosted.org;
+    }
+
+    location /npm/ {
+        rewrite ^/npm/(.*)$ /$1 break;
+        proxy_pass https://registry.npmjs.org;
+        include /etc/nginx/snippets/artifact-cache.conf;
+        proxy_set_header Host registry.npmjs.org;
+    }
+
+    location /crates/ {
+        rewrite ^/crates/(.*)$ /$1 break;
+        proxy_pass https://static.crates.io;
+        include /etc/nginx/snippets/artifact-cache.conf;
+        proxy_set_header Host static.crates.io;
+    }
+
+    location /nix/ {
+        rewrite ^/nix/(.*)$ /$1 break;
+        proxy_pass https://cache.nixos.org;
+        include /etc/nginx/snippets/artifact-cache.conf;
+        proxy_set_header Host cache.nixos.org;
+    }
+
+    location /gh/ {
+        rewrite ^/gh/(.*)$ /$1 break;
+        proxy_pass https://github.com;
+        include /etc/nginx/snippets/artifact-cache.conf;
+        proxy_set_header Host github.com;
+    }
+
+    # The gradle build cache is not a proxy: builds put entries here and take them back.
+    location /gradle/ {
+        alias {{ caches_gradle_dir }}/;
+        dav_methods PUT DELETE;
+        create_full_put_path on;
+        dav_access user:rw group:rw all:r;
+        limit_except GET HEAD {
+            auth_basic "gradle cache";
+            auth_basic_user_file /etc/nginx/gradle.htpasswd;
+        }
+        autoindex off;
+    }
+
+    location = /healthz { return 200 "ok\n"; }
+    location / { return 404; }
+}
