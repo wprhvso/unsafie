@@ -12,7 +12,7 @@
   const creds = resource(() => admin.get('/credentials'));
   onMount(() => refreshOn(['credential.*'], () => creds.reload()));
 
-  let refreshToken = $state('');
+  let token = $state('');
   let label = $state('');
   let busy = $state(false);
   let error = $state('');
@@ -31,26 +31,26 @@
   }
 
   const add = () => run(async () => {
-    await admin.post('/credentials', { refresh_token: refreshToken.trim(), label: label.trim() || null });
-    refreshToken = '';
+    await admin.post('/credentials', { refresh_token: token.trim(), label: label.trim() || null });
+    token = '';
     label = '';
   });
 
-  const sessionState = (c) =>
+  const keyState = (c) =>
     !c.enabled ? ['bad', 'disabled']
     : c.cooldown_until && new Date(c.cooldown_until) > new Date() ? ['warn', 'cooldown']
     : ['ok', 'ready'];
 </script>
 
-<svelte:head><title>unsafie — opal sessions</title></svelte:head>
+<svelte:head><title>unsafie — sessions</title></svelte:head>
 <h1>Opal sessions</h1>
 
 <div class="stack">
-  <Panel title="Add an Opal session">
+  <Panel title="Add session">
     <div class="row pad">
-      <input class="grow" type="password" placeholder="refresh_token" bind:value={refreshToken} disabled={busy} />
+      <input class="grow" type="password" placeholder="refresh_token" bind:value={token} disabled={busy} />
       <input placeholder="label" bind:value={label} disabled={busy} />
-      <button onclick={add} disabled={busy || !refreshToken.trim()}>Add</button>
+      <button onclick={add} disabled={busy || !token.trim()}>Add</button>
     </div>
     {#if error}<p class="pad err">{error}</p>{/if}
   </Panel>
@@ -59,11 +59,11 @@
     <Loader state={creds} empty="No sessions — the bot cannot answer anything.">
       <table>
         <thead>
-          <tr><th>id</th><th>token</th><th>label</th><th>state</th><th>uses</th><th>last error</th><th></th></tr>
+          <tr><th>id</th><th>refresh token</th><th>label</th><th>state</th><th>uses</th><th>last error</th><th></th></tr>
         </thead>
         <tbody>
           {#each creds.data as c (c.id)}
-            {@const [tone, word] = sessionState(c)}
+            {@const [tone, word] = keyState(c)}
             <tr>
               <td class="mono">{c.id}</td>
               <td class="mono muted">{c.refresh_token_masked}</td>
@@ -76,9 +76,7 @@
               <td>{c.uses}</td>
               <td class="err small">{c.last_error ? c.last_error.slice(0, 90) : ''}</td>
               <td class="row nowrap">
-                <button disabled={busy} onclick={() => run(() => admin.post(`/credentials/${c.id}/refresh`))}>
-                  Refresh
-                </button>
+                <button disabled={busy} onclick={() => run(() => admin.post(`/credentials/${c.id}/refresh`, {}))}>Refresh</button>
                 <button disabled={busy} onclick={() => run(() => admin.patch(`/credentials/${c.id}`, { enabled: !c.enabled }))}>
                   {c.enabled ? 'Disable' : 'Enable'}
                 </button>

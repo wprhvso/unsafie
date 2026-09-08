@@ -35,5 +35,8 @@ export function costOf(usage, model) {
 }
 
 export function contextOf(usage) {
-  return Number(usage?.total_tokens ?? (Number(usage?.input_tokens ?? 0) + Number(usage?.output_tokens ?? 0)));
+  return (
+    Number(usage?.input_tokens ?? 0) +
+    Number(usage?.output_tokens ?? 0)
+  );
 }
