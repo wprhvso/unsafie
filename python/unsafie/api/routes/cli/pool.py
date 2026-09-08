@@ -29,6 +29,11 @@ class Release(BaseModel):
     machine: str | None = None
 
 
+class Hold(BaseModel):
+    seconds: float = 300.0
+    machine: str | None = None
+
+
 class Run(BaseModel):
     command: str
     machine: str | None = None
@@ -97,6 +102,15 @@ async def release(body: Release, who: Pool) -> dict:
     except OpsError as refused:
         raise HTTPException(404, str(refused)) from None
     return {"released": gone}
+
+
+@router.post("/hold")
+async def hold(body: Hold, who: Pool) -> dict:
+    try:
+        kept = await leases.hold(who.user_id, body.machine or who.machine, body.seconds)
+    except OpsError as refused:
+        raise HTTPException(404, str(refused)) from None
+    return {**kept, "max_seconds": settings.pool_hold_max}
 
 
 @router.post("/run")

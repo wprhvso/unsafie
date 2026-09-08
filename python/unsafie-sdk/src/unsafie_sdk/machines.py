@@ -58,6 +58,10 @@ class Machine:
         """Give this machine back; it is destroyed."""
         return release(self.id)
 
+    def hold(self, seconds: float = 300.0) -> dict:
+        """Keep this machine from being reaped for a while."""
+        return hold(seconds, machine=self.id)
+
     def rename(self, alias: str) -> dict:
         """Give the machine a human name."""
         return client().call("POST", "/pool/rename", {"machine": self.id, "alias": alias})
@@ -99,6 +103,16 @@ def release(machine: str | Machine | None = None) -> list[str]:
     """Release a machine (or all of them) — the job ends and nothing survives on it."""
     name = machine.id if isinstance(machine, Machine) else machine
     return client().call("POST", "/pool/release", {"machine": name}).get("released", [])
+
+
+def hold(seconds: float = 300.0, machine: str | Machine | None = None) -> dict:
+    """Keep a machine alive for that many seconds even while nothing runs on it.
+
+    Handy before handing a desktop link to the human: the machine waits for the
+    click instead of being reaped as idle. Pass 0 to drop the hold.
+    """
+    name = machine.id if isinstance(machine, Machine) else machine
+    return client().call("POST", "/pool/hold", {"seconds": float(seconds), "machine": name})
 
 
 def run(
@@ -209,8 +223,17 @@ def copy(source: str, target: str) -> dict:
     return {"from": source, "to": target}
 
 
-def desktop(machine: str | None = None) -> str:
-    """A link to the live desktop of a machine, for the human to take the mouse."""
+def desktop(machine: str | None = None, hold_for: float = 600.0) -> str:
+    """A link to the live desktop of a machine, for the human to take the mouse.
+
+    The machine is held for `hold_for` seconds, so it is still there when the
+    human finally clicks the link.
+    """
+    if hold_for:
+        try:
+            hold(hold_for, machine=machine or here())
+        except UnsafieError:
+            pass
     answer = client().call("POST", "/pool/desktop", {"kind": "vnc", "machine": machine or here()})
     return str(answer["url"])
 

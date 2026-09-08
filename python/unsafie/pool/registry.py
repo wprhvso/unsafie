@@ -112,6 +112,23 @@ async def grab_idle() -> str | None:
         await forget(str(name), "vanished before it was taken")
 
 
+async def hold(name: str, seconds: float) -> float:
+    """Keep a machine alive for a while even if nobody is typing on it."""
+    left = max(0.0, min(float(seconds), settings.pool_hold_max))
+    redis = cluster.client()
+    if left <= 0:
+        await redis.delete(keys.hold(name))
+        return 0.0
+    await redis.set(keys.hold(name), str(time.time() + left), ex=int(left) + 1)
+    return left
+
+
+async def held(name: str) -> float:
+    """Seconds left on the hold of a machine, 0 when it is not held."""
+    left = await cluster.client().ttl(keys.hold(name))
+    return float(left) if left and left > 0 else 0.0
+
+
 async def idle_count() -> int:
     return int(await cluster.client().zcard(keys.idle()))
 
@@ -121,6 +138,7 @@ async def forget(name: str, reason: str) -> None:
     await redis.zrem(keys.idle(), name)
     await redis.delete(keys.machine(name))
     await redis.delete(keys.inbox(name))
+    await redis.delete(keys.hold(name))
     async with SessionLocal() as session:
         await session.execute(
             update(PoolMachine)
