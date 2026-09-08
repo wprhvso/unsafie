@@ -11,7 +11,7 @@ PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
     "kasmvnc": (("Xkasmvnc", "kasmvncserver"),),
     "nix": (("nix",),),
     "rust": (("cargo",),),
-    "tools": (("rg",), ("jq",), ("zstd",), ("convert", "magick")),
+    "tools": (("rg",), ("jq",), ("zstd",), ("convert", "magick"), ("gh",)),
 }
 
 
@@ -40,7 +40,7 @@ def _toolchain(name: str, timeout: float) -> str:
         if name == "xvfb":
             return _apt(["xvfb", "openbox", "x11-utils", "xauth", "xfonts-base", "x11vnc"], timeout)
         if name == "tools":
-            return _apt(["ripgrep", "fd-find", "jq", "zstd", "p7zip-full", "imagemagick"], timeout)
+            return _apt(["ripgrep", "fd-find", "jq", "zstd", "p7zip-full", "imagemagick", "gh"], timeout)
         if name == "kasmvnc":
             return _kasmvnc(timeout)
         if name == "nix":

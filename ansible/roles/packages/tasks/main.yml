@@ -21,5 +21,6 @@
       - ripgrep
       - fd-find
       - bat
+      - gh
     state: present
     update_cache: true
