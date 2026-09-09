@@ -4,7 +4,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.repositories.user import UserRepository
 from unsafie.settings import settings
 
-KNOWN = {"en", "ru"}
+KNOWN = {"en", "ru", "es", "fr", "ar", "fa"}
 
 
 def guess(tg_user: TgUser | None) -> str:
