@@ -73,7 +73,6 @@ def main(argv: list[str] | None = None) -> int:
     p_s_finish = s_sub.add_parser("finish")
     p_s_finish.add_argument("result")
 
-
     p_chat = subs.add_parser("chat")
     s_chat = p_chat.add_subparsers(dest="subcmd")
 
@@ -214,9 +213,12 @@ def main(argv: list[str] | None = None) -> int:
     p_beval.add_argument("expression")
 
     p_bshot = s_br.add_parser("shot")
+    p_bshot.add_argument("-o", "--output", default=None)
     p_bshot.add_argument("--full", action="store_true")
-    p_bshot.add_argument("--send", action="store_true")
-    p_bshot.add_argument("--caption", default=None)
+
+    p_vision = subs.add_parser("vision")
+    p_vision.add_argument("paths", nargs="+")
+    p_vision.add_argument("--caption", default=None)
 
     p_bcookies = s_br.add_parser("cookies")
     p_bcookies.add_argument("--set", dest="cookie_json", default=None)
@@ -229,15 +231,22 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "serve":
             token = args.token or os.environ.get("UNSAFIE_WORKER_TOKEN") or ""
-            api = args.api or os.environ.get("UNSAFIE_API") or os.environ.get("UNSAFIE_URL") or "http://127.0.0.1:8000"
+            api = (
+                args.api
+                or os.environ.get("UNSAFIE_API")
+                or os.environ.get("UNSAFIE_URL")
+                or "http://127.0.0.1:8000"
+            )
             if not token:
                 sys.stderr.write("no worker token: set UNSAFIE_WORKER_TOKEN\n")
                 return 0
             from unsafie.machine.daemon import serve
+
             return serve(api, token)
 
         if args.cmd == "setup":
             from unsafie.machine.toolchains import TOOLCHAINS, setup
+
             wanted = args.tools or list(TOOLCHAINS)
             for name, outcome in setup(*wanted).items():
                 sys.stdout.write(f"{name}: {outcome}\n")
@@ -246,24 +255,31 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "ci-runner":
             from unsafie.machine.runner import run_runner
-            return run_runner(args.jit, name=args.name, repo=args.repo, idle=args.idle, lifetime=args.lifetime)
+
+            return run_runner(
+                args.jit, name=args.name, repo=args.repo, idle=args.idle, lifetime=args.lifetime
+            )
 
         if args.cmd == "put":
             from unsafie.cli import blobs
+
             return _out(blobs.put(args.key, Path(args.file)))
 
         if args.cmd == "get":
             from unsafie.cli import blobs
+
             data = blobs.get(args.key)
             Path(args.file).write_bytes(data)
             return _out({"downloaded": args.key, "bytes": len(data)})
 
         if args.cmd == "me":
             from unsafie.cli.client import client
+
             return _out(client().call("GET", "/me"))
 
         if args.cmd == "stop":
             from unsafie.cli.stop import stop
+
             return _out(stop())
 
         if args.cmd == "subagent":
@@ -285,13 +301,35 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "chat":
             from unsafie.cli import chat
+
             if args.subcmd == "send":
                 btns = json.loads(args.buttons) if args.buttons else None
-                return _out(chat.send(args.text, reply_to=args.reply_to, buttons=btns, silent=args.silent, chat=args.chat))
+                return _out(
+                    chat.send(
+                        args.text,
+                        reply_to=args.reply_to,
+                        buttons=btns,
+                        silent=args.silent,
+                        chat=args.chat,
+                    )
+                )
             if args.subcmd == "send-file":
-                return _out(chat.send_file(args.path, name=args.name, caption=args.caption, kind=args.kind, silent=args.silent, chat=args.chat))
+                return _out(
+                    chat.send_file(
+                        args.path,
+                        name=args.name,
+                        caption=args.caption,
+                        kind=args.kind,
+                        silent=args.silent,
+                        chat=args.chat,
+                    )
+                )
             if args.subcmd == "send-photo":
-                return _out(chat.send_photo(args.path, caption=args.caption, silent=args.silent, chat=args.chat))
+                return _out(
+                    chat.send_photo(
+                        args.path, caption=args.caption, silent=args.silent, chat=args.chat
+                    )
+                )
             if args.subcmd == "edit":
                 btns = json.loads(args.buttons) if args.buttons else None
                 return _out(chat.edit(args.message_id, args.text, buttons=btns))
@@ -310,6 +348,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "pages":
             from unsafie.cli import pages
+
             if args.subcmd == "create":
                 return _out(pages.create(args.content, title=args.title))
             if args.subcmd == "update":
@@ -321,6 +360,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "github":
             from unsafie.cli import github
+
             if args.subcmd == "logins":
                 return _out(github.logins())
             if args.subcmd == "use":
@@ -332,8 +372,11 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "browser":
             from unsafie.cli import browser
+
             if args.subcmd == "start":
-                return _out(browser.start(profile=args.profile, size=args.size, headless=args.headless))
+                return _out(
+                    browser.start(profile=args.profile, size=args.size, headless=args.headless)
+                )
             if args.subcmd == "stop":
                 return _out(browser.stop())
             if args.subcmd == "goto":
@@ -345,7 +388,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "press":
                 return _out(browser.press(args.combination))
             if args.subcmd == "wait":
-                return _out(browser.wait(selector=args.selector, url=args.url, js=args.js, timeout=args.timeout))
+                return _out(
+                    browser.wait(
+                        selector=args.selector, url=args.url, js=args.js, timeout=args.timeout
+                    )
+                )
             if args.subcmd == "text":
                 return _out(browser.text(args.selector))
             if args.subcmd == "html":
@@ -353,13 +400,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "eval":
                 return _out(browser.evaluate(args.expression))
             if args.subcmd == "shot":
-                return _out(browser.shot(full=args.full, send=args.send, caption=args.caption))
+                return _out(browser.shot(output=args.output, full=args.full))
             if args.subcmd == "cookies":
                 c_data = json.loads(args.cookie_json) if args.cookie_json else None
                 return _out(browser.cookies(c_data))
 
         if args.cmd == "bloat2md":
             from unsafie.cli import bloat2md
+
             res = bloat2md.run(
                 args.path,
                 output=args.output,
@@ -371,6 +419,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.stdout and res.get("ok"):
                 return 0
             return _out(res, ok=res.get("ok", True))
+
+        if args.cmd == "vision":
+            from unsafie.cli import vision
+
+            return _out(vision.attach(args.paths, caption=args.caption))
 
         return _out({"error": f"unknown command {args.cmd}"}, ok=False)
     except Exception as exc:

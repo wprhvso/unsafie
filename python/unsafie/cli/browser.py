@@ -1,13 +1,11 @@
-import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from unsafie.chrome import actions
 from unsafie.chrome import browser as engine
 from unsafie.chrome.cdp import Cdp, CdpError
 from unsafie.chrome.ws import WsError
-from unsafie.cli import blobs
-from unsafie_wire import markers
 
 SHOTS = "shots"
 _open: dict[str, Any] = {}
@@ -91,8 +89,14 @@ def press(combination: str) -> dict:
     return {"pressed": combination}
 
 
-def wait(selector: str | None = None, *, url: str | None = None, js: str | None = None,
-         state: str = "visible", timeout: float = 30.0) -> dict:
+def wait(
+    selector: str | None = None,
+    *,
+    url: str | None = None,
+    js: str | None = None,
+    state: str = "visible",
+    timeout: float = 30.0,
+) -> dict:
     if selector:
         _act(actions.wait_for, selector, state, timeout)
     elif url:
@@ -116,16 +120,15 @@ def evaluate(expression: str) -> dict:
     return {"result": _act(actions.evaluate, expression)}
 
 
-def shot(*, full: bool = False, send: bool = False, caption: str | None = None) -> dict:
+def shot(*, output: str | Path | None = None, full: bool = False) -> dict:
     data = _act(actions.screenshot, full)
-    key = f"{SHOTS}/{int(time.time() * 1000)}.png"
-    blobs.put(key, data)
-    if send:
-        from unsafie.cli import chat
-        chat.send_photo(data, caption=caption)
-    sys.stderr.write(markers.image(key, "image/png", caption) + "\n")
-    sys.stderr.flush()
-    return {"shot": key}
+    if output is not None:
+        target = Path(output)
+    else:
+        target = Path(f"/tmp/shots/shot_{int(time.time() * 1000)}.png")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    return {"ok": True, "path": str(target), "bytes": len(data)}
 
 
 def cookies(items: list[dict] | None = None) -> dict:
