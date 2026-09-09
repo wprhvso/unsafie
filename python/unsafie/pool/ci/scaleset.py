@@ -264,10 +264,14 @@ class ScaleSet:
             )
         )
 
-    async def close(self, scale_set_id: int, current: Session) -> None:
+    async def close(
+        self, scale_set_id: int, current: Session, timeout: float = 2.0
+    ) -> None:
         try:
             await self.call(
-                "DELETE", f"runnerscalesets/{scale_set_id}/sessions/{current.session_id}"
+                "DELETE",
+                f"runnerscalesets/{scale_set_id}/sessions/{current.session_id}",
+                timeout=timeout,
             )
         except ScaleSetError as refused:
             if refused.status != 404:

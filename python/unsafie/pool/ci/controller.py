@@ -236,7 +236,10 @@ class Controller:
             watcher.cancel()
         if self.session is not None:
             try:
-                await self.api.close(self.scale_set_id, self.session)
-            except (ScaleSetError, OSError) as refused:
+                await asyncio.wait_for(
+                    self.api.close(self.scale_set_id, self.session, timeout=2.0),
+                    timeout=2.0,
+                )
+            except (ScaleSetError, OSError, TimeoutError) as refused:
                 logger.debug("pool ci %s: session stayed open: %s", self.repo.slug, refused)
         logger.info("pool ci %s: controller down", self.repo.slug)
