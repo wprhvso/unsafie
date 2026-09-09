@@ -11,6 +11,7 @@ from pathlib import Path
 from unsafie import tokens
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
+from unsafie.agent.spool import BashSpool, SpoolStatus
 from unsafie.log import short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
 from unsafie.gh import ensure_gh
@@ -38,6 +39,7 @@ class Block:
     images: list[dict] = field(default_factory=list)
     sent: bool = False
     stopped: bool = False
+    spool_dir: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -177,6 +179,84 @@ class Runner:
         await self._run(block)
         return block
 
+    async def resume(self, index: int, code: str) -> Block:
+        block = Block(index=index, code=code)
+        self.blocks.append(block)
+        self.recorder.code_started(index, code, "local")
+        spool = BashSpool(self.ctx.turn_id, index)
+        block.spool_dir = str(spool.dir)
+        probe = spool.probe()
+
+        if probe.status == SpoolStatus.FINISHED:
+            combined = spool.read_output()
+            block.exit_code = probe.exit_code
+            block.seconds = probe.duration
+            lines = combined.splitlines(keepends=True)
+            if len(lines) > settings.pool_max_output_lines:
+                combined = "".join(lines[: settings.pool_max_output_lines])
+                block.truncated = True
+            elif len(combined) > settings.pool_max_output:
+                combined = combined[: settings.pool_max_output]
+                block.truncated = True
+            body, found = markers.split(combined)
+            block.output = body
+            await self._decorate(block, found)
+            self._finished(block)
+            return block
+
+        if probe.status == SpoolStatus.RUNNING:
+            watch = asyncio.create_task(
+                self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
+            )
+            try:
+                await spool.wait(timeout=settings.agent_block_timeout)
+            except TimeoutError:
+                spool.terminate(grace=2.0)
+                block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
+                block.exit_code = 124
+            finally:
+                watch.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await watch
+            probe = spool.probe()
+            combined = spool.read_output()
+            block.exit_code = probe.exit_code
+            block.seconds = probe.duration
+            lines = combined.splitlines(keepends=True)
+            if len(lines) > settings.pool_max_output_lines:
+                combined = "".join(lines[: settings.pool_max_output_lines])
+                block.truncated = True
+            elif len(combined) > settings.pool_max_output:
+                combined = combined[: settings.pool_max_output]
+                block.truncated = True
+            body, found = markers.split(combined)
+            block.output = body
+            await self._decorate(block, found)
+            self._finished(block)
+            return block
+
+        if probe.status == SpoolStatus.DEAD:
+            combined = spool.read_output()
+            block.error = "command was interrupted by host termination / process kill"
+            block.exit_code = probe.exit_code or 137
+            block.seconds = probe.duration
+            combined += "\n[System Notice: Command was interrupted by host restart or process kill. Partial output captured above. Please inspect workspace state (e.g. check created files, git status) and proceed.]"
+            lines = combined.splitlines(keepends=True)
+            if len(lines) > settings.pool_max_output_lines:
+                combined = "".join(lines[: settings.pool_max_output_lines])
+                block.truncated = True
+            elif len(combined) > settings.pool_max_output:
+                combined = combined[: settings.pool_max_output]
+                block.truncated = True
+            body, found = markers.split(combined)
+            block.output = body
+            await self._decorate(block, found)
+            self._finished(block)
+            return block
+
+        await self._run(block)
+        return block
+
     async def _nag(self, block: Block) -> None:
         waited = 0.0
         while True:
@@ -241,45 +321,29 @@ class Runner:
         gh_env = await self._resolve_github_env()
         env.update(gh_env)
 
+        spool = BashSpool(self.ctx.turn_id, block.index)
+        block.spool_dir = str(spool.dir)
+        spool.prepare(block.code)
+
         watch = asyncio.create_task(
             self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
         )
         started = time.monotonic()
         try:
-            proc = await asyncio.create_subprocess_exec(
-                bash_bin,
-                "-c",
-                block.code,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            raw_out, raw_err = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=settings.agent_block_timeout,
-            )
-            combined = raw_out.decode("utf-8", "replace") + (
-                "\n" + raw_err.decode("utf-8", "replace") if raw_err else ""
-            )
-            block.exit_code = proc.returncode
+            await spool.launch(bash_bin=bash_bin, env=env)
+            await spool.wait(timeout=settings.agent_block_timeout)
         except TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            spool.terminate(grace=2.0)
             block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
             block.exit_code = 124
-            combined = ""
-        except FileNotFoundError:
-            block.error = "bash executable 'bash' not found"
-            block.exit_code = 127
-            combined = ""
         except asyncio.CancelledError:
+            spool.terminate(grace=1.0)
             block.error = "stopped by the user"
             block.seconds = time.monotonic() - block.started_at
             self._finished(block)
             raise
         except Exception as broken:
+            spool.terminate(grace=1.0)
             block.error = f"{type(broken).__name__}: {broken}"
             block.seconds = time.monotonic() - block.started_at
             logger.exception("%s bash block %s could not run", self.ctx.prefix, block.index)
@@ -289,6 +353,15 @@ class Runner:
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
+
+        probe = spool.probe()
+        combined = spool.read_output()
+        if probe.status == SpoolStatus.DEAD or probe.interrupted:
+            block.error = "command was interrupted by host termination / process kill"
+            block.exit_code = probe.exit_code or 137
+            combined += "\n[System Notice: Command was interrupted by host restart or process kill. Partial output captured above. Please inspect workspace state (e.g. check created files, git status) and proceed.]"
+        elif block.exit_code is None:
+            block.exit_code = probe.exit_code
 
         lines = combined.splitlines(keepends=True)
         if len(lines) > settings.pool_max_output_lines:
