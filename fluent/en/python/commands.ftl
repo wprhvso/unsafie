@@ -4,7 +4,6 @@ commands-start =
 
     /stop — stop: as a reply, whatever that message started; without a reply, everything
     /effort — thinking effort
-    /model — Gemini model
     /gh — GitHub token and repositories
     /ssh — servers over SSH
     /pool — pool machines and CI runners
@@ -13,15 +12,9 @@ commands-start =
     /tz — timezone
     /help — this help
 
-commands-model-status =
-    Model: { $model }
-    Default: { $default }
 
     /model NAME — switch model
     /model default — back to default
-commands-model-set = Model: { $model }
-commands-model-reset = Back to default model: { $model }
-commands-model-usage = Model name — letters, digits, dots and dashes, e.g. /model gemini-3.1-pro-preview
 commands-effort-status =
     Effort: { $effort }
     Default: { $default }

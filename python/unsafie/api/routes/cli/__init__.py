@@ -9,6 +9,7 @@ from unsafie.api.routes.cli.pages import router as pages_router
 from unsafie.api.routes.cli.pool import router as pool_router
 from unsafie.api.routes.cli.ssh import router as ssh_router
 from unsafie.api.routes.cli.store import router as store_router
+from unsafie.api.routes.cli.subagent import router as subagent_router
 
 cli_router = APIRouter(prefix="/api/v1")
 cli_router.include_router(me_router)
@@ -20,5 +21,6 @@ cli_router.include_router(github_router)
 cli_router.include_router(ci_router)
 cli_router.include_router(automation_router)
 cli_router.include_router(ssh_router)
+cli_router.include_router(subagent_router)
 
 __all__ = ["cli_router"]

@@ -49,6 +49,31 @@ def main(argv: list[str] | None = None) -> int:
 
     subs.add_parser("stop")
 
+    p_sub = subs.add_parser("subagent")
+    s_sub = p_sub.add_subparsers(dest="subcmd")
+
+    p_s_spawn = s_sub.add_parser("spawn")
+    p_s_spawn.add_argument("prompt")
+    p_s_spawn.add_argument("--title", default=None)
+    p_s_spawn.add_argument("--timeout", type=float, default=600.0)
+
+    p_s_wait = s_sub.add_parser("wait")
+    p_s_wait.add_argument("ids", nargs="+")
+    p_s_wait.add_argument("--timeout", type=float, default=600.0)
+
+    p_s_status = s_sub.add_parser("status")
+    p_s_status.add_argument("id")
+
+    p_s_list = s_sub.add_parser("list")
+    p_s_list.add_argument("--limit", type=int, default=50)
+
+    p_s_cancel = s_sub.add_parser("cancel")
+    p_s_cancel.add_argument("ids", nargs="+")
+
+    p_s_finish = s_sub.add_parser("finish")
+    p_s_finish.add_argument("result")
+
+
     p_chat = subs.add_parser("chat")
     s_chat = p_chat.add_subparsers(dest="subcmd")
 
@@ -227,6 +252,23 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "stop":
             from unsafie.cli.stop import stop
             return _out(stop())
+
+        if args.cmd == "subagent":
+            from unsafie.cli import subagent
+
+            if args.subcmd == "spawn":
+                return _out(subagent.spawn(args.prompt, title=args.title, timeout=args.timeout))
+            if args.subcmd == "wait":
+                return _out(subagent.wait(*args.ids, timeout=args.timeout))
+            if args.subcmd == "status":
+                return _out(subagent.status(args.id))
+            if args.subcmd == "list":
+                return _out(subagent.listing(limit=args.limit))
+            if args.subcmd == "cancel":
+                return _out(subagent.cancel(*args.ids))
+            if args.subcmd == "finish":
+                return _out(subagent.finish(args.result))
+            return _out({"error": f"unknown subagent subcommand {args.subcmd}"}, ok=False)
 
         if args.cmd == "chat":
             from unsafie.cli import chat

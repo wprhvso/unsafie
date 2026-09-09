@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     otel_batch_size: int = 512
     otel_schedule_delay: int = 2000
 
-    gemini_model: str = "gemini-3.1-pro-preview"
+    gemini_model: str = "gemini-flash-latest"
     gemini_api_url: str = "https://appcatalyst.pa.googleapis.com/v1beta1/models"
     gemini_safety_threshold: SafetyThreshold = "BLOCK_NONE"
     gemini_thinking_level: ThinkingLevel = "HIGH"

@@ -4,7 +4,6 @@ commands-start =
 
     /stop — остановить: реплаем на сообщение — то, что запустило оно, без реплая — вообще всё
     /effort — усилие на размышления
-    /model — модель Gemini
     /gh — токен GitHub и репозитории
     /ssh — серверы по SSH
     /pool — машины пула и раннеры CI
@@ -13,15 +12,9 @@ commands-start =
     /tz — таймзона
     /help — эта справка
 
-commands-model-status =
-    Модель: { $model }
-    По умолчанию: { $default }
 
     /model NAME — сменить модель
     /model default — вернуть модель по умолчанию
-commands-model-set = Модель: { $model }
-commands-model-reset = Снова модель по умолчанию: { $model }
-commands-model-usage = Имя модели — буквы, цифры, точки и дефисы, например /model gemini-3.1-pro-preview
 commands-effort-status =
     Усилие: { $effort }
     По умолчанию: { $default }
