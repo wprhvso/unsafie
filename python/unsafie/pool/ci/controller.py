@@ -46,8 +46,9 @@ class Controller:
             logger.info("pool ci %s: controller up", self.repo.slug)
             backoff = BACKOFF_MIN
             try:
-                while True:
+                while not held.lost.is_set():
                     try:
+                        held.check()
                         await self._prepare()
                         await self._cycle()
                         backoff = BACKOFF_MIN
