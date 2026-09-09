@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from unsafie import cluster, events, telemetry
 from unsafie.agent import turns
+from unsafie.agent.recovery import recovery_supervisor
 from unsafie.agent.client import close_session as close_gemini
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
@@ -35,7 +36,7 @@ setup()
 telemetry.setup()
 logger = logging.getLogger(__name__)
 
-LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor)
+LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor, recovery_supervisor)
 
 
 @asynccontextmanager
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
             events.bus.start()
         await upgrade()
         with telemetry.detached():
+            await recovery_supervisor.startup_sweep()
             for loop in LOOPS:
                 loop.start()
         logger.info("lifespan ready")

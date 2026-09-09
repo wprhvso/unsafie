@@ -32,13 +32,13 @@ class Janitor(Loop):
 
     async def _reap(self) -> None:
         async with SessionLocal() as session:
-            reaped = await TurnRepository(session).reap_stale(settings.turn_stale_after)
+            reaped = await TurnRepository(session).reap_stale(settings.turn_stale_after * 2)
         for turn in reaped:
             logger.warning(
                 "turn=%s reaped: instance %s went silent for more than %ss",
                 turn.id,
                 turn.instance_id,
-                settings.turn_stale_after,
+                settings.turn_stale_after * 2,
             )
             events.publish(
                 "turn.reaped",

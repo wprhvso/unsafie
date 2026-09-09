@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.response import Response
@@ -313,12 +313,17 @@ class TurnRepository:
 
     async def reap_stale(self, stale_after: float) -> list[Turn]:
         cutoff = datetime.now(UTC) - timedelta(seconds=stale_after)
+        ancient_cutoff = datetime.now(UTC) - timedelta(hours=1)
         rows = list(
             await self.session.scalars(
                 select(Turn)
                 .where(
                     Turn.status == TurnStatus.RUNNING,
                     func.coalesce(Turn.heartbeat_at, Turn.created_at) < cutoff,
+                    or_(
+                        Turn.recovery_attempts >= 3,
+                        Turn.created_at < ancient_cutoff,
+                    ),
                 )
                 .with_for_update(skip_locked=True)
             )
