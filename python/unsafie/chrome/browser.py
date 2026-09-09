@@ -67,6 +67,32 @@ def _display(size: str) -> tuple[str, subprocess.Popen | None]:
     return vnc.start_display(size)
 
 
+def _kill_process(proc: subprocess.Popen | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=1.0)
+    except (subprocess.TimeoutExpired, OSError):
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=1.0)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
+
 def launch(profile: str | None, size: str, headless: bool) -> dict:
     port = _free_port()
     data = profile_dir(profile)
@@ -93,7 +119,13 @@ def launch(profile: str | None, size: str, headless: bool) -> dict:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    endpoint = _wait_for_devtools(port)
+    try:
+        endpoint = _wait_for_devtools(port)
+    except Exception:
+        _kill_process(process)
+        if xvfb:
+            _kill_process(xvfb)
+        raise
     return {
         "pid": process.pid,
         "port": port,
@@ -161,10 +193,21 @@ def stop(state: dict) -> None:
         if not pid:
             continue
         try:
-            os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
+            target_pid = int(pid)
+            pgid = os.getpgid(target_pid)
+            os.killpg(pgid, signal.SIGTERM)
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                try:
+                    os.kill(target_pid, 0)
+                    time.sleep(0.05)
+                except ProcessLookupError:
+                    break
+            else:
+                os.killpg(pgid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
             try:
-                os.kill(int(pid), signal.SIGTERM)
+                os.kill(int(pid), signal.SIGKILL)
             except OSError:
                 pass
 

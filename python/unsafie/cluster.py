@@ -4,7 +4,7 @@ import logging
 import secrets
 import time
 from collections.abc import AsyncIterator, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit, urlunsplit
 
 from redis.asyncio import Redis
@@ -152,10 +152,19 @@ class Held:
     token: str
     ttl: float
     taken_at: float
+    lost: asyncio.Event = field(default_factory=asyncio.Event)
 
     @property
     def age(self) -> float:
         return time.monotonic() - self.taken_at
+
+    @property
+    def valid(self) -> bool:
+        return not self.lost.is_set()
+
+    def check(self) -> None:
+        if self.lost.is_set():
+            raise Busy(f"lock {self.name} was lost")
 
     async def extend(self, ttl: float | None = None) -> bool:
         ms = int((ttl or self.ttl) * 1000)
@@ -212,9 +221,11 @@ async def _keep(held: Held) -> None:
         try:
             alive = await held.extend()
         except RedisError:
+            held.lost.set()
             logger.warning("lock %s could not be extended", held.name, exc_info=True)
             return
         if not alive:
+            held.lost.set()
             logger.warning("lock %s expired under us after %.1fs", held.name, held.age)
             return
 

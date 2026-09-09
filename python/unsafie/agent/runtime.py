@@ -49,6 +49,8 @@ from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
+_ACTIVE_TURNS: set[asyncio.Task] = set()
+
 LOST_CONTEXT = (
     "The earlier part of this conversation could not be restored, so you are seeing it for the "
     "first time. The message below may reply to something you cannot see: say so plainly instead "
@@ -589,7 +591,12 @@ async def dispatch(
         async with SessionLocal() as session:
             user = await UserRepository(session).get(user_id)
         locale = user.locale if user and user.locale else settings.default_locale
-    await run_turn(bot, plan, prompt, locale)
+    task = asyncio.create_task(
+        run_turn(bot, plan, prompt, locale),
+        name=f"turn:{plan.turn.id}",
+    )
+    _ACTIVE_TURNS.add(task)
+    task.add_done_callback(_ACTIVE_TURNS.discard)
 
 
 async def _user_locale(user_id: int, tg_user) -> str:
