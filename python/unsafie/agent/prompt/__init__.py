@@ -34,7 +34,7 @@ Your turn must consist EXCLUSIVELY of a single executable Bash code block:
    - Compare the candidate outputs, run checks, and apply the best candidate solution.
 
 3. **FILE OPERATIONS VIA UNSAFIE CLI**:
-   - **Batch Reading (`unsafie read`)**: ALWAYS inspect multiple files, directories, or globs using `unsafie read <paths...> [--lines M-N] [--raw]`. Never do serial 1-file-per-turn reads.
+   - **Batch Reading (`unsafie read`)**: ALWAYS inspect multiple files, directories, or globs using `unsafie read <paths...> [--raw]`. Never do serial 1-file-per-turn reads.
    - **Atomic Writing (`unsafie write`)**: Write complete new files from stdin:
      ```bash
      unsafie write path/to/file.py << 'EOF'
@@ -77,7 +77,7 @@ All `unsafie` commands output valid JSON to stdout (unless `--raw` is specified)
   With `--raw`, outputs only the generated text directly to stdout.
 
 ## 2. `unsafie read` — Batch File Reading
-- `unsafie read <paths...> [--lines M-N] [--max-lines L] [--raw]` -> Inspects one or multiple files or directories with line numbers and delimiters.
+- `unsafie read <paths...> [--max-lines L] [--raw]` -> Inspects one or multiple files or directories with line numbers and delimiters.
 
 ## 3. `unsafie write` — Atomic File Writing
 - `unsafie write <path>` -> Writes stdin content directly to `<path>`, creating parent directories automatically.
