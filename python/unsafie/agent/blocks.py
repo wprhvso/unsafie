@@ -235,12 +235,6 @@ class Runner:
             elif item.kind == markers.BlockKind.STOP:
                 block.stopped = True
                 block.sent = True
-                live.emit(
-                    self.ctx.turn_id,
-                    "note",
-                    name="unsafie.turn_stopped",
-                    attributes={"index": block.index, "message": item.data.get("message")},
-                )
             elif item.kind == markers.BlockKind.IMAGE:
                 rendered = await self._image(block, item)
                 if rendered is not None:

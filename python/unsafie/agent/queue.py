@@ -30,11 +30,11 @@ async def enqueue(turn_id: UUID, prompt: str) -> int:
     return int(length)
 
 
-async def drain(turn_id: UUID) -> str | None:
+async def drain(turn_id: UUID) -> tuple[str | None, list[str]]:
     items = await cluster.client().eval(DRAIN, 1, key(turn_id))
     if not items:
-        return None
-    return INJECT_HEADER + "\n\n" + "\n".join(items)
+        return None, []
+    return INJECT_HEADER + "\n\n" + "\n".join(items), list(items)
 
 
 async def clear(turn_id: UUID) -> None:

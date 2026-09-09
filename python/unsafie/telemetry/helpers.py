@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import json
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any
@@ -19,8 +20,17 @@ def tracer() -> trace.Tracer:
     return trace.get_tracer(SCOPE)
 
 
+def _clean_val(v: Any) -> Any:
+    if isinstance(v, (bool, str, bytes, int, float)):
+        return v
+    if isinstance(v, (list, tuple)):
+        if all(isinstance(x, (bool, str, bytes, int, float)) for x in v):
+            return v
+    return json.dumps(v, ensure_ascii=False, default=str)
+
+
 def clean(attributes: Attributes) -> dict[str, Any]:
-    return {k: v for k, v in (attributes or {}).items() if v is not None}
+    return {k: _clean_val(v) for k, v in (attributes or {}).items() if v is not None}
 
 
 def fail(span: Span, exc: BaseException) -> None:

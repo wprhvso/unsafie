@@ -136,8 +136,6 @@
 
   <div class="stats">
     <span title="elapsed"><b>{clock(elapsed)}</b></span>
-    <span title="model requests">{feed.steps} steps</span>
-    <span class="calls" title="commands run">{feed.calls} calls</span>
     {#if feed.model}<span class="mono model" title="model">{feed.model}</span>{/if}
   </div>
 
@@ -416,7 +414,6 @@
     }
 
     .model,
-    .calls,
     .what {
       display: none;
     }

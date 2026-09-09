@@ -100,7 +100,7 @@ async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | 
     async with cluster.lock(
         chat_lock(bot_id, chat_id), ttl=settings.chat_lock_ttl, wait=settings.chat_lock_wait
     ):
-        leftover = await queue.drain(turn_id)
+        leftover, _ = await queue.drain(turn_id)
         if leftover is None:
             await seal(turn_id)
         return leftover

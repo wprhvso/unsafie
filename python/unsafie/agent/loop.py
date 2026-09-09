@@ -1,3 +1,4 @@
+import json
 import logging
 from dataclasses import dataclass, field
 
@@ -101,7 +102,9 @@ async def run(
         code = extract_code(reply.text)
         if not code:
             recorder.note("unsafie.no_code_block")
-            logger.warning("%s step=%s model returned zero executable blocks", ctx.prefix, result.steps)
+            logger.warning(
+                "%s step=%s model returned zero executable blocks", ctx.prefix, result.steps
+            )
             _ask(
                 messages,
                 "Error: No executable bash block found. Please provide an executable bash code block.",
@@ -114,11 +117,24 @@ async def run(
         if runner.replied:
             result.replied = True
 
-        extra = await queue.drain(ctx.turn_id)
+        extra, injected_raw = await queue.drain(ctx.turn_id)
 
         if runner.stopped:
             if extra is not None:
-                recorder.note("unsafie.stop_blocked", {"reason": "pending messages"})
+                injected_data = []
+                for raw in injected_raw:
+                    try:
+                        injected_data.append(json.loads(raw))
+                    except Exception:
+                        injected_data.append(raw)
+                payload = (
+                    injected_data[0]
+                    if len(injected_data) == 1 and isinstance(injected_data[0], dict)
+                    else {"messages": injected_data}
+                )
+                recorder.note(
+                    "unsafie.stop_blocked", {"reason": "pending messages", "injected": payload}
+                )
                 logger.info(
                     "%s turn stopped via stop(), but injecting pending messages into next step",
                     ctx.prefix,
@@ -128,13 +144,23 @@ async def run(
                 messages.append({"role": "user", "content": content})
                 continue
             result.replied = True
-            recorder.note("unsafie.turn_stopped")
             logger.info("%s turn stopped via stop()", ctx.prefix)
             return result
 
         content = runner.content()
         if extra is not None:
-            recorder.note("unsafie.messages_injected")
+            injected_data = []
+            for raw in injected_raw:
+                try:
+                    injected_data.append(json.loads(raw))
+                except Exception:
+                    injected_data.append(raw)
+            payload = (
+                injected_data[0]
+                if len(injected_data) == 1 and isinstance(injected_data[0], dict)
+                else {"messages": injected_data}
+            )
+            recorder.note("unsafie.messages_injected", payload)
             logger.info("%s injecting messages that arrived mid-turn", ctx.prefix)
             content.append({"type": "text", "text": extra})
         messages.append({"role": "user", "content": content})
