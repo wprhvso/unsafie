@@ -18,19 +18,19 @@ def build_system_router() -> Router:
         locale = await locale_for(user_id, message.from_user)
         prompt = (command.args or "").strip()
 
-        async with SessionLocal() as session:
-            repo = ChatRepository(session)
-            if not prompt:
-                chat = await repo.get(bot_id, message.chat.id)
-                if chat and chat.system:
-                    text = f"{t('cmd-system-ok', locale)}:\n\n<code>{chat.system}</code>\n\n{t('cmd-system-help', locale)}"
-                else:
-                    text = t("cmd-system-help", locale)
-                await answer(message, bot_id, text)
-                return
+        if not prompt:
+            async with SessionLocal() as session:
+                chat = await ChatRepository(session).get(bot_id, message.chat.id)
+            if chat and chat.system:
+                text = f"{t('cmd-system-ok', locale)}:\n\n<code>{chat.system}</code>\n\n{t('cmd-system-help', locale)}"
+            else:
+                text = t("cmd-system-help", locale)
+            await answer(message, bot_id, text)
+            return
 
-            await repo.set_system(bot_id, message.chat.id, prompt)
-            await answer(message, bot_id, t("cmd-system-ok", locale))
+        async with SessionLocal() as session:
+            await ChatRepository(session).set_system(bot_id, message.chat.id, prompt)
+        await answer(message, bot_id, t("cmd-system-ok", locale))
 
     @router.message(Command("system_clear"))
     async def system_clear_command(message: Message, bot_id: int) -> None:

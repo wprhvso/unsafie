@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     db_name: str = "unsafie"
     db_user: str = "unsafie"
     db_password: str = ""
+    db_pool_size: int = 20
+    db_max_overflow: int = 30
+    db_pool_timeout: float = 30.0
+    db_pool_recycle: int = 1800
+    db_pool_pre_ping: bool = True
 
     redis_url: str = "redis://127.0.0.1:6379/0"
     redis_max_connections: int = 32

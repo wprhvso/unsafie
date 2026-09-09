@@ -109,61 +109,62 @@ def build_lang_router() -> Router:
         supported = ", ".join(LANGUAGES)
 
         async with SessionLocal() as session:
-            users = UserRepository(session)
-            user = await users.get_or_create(user_id)
+            user = await UserRepository(session).get_or_create(user_id)
             current_locale = user.locale
 
-            if not raw:
-                effective = current_locale or guess(message.from_user)
-                markup = lang_keyboard(current_locale)
-                await answer(
-                    message,
-                    bot_id,
-                    t(
-                        "commands-lang-status",
-                        effective,
-                        current=LANGUAGE_NAMES.get(effective, effective),
-                        languages=supported,
-                    ),
-                    reply_markup=markup,
-                )
-                return
-
-            if raw in RESET:
-                await users.set_locale(user_id, None)
-                new_locale = guess(message.from_user)
-                logger.info("bot=%s user=%s lang -> auto (%s)", bot_id, user_id, new_locale)
-                await answer(
-                    message,
-                    bot_id,
-                    t(
-                        "commands-lang-reset",
-                        new_locale,
-                        language=LANGUAGE_NAMES.get(new_locale, new_locale),
-                    ),
-                )
-                return
-
-            chosen = parse_lang(raw)
-            if chosen is None or chosen not in KNOWN:
-                await answer(
-                    message,
-                    bot_id,
-                    t(
-                        "commands-lang-usage",
-                        current_locale or settings.default_locale,
-                        languages=supported,
-                    ),
-                )
-                return
-
-            await users.set_locale(user_id, chosen)
-            logger.info("bot=%s user=%s lang -> %s", bot_id, user_id, chosen)
+        if not raw:
+            effective = current_locale or guess(message.from_user)
+            markup = lang_keyboard(current_locale)
             await answer(
                 message,
                 bot_id,
-                t("commands-lang-set", chosen, language=LANGUAGE_NAMES.get(chosen, chosen)),
+                t(
+                    "commands-lang-status",
+                    effective,
+                    current=LANGUAGE_NAMES.get(effective, effective),
+                    languages=supported,
+                ),
+                reply_markup=markup,
             )
+            return
+
+        if raw in RESET:
+            async with SessionLocal() as session:
+                await UserRepository(session).set_locale(user_id, None)
+            new_locale = guess(message.from_user)
+            logger.info("bot=%s user=%s lang -> auto (%s)", bot_id, user_id, new_locale)
+            await answer(
+                message,
+                bot_id,
+                t(
+                    "commands-lang-reset",
+                    new_locale,
+                    language=LANGUAGE_NAMES.get(new_locale, new_locale),
+                ),
+            )
+            return
+
+        chosen = parse_lang(raw)
+        if chosen is None or chosen not in KNOWN:
+            await answer(
+                message,
+                bot_id,
+                t(
+                    "commands-lang-usage",
+                    current_locale or settings.default_locale,
+                    languages=supported,
+                ),
+            )
+            return
+
+        async with SessionLocal() as session:
+            await UserRepository(session).set_locale(user_id, chosen)
+        logger.info("bot=%s user=%s lang -> %s", bot_id, user_id, chosen)
+        await answer(
+            message,
+            bot_id,
+            t("commands-lang-set", chosen, language=LANGUAGE_NAMES.get(chosen, chosen)),
+        )
 
     @router.callback_query(LangCallback.filter())
     async def lang_callback(query: CallbackQuery, callback_data: LangCallback, bot_id: int) -> None:

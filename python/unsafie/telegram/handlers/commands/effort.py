@@ -30,34 +30,36 @@ def build_effort_router() -> Router:
         locale = await locale_for(user_id, message.from_user)
         raw = (command.args or "").strip().lower()
         levels = ", ".join(EFFORT_LEVELS)
+        if not raw:
+            async with SessionLocal() as session:
+                user = await UserRepository(session).get_or_create(user_id)
+                effort = user.effort or DEFAULT_EFFORT
+            await answer(
+                message,
+                bot_id,
+                t(
+                    "commands-effort-status",
+                    locale,
+                    effort=effort,
+                    default=DEFAULT_EFFORT,
+                    levels=levels,
+                ),
+            )
+            return
+        if raw in RESET:
+            async with SessionLocal() as session:
+                await UserRepository(session).set_effort(user_id, None)
+            logger.info("bot=%s user=%s effort -> default", bot_id, user_id)
+            await answer(
+                message, bot_id, t("commands-effort-reset", locale, effort=DEFAULT_EFFORT)
+            )
+            return
+        level = ALIASES.get(raw, raw)
+        if level not in EFFORT_LEVELS:
+            await answer(message, bot_id, t("commands-effort-usage", locale, levels=levels))
+            return
         async with SessionLocal() as session:
-            users = UserRepository(session)
-            if not raw:
-                user = await users.get_or_create(user_id)
-                await answer(
-                    message,
-                    bot_id,
-                    t(
-                        "commands-effort-status",
-                        locale,
-                        effort=user.effort or DEFAULT_EFFORT,
-                        default=DEFAULT_EFFORT,
-                        levels=levels,
-                    ),
-                )
-                return
-            if raw in RESET:
-                await users.set_effort(user_id, None)
-                logger.info("bot=%s user=%s effort -> default", bot_id, user_id)
-                await answer(
-                    message, bot_id, t("commands-effort-reset", locale, effort=DEFAULT_EFFORT)
-                )
-                return
-            level = ALIASES.get(raw, raw)
-            if level not in EFFORT_LEVELS:
-                await answer(message, bot_id, t("commands-effort-usage", locale, levels=levels))
-                return
-            await users.set_effort(user_id, level)
+            await UserRepository(session).set_effort(user_id, level)
         logger.info("bot=%s user=%s effort -> %s", bot_id, user_id, level)
         await answer(message, bot_id, t("commands-effort-set", locale, effort=level))
 

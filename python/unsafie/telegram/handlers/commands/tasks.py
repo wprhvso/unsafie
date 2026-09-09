@@ -27,14 +27,17 @@ def build_tasks_router() -> Router:
         locale = await locale_for(user_id, message.from_user)
         chat_id = message.chat.id
         arg = (command.args or "").strip().lower()
+        if arg in ("clear", "rm all"):
+            async with SessionLocal() as session:
+                schedule = ScheduleRepository(session)
+                watchdog = WatchRepository(session)
+                n = await schedule.remove_all(bot_id, chat_id)
+                m = await watchdog.remove_all(bot_id, chat_id)
+            await answer(message, bot_id, t("tasks-cleared", locale, tasks=n, watches=m))
+            return
         async with SessionLocal() as session:
             schedule = ScheduleRepository(session)
             watchdog = WatchRepository(session)
-            if arg in ("clear", "rm all"):
-                n = await schedule.remove_all(bot_id, chat_id)
-                m = await watchdog.remove_all(bot_id, chat_id)
-                await answer(message, bot_id, t("tasks-cleared", locale, tasks=n, watches=m))
-                return
             tasks = await schedule.for_chat(bot_id, chat_id)
             checks = await watchdog.for_chat(bot_id, chat_id)
         blocks = [service.summary(tasks, locale)]
