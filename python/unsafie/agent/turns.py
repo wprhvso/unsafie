@@ -50,6 +50,7 @@ async def route(
     update_db_id: int | None,
     is_inline: bool = False,
     inline_message_id: str | None = None,
+    turn_reply_to: int | None = None,
 ) -> Plan:
     prefix = f"bot={bot_id} chat={chat_id}"
     async with cluster.lock(
@@ -80,7 +81,7 @@ async def route(
                 chat_id=chat_id,
                 user_id=user_id,
                 parent=owner,
-                reply_to=reply_to,
+                reply_to=turn_reply_to if turn_reply_to is not None else reply_to,
                 is_inline=is_inline,
                 inline_message_id=inline_message_id,
             )

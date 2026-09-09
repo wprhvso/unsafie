@@ -541,6 +541,7 @@ async def dispatch(
     locale: str | None = None,
     is_inline: bool = False,
     inline_message_id: str | None = None,
+    turn_reply_to: int | None = None,
     what: str,
 ) -> None:
     with telemetry.span(
@@ -560,6 +561,7 @@ async def dispatch(
             update_db_id=update_db_id,
             is_inline=is_inline,
             inline_message_id=inline_message_id,
+            turn_reply_to=turn_reply_to,
         )
         telemetry.set_attrs(
             span,

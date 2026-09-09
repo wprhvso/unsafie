@@ -1,7 +1,12 @@
+import asyncio
 import base64
 import binascii
+import json
 import logging
+from datetime import UTC, datetime
+from typing import Any
 
+from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (
     BufferedInputFile,
@@ -14,9 +19,15 @@ from aiogram.types import (
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from sqlalchemy import select
+
 from unsafie.agent import live
 from unsafie.api.routes.cli.deps import Chat
+from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
+from unsafie.database.models.update import Update
+from unsafie.database.repositories.chat import ChatRepository
+from unsafie.database.repositories.response import ResponseRepository
 from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
@@ -203,15 +214,96 @@ def _markup(raw: str | None):
         raise HTTPException(400, str(bad)) from None
 
 
+def _trigger_bot_reply_turn(
+    *,
+    bot: Bot,
+    bot_id: int,
+    chat_id: int,
+    user_id: int,
+    reply_to: int,
+    text: str,
+    sent_message_id: int | None,
+    target_content: str,
+    target_created_at: datetime | None,
+) -> None:
+    async def _runner() -> None:
+        from unsafie.agent.runtime import dispatch
+
+        async with SessionLocal() as session:
+            chat_row = await ChatRepository(session).get(bot_id, chat_id)
+            latest_update = await session.scalar(
+                select(Update)
+                .where(Update.bot_id == bot_id, Update.user_id == user_id)
+                .order_by(Update.id.desc())
+                .limit(1)
+            )
+
+        chat_data: dict[str, Any] = {"id": chat_id}
+        if chat_row:
+            if chat_row.type:
+                chat_data["type"] = chat_row.type
+            if chat_row.title:
+                chat_data["title"] = chat_row.title
+            if chat_row.username:
+                chat_data["username"] = chat_row.username
+
+        from_data = None
+        if latest_update and "message" in latest_update.payload and "from" in latest_update.payload["message"]:
+            from_data = latest_update.payload["message"]["from"]
+        if not from_data:
+            from_data = {"id": user_id}
+
+        def _prompt(in_context: bool) -> str:
+            data: dict[str, Any] = {
+                "message_id": sent_message_id,
+                "date": datetime.now(UTC).isoformat(),
+                "from": from_data,
+                "text": text,
+                "chat": chat_data,
+                "reply_to": {
+                    "message_id": reply_to,
+                    "date": target_created_at.isoformat() if target_created_at else None,
+                    "from": {"is_bot": True},
+                    "text": target_content,
+                    "in_context": in_context,
+                },
+            }
+            return json.dumps(data, ensure_ascii=False)
+
+        try:
+            await dispatch(
+                bot,
+                bot_id=bot_id,
+                chat_id=chat_id,
+                user_id=user_id,
+                reply_to=reply_to,
+                update_db_id=None,
+                build_prompt=_prompt,
+                turn_reply_to=sent_message_id,
+                what=f"bot-reply={sent_message_id or reply_to}",
+            )
+        except Exception:
+            logger.exception(
+                "bot=%s chat=%s failed to dispatch turn for reply_to=%s",
+                bot_id,
+                chat_id,
+                reply_to,
+            )
+
+    asyncio.create_task(_runner(), name=f"bot-reply:{sent_message_id or reply_to}")
+
+
 @router.post("/messages")
 async def say(body: Message, who: Chat) -> dict:
     bot = await who.bot()
     turn = await who.turn(body.turn)
+    bot_id = who.bot_id or 0
+    chat_id = who.chat(body.chat_id)
     try:
         response = await sender.send(
             bot,
-            bot_id=who.bot_id or 0,
-            chat_id=who.chat(body.chat_id),
+            bot_id=bot_id,
+            chat_id=chat_id,
             markdown=body.text,
             kind=ResponseKind.AGENT,
             turn=turn,
@@ -221,6 +313,23 @@ async def say(body: Message, who: Chat) -> dict:
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
+
+    if body.reply_to is not None:
+        async with SessionLocal() as session:
+            bot_target = await ResponseRepository(session).by_message(bot_id, chat_id, body.reply_to)
+        if bot_target is not None:
+            _trigger_bot_reply_turn(
+                bot=bot,
+                bot_id=bot_id,
+                chat_id=chat_id,
+                user_id=who.user_id,
+                reply_to=body.reply_to,
+                text=body.text,
+                sent_message_id=response.message_ids[0] if response.message_ids else None,
+                target_content=bot_target.content,
+                target_created_at=bot_target.created_at,
+            )
+
     return {"message_ids": response.message_ids, "reply_to": response.reply_to}
 
 
