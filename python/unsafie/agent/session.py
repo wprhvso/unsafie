@@ -16,6 +16,7 @@ class Ctx:
     user_id: int
     turn_id: UUID
     locale: str = "en"
+    inline_message_id: str | None = None
 
     @property
     def prefix(self) -> str:

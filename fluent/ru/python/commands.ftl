@@ -48,3 +48,11 @@ commands-retry-toast = Перезапускаю запрос...
 commands-retry-not-found = Не удалось найти исходный запрос.
 commands-retry-already-running = Этот запрос уже выполняется.
 commands-retry-denied = Только автор запроса или администраторы группы могут повторить его.
+
+inline-prompt = Начните вводить вопрос...
+inline-again = 🔍 Новый запрос
+inline-text-title = Текстовый ответ
+inline-text-hint = Быстрый ответ прямо в чат
+inline-page-title = Веб-страница (Page)
+inline-page-hint = Опубликовать подробную статью со ссылкой
+inline-pending = ⏳ Генерирую ответ...

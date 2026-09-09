@@ -166,6 +166,8 @@ class Runner:
         env["UNSAFIE_TOKEN"] = token
         env["UNSAFIE_CHAT"] = str(self.ctx.chat_id)
         env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
+        if self.ctx.inline_message_id:
+            env["UNSAFIE_INLINE_MESSAGE_ID"] = self.ctx.inline_message_id
 
         watch = asyncio.create_task(
             self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
@@ -184,9 +186,8 @@ class Runner:
                 proc.communicate(),
                 timeout=settings.agent_block_timeout,
             )
-            combined = (
-                raw_out.decode("utf-8", "replace")
-                + ("\n" + raw_err.decode("utf-8", "replace") if raw_err else "")
+            combined = raw_out.decode("utf-8", "replace") + (
+                "\n" + raw_err.decode("utf-8", "replace") if raw_err else ""
             )
             block.exit_code = proc.returncode
         except TimeoutError:

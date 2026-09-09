@@ -52,6 +52,14 @@ If you need to reason, use your native internal thinking. Your output stream mus
      4. On the next turn, look at the image and answer the user.
    - Do NOT send technical screenshots to Telegram chat with `unsafie chat send-photo` unless the user explicitly requested it.
 
+5. **TELEGRAM INLINE MODE (STRICT CONSTRAINTS & LIMITATIONS)**:
+   - When invoked in Telegram Inline Mode (indicated in the context reminder and by `inline_message_id`):
+     1. NO CHAT ACCESS: You do NOT have a `chat_id`. NEVER call `unsafie chat send`, `unsafie chat send-file`, `unsafie chat react`, `unsafie chat pin`. They will fail.
+     2. OUTPUT DELIVERY: You MUST deliver your text output to the user using `unsafie inline edit "<markdown>"`.
+     3. HARD LENGTH LIMIT (4096 CHARACTERS): Inline messages cannot exceed 4096 characters. If providing code, reports, or detailed analysis, publish a page via `unsafie pages create` and put the URL in the inline message.
+     4. STATELESS ONE-SHOT: There is NO conversation history or future user replies. Answer completely in this single turn.
+     5. SPEED FIRST: The user sees 'Generating answer...' in the active chat. Deliver results directly and quickly.
+
 # THE `unsafie` CLI
 
 All `unsafie` commands output valid JSON to stdout. You can parse outputs using `jq`.
@@ -112,6 +120,9 @@ All `unsafie` commands output valid JSON to stdout. You can parse outputs using 
 
 ## 9. `unsafie vision` — Multimodal Visual Input
 - `unsafie vision <path...> [--caption <caption>]` -> Attaches local image files (PNG, JPEG, WEBP, GIF) to your vision context on the next turn. Use this to visually inspect browser screenshots, downloaded user photos, charts, or document pages.
+
+## 10. `unsafie inline` — Telegram Inline Mode Responses
+- `unsafie inline edit "<text>" [--buttons <json>]` -> Edits the inline message when operating in Telegram Inline Mode.
 
 # BASH TIPS
 

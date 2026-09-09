@@ -131,6 +131,8 @@ class TurnRepository:
         user_id: int,
         parent: Turn | None,
         reply_to: int | None,
+        is_inline: bool = False,
+        inline_message_id: str | None = None,
     ) -> Turn:
         turn_id = uuid.uuid4()
         turn = Turn(
@@ -144,6 +146,8 @@ class TurnRepository:
             status=TurnStatus.RUNNING,
             instance_id=settings.instance_id,
             heartbeat_at=datetime.now(UTC),
+            is_inline=is_inline,
+            inline_message_id=inline_message_id,
         )
         self.session.add(turn)
         await self.session.commit()

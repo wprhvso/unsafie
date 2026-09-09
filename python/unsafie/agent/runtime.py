@@ -9,7 +9,7 @@ from uuid import UUID
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, ChosenInlineResult, InlineKeyboardMarkup, Message
 
 from unsafie import events, telemetry
 from unsafie.agent import (
@@ -293,7 +293,15 @@ def _failure_text(locale: str, outcome: Outcome) -> str:
 
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
-    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
+    ctx = Ctx(
+        bot,
+        turn.bot_id,
+        turn.chat_id,
+        turn.user_id,
+        turn.id,
+        locale,
+        inline_message_id=turn.inline_message_id,
+    )
     prefix = ctx.prefix
     history = await segments.load(turn)
     system_prompt = history.system or SYSTEM_PROMPT
@@ -569,6 +577,8 @@ async def dispatch(
     update_db_id: int | None,
     build_prompt: Callable[[bool], str],
     locale: str | None = None,
+    is_inline: bool = False,
+    inline_message_id: str | None = None,
     what: str,
 ) -> None:
     with telemetry.span(
@@ -586,6 +596,8 @@ async def dispatch(
             user_id=user_id,
             reply_to=reply_to,
             update_db_id=update_db_id,
+            is_inline=is_inline,
+            inline_message_id=inline_message_id,
         )
         telemetry.set_attrs(
             span,
@@ -726,4 +738,31 @@ async def retry_turn(bot: Bot, origin: Turn, locale: str) -> None:
         build_prompt=lambda _: prompt,
         locale=locale,
         what=f"retry={origin.id}",
+    )
+
+
+async def handle_inline(chosen: ChosenInlineResult, bot_id: int) -> None:
+    if chosen.bot is None:
+        return
+    user_id = chosen.from_user.id
+    locale = await _user_locale(user_id, chosen.from_user)
+    query = chosen.query.strip()
+    data = {
+        "inline_query": query,
+        "inline_message_id": chosen.inline_message_id,
+        "from": render.user_info(chosen.from_user),
+    }
+    prompt = json.dumps(data, ensure_ascii=False)
+    await dispatch(
+        chosen.bot,
+        bot_id=bot_id,
+        chat_id=user_id,
+        user_id=user_id,
+        reply_to=None,
+        update_db_id=None,
+        build_prompt=lambda _: prompt,
+        locale=locale,
+        is_inline=True,
+        inline_message_id=chosen.inline_message_id,
+        what=f"inline={chosen.inline_message_id}",
     )
