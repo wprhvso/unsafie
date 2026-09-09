@@ -1,3 +1,6 @@
+import hashlib
+import json
+from unsafie import cluster
 import base64
 import binascii
 import logging
@@ -56,6 +59,7 @@ class Message(BaseModel):
     buttons: str | None = None
     silent: bool = False
     turn: str | None = None
+    idempotency_key: str | None = None
 
 
 class Moderation(BaseModel):
@@ -106,6 +110,7 @@ class Upload(BaseModel):
     chat_id: int | None = None
     silent: bool = False
     turn: str | None = None
+    idempotency_key: str | None = None
 
 
 class Edit(BaseModel):
@@ -207,11 +212,30 @@ def _markup(raw: str | None):
 async def say(body: Message, who: Chat) -> dict:
     bot = await who.bot()
     turn = await who.turn(body.turn)
+    target_chat_id = who.chat(body.chat_id)
+    bot_id = who.bot_id or 0
+
+    idemp_key = body.idempotency_key
+    if not idemp_key and body.turn:
+        raw = f"{body.text}:{body.reply_to}:{body.buttons}"
+        idemp_key = f"{body.turn}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+
+    cache_k = cluster.key("idemp", "msg", bot_id, target_chat_id, idemp_key) if idemp_key else None
+    if cache_k:
+        try:
+            redis = cluster.client()
+            cached = await redis.get(cache_k)
+            if cached:
+                logger.info("idempotent message replay key=%s", idemp_key)
+                return json.loads(cached)
+        except Exception:
+            pass
+
     try:
         response = await sender.send(
             bot,
-            bot_id=who.bot_id or 0,
-            chat_id=who.chat(body.chat_id),
+            bot_id=bot_id,
+            chat_id=target_chat_id,
             markdown=body.text,
             kind=ResponseKind.AGENT,
             turn=turn,
@@ -221,7 +245,16 @@ async def say(body: Message, who: Chat) -> dict:
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
-    return {"message_ids": response.message_ids, "reply_to": response.reply_to}
+
+    result = {"message_ids": response.message_ids, "reply_to": response.reply_to}
+    if cache_k:
+        try:
+            redis = cluster.client()
+            await redis.set(cache_k, json.dumps(result, ensure_ascii=False), ex=86400)
+        except Exception:
+            pass
+
+    return result
 
 
 @router.post("/files")
@@ -238,11 +271,30 @@ async def upload(body: Upload, who: Chat) -> dict:
         raise HTTPException(400, f"media must be one of {', '.join(MEDIA)}")
     bot = await who.bot()
     turn = await who.turn(body.turn)
+    target_chat_id = who.chat(body.chat_id)
+    bot_id = who.bot_id or 0
+
+    idemp_key = body.idempotency_key
+    if not idemp_key and body.turn:
+        raw = f"{body.name}:{len(data)}:{body.caption}"
+        idemp_key = f"{body.turn}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+
+    cache_k = cluster.key("idemp", "file", bot_id, target_chat_id, idemp_key) if idemp_key else None
+    if cache_k:
+        try:
+            redis = cluster.client()
+            cached = await redis.get(cache_k)
+            if cached:
+                logger.info("idempotent file replay key=%s", idemp_key)
+                return json.loads(cached)
+        except Exception:
+            pass
+
     try:
         response, sent_as = await sender.send_file(
             bot,
-            bot_id=who.bot_id or 0,
-            chat_id=who.chat(body.chat_id),
+            bot_id=bot_id,
+            chat_id=target_chat_id,
             data=data,
             filename=body.name,
             caption=body.caption,
@@ -253,12 +305,21 @@ async def upload(body: Upload, who: Chat) -> dict:
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
-    return {
+
+    result = {
         "message_ids": response.message_ids,
         "sent_as": sent_as,
         "mime": sniff_mime(data, body.name),
         "bytes": len(data),
     }
+    if cache_k:
+        try:
+            redis = cluster.client()
+            await redis.set(cache_k, json.dumps(result, ensure_ascii=False), ex=86400)
+        except Exception:
+            pass
+
+    return result
 
 
 @router.post("/messages/{message_id}")
