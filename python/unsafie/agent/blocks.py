@@ -3,6 +3,7 @@ import contextlib
 import logging
 import os
 import shutil
+import signal
 import sys
 import time
 from dataclasses import dataclass, field
@@ -64,6 +65,26 @@ class Block:
         tail = self.reason()
         head = f"[block {self.index}] {where} · exit {self.exit_code} in {self.seconds:.1f}s"
         return f"{head}: {tail}" if tail else head
+
+
+def _kill_group(proc: asyncio.subprocess.Process, sig: int = signal.SIGKILL) -> None:
+    try:
+        pgid = os.getpgid(proc.pid)
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, OSError):
+        try:
+            proc.kill()
+        except (ProcessLookupError, OSError):
+            pass
+
+
+def _close_pipes(proc: asyncio.subprocess.Process) -> None:
+    for stream in (proc.stdout, proc.stderr):
+        if stream is not None and hasattr(stream, "_transport") and stream._transport:
+            try:
+                stream._transport.close()
+            except Exception:
+                pass
 
 
 class Runner:
@@ -241,6 +262,7 @@ class Runner:
         gh_env = await self._resolve_github_env()
         env.update(gh_env)
 
+        proc: asyncio.subprocess.Process | None = None
         watch = asyncio.create_task(
             self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
         )
@@ -253,6 +275,7 @@ class Runner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                start_new_session=True,
             )
             raw_out, raw_err = await asyncio.wait_for(
                 proc.communicate(),
@@ -263,10 +286,11 @@ class Runner:
             )
             block.exit_code = proc.returncode
         except TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            if proc is not None:
+                _kill_group(proc)
+                _close_pipes(proc)
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(proc.wait(), timeout=1.0)
             block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
             block.exit_code = 124
             combined = ""
@@ -275,11 +299,18 @@ class Runner:
             block.exit_code = 127
             combined = ""
         except asyncio.CancelledError:
+            if proc is not None:
+                _kill_group(proc)
+                _close_pipes(proc)
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(proc.wait(), timeout=1.0)
             block.error = "stopped by the user"
             block.seconds = time.monotonic() - block.started_at
             self._finished(block)
             raise
         except Exception as broken:
+            if proc is not None and proc.returncode is None:
+                _kill_group(proc)
             block.error = f"{type(broken).__name__}: {broken}"
             block.seconds = time.monotonic() - block.started_at
             logger.exception("%s bash block %s could not run", self.ctx.prefix, block.index)
@@ -289,6 +320,8 @@ class Runner:
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
+            if proc is not None and proc.returncode is None:
+                _kill_group(proc)
 
         lines = combined.splitlines(keepends=True)
         if len(lines) > settings.pool_max_output_lines:
