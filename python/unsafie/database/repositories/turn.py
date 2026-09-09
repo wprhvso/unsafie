@@ -272,6 +272,45 @@ class TurnRepository:
         )
         await self.session.commit()
 
+    async def find_stale_running(self, threshold_seconds: float, limit: int = 50) -> list[Turn]:
+        cutoff = datetime.now(UTC) - timedelta(seconds=threshold_seconds)
+        rows = await self.session.scalars(
+            select(Turn)
+            .where(
+                Turn.status == TurnStatus.RUNNING,
+                func.coalesce(Turn.heartbeat_at, Turn.created_at) < cutoff,
+            )
+            .order_by(Turn.created_at.asc())
+            .limit(limit)
+        )
+        return list(rows)
+
+    async def claim_for_recovery(
+        self, turn_id: UUID, instance_id: str, max_recoveries: int = 3
+    ) -> Turn | None:
+        turn = await self.session.scalar(
+            select(Turn)
+            .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
+            .with_for_update(skip_locked=True)
+        )
+        if turn is None:
+            return None
+
+        if turn.recovery_attempts >= max_recoveries:
+            turn.status = TurnStatus.FAILED
+            turn.heartbeat_at = None
+            turn.finished_at = datetime.now(UTC)
+            turn.result = "max recovery attempts exceeded (poison pill)"
+            await self.session.commit()
+            return None
+
+        turn.recovery_attempts += 1
+        turn.instance_id = instance_id
+        turn.heartbeat_at = datetime.now(UTC)
+        await self.session.commit()
+        await self.session.refresh(turn)
+        return turn
+
     async def reap_stale(self, stale_after: float) -> list[Turn]:
         cutoff = datetime.now(UTC) - timedelta(seconds=stale_after)
         rows = list(
