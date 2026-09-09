@@ -101,7 +101,7 @@ async def run(
 
         code = extract_code(reply.text)
         if not code:
-            recorder.note("unsafie.no_code_block")
+            recorder.note("unsafie.no_code_block", reply.dump())
             logger.warning(
                 "%s step=%s model returned zero executable blocks", ctx.prefix, result.steps
             )

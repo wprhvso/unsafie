@@ -59,6 +59,7 @@ class Reply:
     raw_parts: list[dict] = field(default_factory=list)
     stop_reason: str | None = None
     usage: dict = field(default_factory=dict)
+    raw: list[dict] = field(default_factory=list)
 
     @property
     def content(self) -> list[dict]:
@@ -71,6 +72,21 @@ class Reply:
     def as_message(self) -> dict:
         # Сохраняем raw_parts (мысли + сигнатуры + код), обеспечивая сохранение цепочки рассуждений в многоходовом диалоге
         return {"role": "assistant", "content": self.raw_parts if self.raw_parts else self.text}
+
+    def dump(self) -> dict:
+        data = {
+            "model": self.model,
+            "text": self.text,
+            "thoughts": self.thoughts,
+            "thought_signatures": self.thought_signatures,
+            "raw_parts": self.raw_parts,
+            "stop_reason": self.stop_reason,
+            "usage": self.usage,
+            "raw": self.raw,
+        }
+        if self.id:
+            data["id"] = self.id
+        return data
 
 
 async def session() -> aiohttp.ClientSession:
@@ -111,6 +127,7 @@ class Builder:
         self.reply = Reply(model=model)
 
     def feed(self, data: dict, on_event: Callable[[str, dict], None] | None) -> None:
+        self.reply.raw.append(data)
         candidates = data.get("candidates") or []
         for candidate in candidates:
             content = candidate.get("content") or {}
