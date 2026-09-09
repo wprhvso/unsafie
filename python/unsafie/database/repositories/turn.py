@@ -211,7 +211,7 @@ class TurnRepository:
             .order_by(Update.ordinal.desc())
             .limit(1)
         )
-        return int(last) if last is not None else None
+        return int(last) if last is not None else turn.reply_to
 
     async def responses(self, turn_id: UUID) -> list[Response]:
         rows = await self.session.scalars(
