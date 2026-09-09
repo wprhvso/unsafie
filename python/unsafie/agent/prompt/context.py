@@ -13,7 +13,7 @@ REMINDER = (
     "Reminder: Write ONLY a single executable Bash code block. "
     "Do not write prose outside code blocks. Nothing written outside code blocks reaches the user. "
     "All messages must be sent via 'unsafie chat send ...' inside your code. "
-    "When finished, run 'unsafie stop' (or 'unsafie stop \"final message\"') to conclude your turn."
+    "When finished, run 'unsafie stop' to conclude your turn."
 )
 
 
