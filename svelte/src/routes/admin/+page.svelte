@@ -3,7 +3,6 @@
   import { admin } from '$lib/api.js';
   import { resource } from '$lib/resource.svelte.js';
   import { refreshOn } from '$lib/events.js';
-  import { money, usd } from '$lib/format.js';
   import Panel from '$lib/components/Panel.svelte';
   import Loader from '$lib/components/Loader.svelte';
   import Stat from '$lib/components/Stat.svelte';
@@ -12,7 +11,7 @@
   const overview = resource(() => admin.get('/overview'));
   onMount(() => refreshOn(['turn.*', 'webhook.*', 'watch.*', 'bot.*'], () => overview.reload(), 3000));
 
-  const max = $derived(Math.max(1, ...(overview.data?.daily ?? []).map((d) => d.cost_usd)));
+  const max = $derived(Math.max(1, ...(overview.data?.daily ?? []).map((d) => d.turns)));
 </script>
 
 <svelte:head><title>unsafie — overview</title></svelte:head>
@@ -26,7 +25,6 @@
     <Stat label="Instances" value={o.instances} hint="alive" tone={o.instances ? '' : 'bad'} />
     <Stat label="Users" value={o.users} hint="{o.chats} chats" />
     <Stat label="Turns 24h" value={o.day.turns} hint="{o.day.failed} failed" tone={o.day.failed ? 'warn' : ''} />
-    <Stat label="Spend 24h" value={usd(o.day.cost_usd)} hint="charged {money(o.day.charge)}" />
     <Stat label="Running" value={o.running_turns} hint="turns in flight" />
     <Stat label="Keys" value="{o.credentials}/{o.credentials_total}" hint="usable" tone={o.credentials ? '' : 'bad'} />
     <Stat label="Repos" value={o.repos} hint="{o.installations} installations" />
@@ -38,19 +36,19 @@
   </div>
 
   <div class="cols">
-    <Panel title="Spend, 30 days">
+    <Panel title="Turns, 30 days">
       <div class="chart">
         {#each o.daily as d (d.day)}
-          <div class="bar" title="{d.day}: {usd(d.cost_usd)} · {d.turns} turns">
-            <div class="fill" style="height: {Math.max(2, (d.cost_usd / max) * 100)}%"></div>
+          <div class="bar" title="{d.day}: {d.turns} turns">
+            <div class="fill" style="height: {Math.max(2, (d.turns / max) * 100)}%"></div>
           </div>
         {:else}
           <p class="muted pad">No activity yet.</p>
         {/each}
       </div>
       <div class="row legend small muted">
-        <span>7d: {usd(o.week.cost_usd)} · {o.week.turns} turns</span>
-        <span>30d: {usd(o.month.cost_usd)} · {o.month.turns} turns</span>
+        <span>7d: {o.week.turns} turns ({o.week.failed} failed)</span>
+        <span>30d: {o.month.turns} turns ({o.month.failed} failed)</span>
       </div>
     </Panel>
 

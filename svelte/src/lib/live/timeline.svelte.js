@@ -1,5 +1,4 @@
-import { UNITS_PER_USD } from '../format.js';
-import { contextLimit, contextOf, costOf } from './pricing.js';
+import { contextLimit, contextOf } from './pricing.js';
 
 const USAGE = [
   'input_tokens',
@@ -23,14 +22,6 @@ export function timeline() {
     effort: null,
     steps: 0,
     calls: 0,
-    cost: 0,
-    settled: 0,
-    pending: 0,
-    charge: 0,
-    spent: 0,
-    ratio: null,
-    budget: null,
-    balance: null,
     usage: {},
     context: 0,
     contextPeak: 0,
@@ -44,7 +35,6 @@ export function timeline() {
   let codeBlocks = new Map();
   let steps = new Map();
   let attempts = [];
-  let balanceStart = null;
 
   const at = (frame) => frame.at ?? null;
 
@@ -54,12 +44,6 @@ export function timeline() {
     state.context = size;
     state.contextPeak = Math.max(state.contextPeak, size);
     state.contextLimit = contextLimit(model ?? state.model);
-  }
-
-  function total() {
-    state.cost = state.settled + state.pending;
-    state.spent = state.charge / UNITS_PER_USD + state.pending * (state.ratio ?? 1);
-    if (balanceStart !== null) state.balance = Math.max(balanceStart - state.spent, 0);
   }
 
   function push(item) {
@@ -99,21 +83,14 @@ export function timeline() {
       case 'attempt.start': {
         state.model = data.model ?? state.model;
         state.effort = data.effort ?? state.effort;
-        state.ratio = typeof data.ratio === 'number' ? data.ratio : state.ratio;
-        if (typeof data.budget_units === 'number')
-          state.budget = data.budget_units / UNITS_PER_USD + state.spent;
-        if (typeof data.balance_units === 'number')
-          balanceStart = data.balance_units / UNITS_PER_USD;
         state.contextLimit = contextLimit(state.model);
-        total();
         const item = push({
           id: frame.id,
           at: when,
           type: 'attempt',
           attempt: data.attempt,
           model: data.model,
-          effort: data.effort,
-          budget: data.budget_usd
+          effort: data.effort
         });
         attempts.push(item);
         break;
@@ -123,20 +100,9 @@ export function timeline() {
         const item = attempts[attempts.length - 1];
         if (item) {
           item.status = data.status;
-          item.cost = data.cost_usd;
           item.stop = data.stop_reason;
           item.error = data.error;
         }
-        state.settled =
-          typeof data.total_cost === 'number'
-            ? data.total_cost
-            : state.settled + (data.cost_usd ?? 0);
-        state.charge =
-          typeof data.total_charge === 'number'
-            ? data.total_charge
-            : state.charge + (data.charge ?? 0);
-        state.pending = 0;
-        total();
         break;
       }
 
@@ -161,16 +127,6 @@ export function timeline() {
         break;
       }
 
-      case 'charge': {
-        if (typeof data.total === 'number') state.charge = data.total;
-        if (typeof data.cost_usd === 'number') state.settled = data.cost_usd;
-        state.pending = 0;
-        if (typeof data.balance === 'number')
-          balanceStart = (data.balance + state.charge) / UNITS_PER_USD;
-        total();
-        break;
-      }
-
       case 'step.end': {
         const item = steps.get(data.step);
         if (item) {
@@ -180,9 +136,7 @@ export function timeline() {
           item.endedAt = when;
         }
         merge(state.usage, data.usage);
-        state.pending += costOf(data.usage, data.model ?? state.model);
         seeContext(data.usage, data.model);
-        total();
 
         const thinkItem = blocks.get(`${data.step}:think`);
         if (thinkItem) thinkItem.streaming = false;
@@ -266,18 +220,12 @@ export function timeline() {
       case 'turn.end':
         state.endedAt = when;
         state.outcome = data.status;
-        if (typeof data.charge === 'number') state.charge = data.charge;
-        if (typeof data.cost_usd === 'number') state.settled = data.cost_usd;
-        state.pending = 0;
-        total();
         push({
           id: frame.id,
           at: when,
           type: 'end',
           status: data.status,
           steps: data.steps,
-          cost: data.cost_usd,
-          charge: data.charge,
           note: data.note
         });
         break;
@@ -292,13 +240,6 @@ export function timeline() {
     state.usage = {};
     state.steps = 0;
     state.calls = 0;
-    state.cost = 0;
-    state.settled = 0;
-    state.pending = 0;
-    state.charge = 0;
-    state.spent = 0;
-    state.balance = null;
-    balanceStart = null;
     state.context = 0;
     state.contextPeak = 0;
     state.outcome = null;

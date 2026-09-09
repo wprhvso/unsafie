@@ -3,7 +3,6 @@ from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.bot import Bot
 from unsafie.database.models.chat import Chat
 from unsafie.database.models.commit_log import CommitLog
-from unsafie.database.models.config import Config
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
 from unsafie.database.models.installation import Installation, InstallationAccount
@@ -28,7 +27,6 @@ from unsafie.database.models.scheduled_task import ScheduledTask, TaskKind
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch, WatchMode
 from unsafie.database.models.subscription import GithubSubscription
-from unsafie.database.models.transaction import Transaction
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.models.turn_message import TurnMessages
 from unsafie.database.models.update import Update
@@ -44,7 +42,6 @@ __all__ = [
     "Chat",
     "CommandStatus",
     "CommitLog",
-    "Config",
     "GithubAccount",
     "GithubApp",
     "GithubSubscription",
@@ -68,7 +65,6 @@ __all__ = [
     "SshWatch",
     "TaskKind",
     "TokenKind",
-    "Transaction",
     "Turn",
     "TurnMessages",
     "TurnStatus",

@@ -1,6 +1,4 @@
 agent-failure = Что-то сломалось, попробуй ещё раз.
-agent-empty-balance = Баланс пуст. Проверить: /budget
-agent-budget-busy = Весь баланс сейчас залочен другим ходом. Дождись его конца или поставь лимит на ход: /budget
 agent-no-credentials = Все сессии Opal сейчас недоступны{ $when }. Попробуй позже.
 agent-no-credentials-when = { $minutes ->
     [one] { " " }(ближайший освободится через ~{ $minutes } минуту)

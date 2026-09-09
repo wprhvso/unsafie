@@ -13,7 +13,6 @@ from aiogram.types import CallbackQuery, Message
 
 from unsafie import events, telemetry
 from unsafie.agent import (
-    billing,
     cancel,
     credentials,
     live,
@@ -31,7 +30,6 @@ from unsafie.agent.trace import Recorder
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.turn import Turn, TurnStatus
-from unsafie.database.repositories.config import ConfigRepository
 from unsafie.database.repositories.opal_session import OpalSessionRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.user import UserRepository
@@ -58,7 +56,6 @@ class Outcome:
     status: str
     next_at: datetime | None = None
     error: str | None = None
-    cost_usd: float = 0.0
 
 
 def prompt_for(message: Message, in_context: bool) -> str:
@@ -76,60 +73,6 @@ def _usage(span, result: loop.Result) -> None:
             attrs.GEN_AI_OUTPUT_TOKENS: result.usage.get("output_tokens"),
         },
     )
-
-
-class Meter:
-    def __init__(self, held: billing.Hold, turn_id: UUID) -> None:
-        self.held = held
-        self.turn_id = turn_id
-        self.ratio = 1.0
-        self.base = 0
-        self.charged = 0
-        self.cost = 0.0
-        self.segment = 0.0
-
-    def begin(self, ratio: float) -> None:
-        self.base = self.charged
-        self.segment = 0.0
-        self.ratio = ratio
-
-    async def take(self, cost_usd: float) -> int:
-        self.cost += cost_usd
-        self.segment += cost_usd
-        target = self.base + billing.charge_units(self.segment, self.ratio)
-        delta = target - self.charged
-        if delta <= 0:
-            return 0
-        self.charged = target
-        balance = await self.held.spend(delta)
-        live.emit(
-            self.turn_id,
-            "charge",
-            units=delta,
-            total=self.charged,
-            balance=balance,
-            cost_usd=self.cost,
-        )
-        return delta
-
-
-async def _bill(ctx: Ctx, session_id: int, result: loop.Result, meter: Meter) -> int:
-    leftover = result.cost_usd - meter.segment
-    if leftover > 0:
-        await meter.take(leftover)
-    charge = meter.charged - meter.base
-    if charge:
-        logger.info("%s charged %s for this attempt", ctx.prefix, charge)
-    async with SessionLocal() as session:
-        await TurnRepository(session).record(
-            ctx.turn_id,
-            credential_id=session_id,
-            cost_usd=result.cost_usd,
-            charge=charge,
-            num_turns=result.steps,
-            result=result.text,
-        )
-    return charge
 
 
 async def _punish(session_row, result: loop.Result) -> None:
@@ -157,12 +100,9 @@ async def _execute(
     ctx: Ctx,
     messages: list[dict],
     system_prompt: str,
-    held: billing.Hold,
 ) -> Outcome:
     prefix = ctx.prefix
     tried: set[int] = set()
-    spent = 0.0
-    meter = Meter(held, ctx.turn_id)
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         with telemetry.span(
@@ -176,9 +116,7 @@ async def _execute(
                     next_at = await creds.next_cooldown()
                     telemetry.refused(attempt_span, f"no usable opal session (tried={sorted(tried)})")
                     logger.warning("%s no usable opal session (tried=%s)", prefix, sorted(tried))
-                    return Outcome("no_credentials", next_at=next_at, cost_usd=spent)
-                config = await ConfigRepository(session).get()
-                ratio = config.ratio
+                    return Outcome("no_credentials", next_at=next_at)
                 user = await UserRepository(session).get_or_create(ctx.user_id)
                 model = user.model or settings.gemini_model
                 effort = user.effort or settings.gemini_thinking_level
@@ -194,32 +132,21 @@ async def _execute(
                 )
                 continue
 
-            meter.begin(ratio)
-            left = held.usd(ratio)
-            if left <= 0:
-                empty = "busy" if held.balance > 0 else "empty_balance"
-                telemetry.refused(attempt_span, empty)
-                logger.warning("%s stopped: nothing left to spend (%s)", prefix, empty)
-                return Outcome("ok" if spent else empty, cost_usd=spent)
-
             telemetry.set_attrs(
                 attempt_span,
                 {
                     attrs.CREDENTIAL_ID: session_row.id,
                     attrs.GEN_AI_MODEL: model,
                     attrs.EFFORT: effort,
-                    attrs.BUDGET_USD: left,
                 },
             )
             logger.info(
-                "%s attempt=%s session=%s model=%s effort=%s ratio=%s budget=%.6f messages=%s",
+                "%s attempt=%s session=%s model=%s effort=%s messages=%s",
                 prefix,
                 attempt,
                 session_row.id,
                 model,
                 effort,
-                ratio,
-                left,
                 len(messages),
             )
 
@@ -229,10 +156,6 @@ async def _execute(
                 attempt=attempt,
                 model=model,
                 effort=effort,
-                budget_usd=left,
-                ratio=ratio,
-                budget_units=held.units,
-                balance_units=held.balance,
             )
             started = time.perf_counter()
             with telemetry.span(
@@ -243,7 +166,6 @@ async def _execute(
                     attrs.GEN_AI_OPERATION: "invoke_agent",
                     attrs.GEN_AI_MODEL: model,
                     attrs.EFFORT: effort,
-                    attrs.BUDGET_USD: left,
                     attrs.TURN_ID: str(ctx.turn_id),
                 },
             ) as query_span:
@@ -254,19 +176,15 @@ async def _execute(
                     model=model,
                     prompt=system_prompt,
                     effort=effort,
-                    budget_usd=left,
                     recorder=Recorder(prefix, live.of(ctx.turn_id)),
-                    on_cost=meter.take,
                 )
                 elapsed = (time.perf_counter() - started) * 1000
-                spent += result.cost_usd
                 _usage(query_span, result)
                 telemetry.set_attrs(
                     query_span,
                     {
                         attrs.SDK_MESSAGES: len(messages),
                         attrs.NUM_TURNS: result.steps,
-                        attrs.COST_USD: result.cost_usd,
                         attrs.GEN_AI_FINISH_REASONS: [result.stop_reason] if result.stop_reason else None,
                         attrs.COMPLETION: telemetry.content(result.text),
                     },
@@ -276,25 +194,28 @@ async def _execute(
                         query_span, RuntimeError(short(result.error or result.status, 300))
                     )
 
-            charge = await _bill(ctx, session_row.id, result, meter)
+            async with SessionLocal() as session:
+                await TurnRepository(session).record(
+                    ctx.turn_id,
+                    credential_id=session_row.id,
+                    num_turns=result.steps,
+                    result=result.text,
+                )
+
             telemetry.set_attrs(
                 attempt_span,
                 {
                     attrs.OUTCOME: result.status,
-                    attrs.COST_USD: result.cost_usd,
-                    attrs.CHARGE: charge,
                     attrs.NUM_TURNS: result.steps,
                     attrs.FAILURE: str(result.failure) if result.failure else None,
                 },
             )
             logger.info(
-                "%s attempt=%s %s steps=%s cost=%.6f charge=%s in %.1fms",
+                "%s attempt=%s %s steps=%s in %.1fms",
                 prefix,
                 attempt,
                 result.status,
                 result.steps,
-                result.cost_usd,
-                charge,
                 elapsed,
             )
 
@@ -304,10 +225,6 @@ async def _execute(
                 attempt=attempt,
                 status=result.status,
                 steps=result.steps,
-                cost_usd=result.cost_usd,
-                charge=charge,
-                total_cost=meter.cost,
-                total_charge=meter.charged,
                 usage=result.usage,
                 stop_reason=result.stop_reason,
                 error=short(result.error, 300) if result.error else None,
@@ -316,9 +233,7 @@ async def _execute(
             if result.status == "ok":
                 async with SessionLocal() as session:
                     await OpalSessionRepository(session).succeeded(session_row.id)
-                return Outcome("ok", cost_usd=spent)
-            if result.status == "budget":
-                return Outcome("empty_balance", cost_usd=spent)
+                return Outcome("ok")
             if result.failure is not None and credentials.blames_credential(result.failure):
                 logger.warning(
                     "%s session=%s failed (%s): %s",
@@ -330,8 +245,8 @@ async def _execute(
                 tried.add(session_row.id)
                 await _punish(session_row, result)
                 continue
-            return Outcome("failed", error=result.error, cost_usd=spent)
-    return Outcome("failed", error="attempts exhausted", cost_usd=spent)
+            return Outcome("failed", error=result.error)
+    return Outcome("failed", error="attempts exhausted")
 
 
 async def notify(bot: Bot, turn: Turn, text: str) -> None:
@@ -351,10 +266,6 @@ async def notify(bot: Bot, turn: Turn, text: str) -> None:
 
 
 def _failure_text(locale: str, outcome: Outcome) -> str:
-    if outcome.status == "empty_balance":
-        return t("agent-empty-balance", locale)
-    if outcome.status == "busy":
-        return t("agent-budget-busy", locale)
     if outcome.status == "no_credentials":
         when = ""
         if outcome.next_at is not None:
@@ -415,31 +326,29 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                     async with SessionLocal() as session:
                         context = await build_context(session, ctx)
                 messages.append(request.user(prompt, context))
-                async with billing.hold(turn.user_id, turn.id) as held:
-                    telemetry.annotate(**{attrs.LOCKED: held.units})
-                    while True:
-                        outcome = await _execute(ctx, messages, system_prompt, held)
-                        if outcome.status != "ok":
-                            await queue.clear(turn.id)
-                            note = (
-                                outcome.status
-                                if outcome.error is None
-                                else short(outcome.error, 1000)
-                            )
-                            logger.info("%s finished with %s", prefix, outcome.status)
-                            await notify(bot, turn, _failure_text(locale, outcome))
-                            return
-                        leftover = await turns.finish_or_continue(
-                            turn.id, turn.bot_id, turn.chat_id
+                while True:
+                    outcome = await _execute(ctx, messages, system_prompt)
+                    if outcome.status != "ok":
+                        await queue.clear(turn.id)
+                        note = (
+                            outcome.status
+                            if outcome.error is None
+                            else short(outcome.error, 1000)
                         )
-                        if leftover is None:
-                            status = TurnStatus.DONE
-                            return
-                        messages.append(request.user(leftover))
-                        telemetry.event("unsafie.turn_rerun")
-                        logger.info(
-                            "%s re-running with messages that arrived after the reply", prefix
-                        )
+                        logger.info("%s finished with %s", prefix, outcome.status)
+                        await notify(bot, turn, _failure_text(locale, outcome))
+                        return
+                    leftover = await turns.finish_or_continue(
+                        turn.id, turn.bot_id, turn.chat_id
+                    )
+                    if leftover is None:
+                        status = TurnStatus.DONE
+                        return
+                    messages.append(request.user(leftover))
+                    telemetry.event("unsafie.turn_rerun")
+                    logger.info(
+                        "%s re-running with messages that arrived after the reply", prefix
+                    )
         except asyncio.CancelledError:
             current = asyncio.current_task()
             if current is not None:
@@ -466,8 +375,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                 turn_span,
                 {
                     attrs.TURN_STATUS: str(status),
-                    attrs.COST_USD: fresh.cost_usd if fresh else None,
-                    attrs.CHARGE: fresh.charge if fresh else None,
                     attrs.REFUSAL: note,
                 },
             )
@@ -479,8 +386,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                 chat_id=turn.chat_id,
                 user_id=turn.user_id,
                 status=str(status),
-                cost_usd=fresh.cost_usd if fresh else None,
-                charge=fresh.charge if fresh else 0,
                 note=note,
             )
             live.emit(
@@ -488,8 +393,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                 "turn.end",
                 status=str(status),
                 steps=fresh.num_turns if fresh else 0,
-                cost_usd=fresh.cost_usd if fresh else None,
-                charge=fresh.charge if fresh else 0,
                 note=note,
             )
             await live.end(turn.id)

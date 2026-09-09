@@ -9,7 +9,6 @@
     ['/admin', 'Overview'],
     ['/admin/bots', 'Bots'],
     ['/admin/credentials', 'Keys'],
-    ['/admin/config', 'Pricing'],
     ['/admin/users', 'Users'],
     ['/admin/chats', 'Chats'],
     ['/admin/turns', 'Turns'],

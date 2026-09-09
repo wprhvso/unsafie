@@ -1,8 +1,6 @@
 import logging
 import uuid
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import NamedTuple
 from uuid import UUID
 
 from sqlalchemy import func, select, text, update
@@ -82,31 +80,6 @@ REPLY_QUERY = text("""
         ) AS in_lineage
 """)
 
-HOLD_QUERY = text("""
-    WITH me AS (
-        SELECT id, balance FROM users WHERE id = :user FOR UPDATE
-    ),
-    free AS (
-        SELECT
-            me.balance AS balance,
-            GREATEST(me.balance - COALESCE((
-                SELECT SUM(t.locked)
-                FROM turns t
-                WHERE t.user_id = me.id
-                  AND t.status = 'running'
-                  AND COALESCE(t.heartbeat_at, t.created_at)
-                      > now() - make_interval(secs => CAST(:stale AS double precision))
-            ), 0), 0) AS units
-        FROM me
-    )
-    UPDATE turns
-       SET locked = turns.locked + LEAST(free.units, COALESCE(CAST(:limit AS bigint), free.units))
-      FROM free
-     WHERE turns.id = CAST(:turn AS uuid)
- RETURNING LEAST(free.units, COALESCE(CAST(:limit AS bigint), free.units)) AS held, free.balance
-""")
-
-
 LINEAGE_QUERY = text("""
     WITH RECURSIVE tree AS (
         SELECT id FROM turns WHERE id = CAST(:turn_id AS uuid)
@@ -115,11 +88,6 @@ LINEAGE_QUERY = text("""
     )
     SELECT id FROM tree
 """)
-
-
-class Reserved(NamedTuple):
-    units: int
-    balance: int
 
 
 class TurnRepository:
@@ -138,7 +106,6 @@ class TurnRepository:
         return await self.session.get(Turn, turn_id)
 
     async def running(self, bot_id: int, chat_id: int) -> list[Turn]:
-        """Turns of this chat that are still beating."""
         cutoff = datetime.now(UTC) - timedelta(seconds=settings.turn_stale_after)
         rows = await self.session.scalars(
             select(Turn)
@@ -153,7 +120,6 @@ class TurnRepository:
         return list(rows)
 
     async def lineage(self, turn_id: UUID) -> set[UUID]:
-        """A turn and every turn spawned from it."""
         rows = await self.session.scalars(LINEAGE_QUERY, {"turn_id": str(turn_id)})
         return set(rows)
 
@@ -197,8 +163,6 @@ class TurnRepository:
         turn_id: UUID,
         *,
         credential_id: int | None,
-        cost_usd: float | None,
-        charge: int,
         num_turns: int,
         result: str | None,
     ) -> None:
@@ -207,62 +171,10 @@ class TurnRepository:
             return
         if credential_id is not None:
             turn.credential_id = credential_id
-        if cost_usd is not None:
-            turn.cost_usd = (turn.cost_usd or 0.0) + cost_usd
-        turn.charge += charge
         turn.num_turns += num_turns
         if result:
             turn.result = result
         await self.session.commit()
-
-    async def hold(self, turn_id: UUID, user_id: int, limit: int) -> Reserved:
-        row = (
-            await self.session.execute(
-                HOLD_QUERY,
-                {
-                    "turn": str(turn_id),
-                    "user": user_id,
-                    "limit": None if limit < 0 else max(limit, 0),
-                    "stale": settings.turn_stale_after,
-                },
-            )
-        ).first()
-        await self.session.commit()
-        if row is None:
-            return Reserved(0, 0)
-        logger.info(
-            "turn=%s user=%s locked %s of balance %s", turn_id, user_id, row.held, row.balance
-        )
-        return Reserved(int(row.held), int(row.balance))
-
-    async def unhold(self, turn_id: UUID, amount: int) -> None:
-        if amount <= 0:
-            return
-        await self.session.execute(
-            update(Turn)
-            .where(Turn.id == turn_id)
-            .values(locked=func.greatest(Turn.locked - amount, 0))
-        )
-        await self.session.commit()
-
-    async def locked(self, user_ids: Sequence[int]) -> dict[int, int]:
-        if not user_ids:
-            return {}
-        cutoff = datetime.now(UTC) - timedelta(seconds=settings.turn_stale_after)
-        rows = await self.session.execute(
-            select(Turn.user_id, func.sum(Turn.locked))
-            .where(
-                Turn.user_id.in_(list(user_ids)),
-                Turn.status == TurnStatus.RUNNING,
-                Turn.locked > 0,
-                func.coalesce(Turn.heartbeat_at, Turn.created_at) > cutoff,
-            )
-            .group_by(Turn.user_id)
-        )
-        return {int(user_id): int(total or 0) for user_id, total in rows}
-
-    async def locked_for(self, user_id: int) -> int:
-        return (await self.locked([user_id])).get(user_id, 0)
 
     async def finish(self, turn_id: UUID, status: TurnStatus, note: str | None = None) -> None:
         turn = await self.session.get(Turn, turn_id)

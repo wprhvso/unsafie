@@ -29,7 +29,7 @@
     const d = e.data ?? {};
     switch (e.kind) {
       case 'turn.started': return `chat ${d.chat_id} · user ${d.user_id}`;
-      case 'turn.finished': return `chat ${d.chat_id} · ${d.status}${d.cost_usd ? ` · $${d.cost_usd.toFixed(4)}` : ''}`;
+      case 'turn.finished': return `chat ${d.chat_id} · ${d.status}`;
       case 'webhook.received': return `${d.event}${d.action ? `.${d.action}` : ''} · ${d.repo ?? '?'} · ${d.sender ?? ''}`;
       case 'webhook.processed': return `${d.delivery_id?.slice(0, 8)} · sent ${d.notified}${d.error ? ` · ${d.error}` : ''}`;
       case 'watch.fired':

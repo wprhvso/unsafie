@@ -28,7 +28,7 @@ async def top_chats(hours: int = 168, limit: int = 10):
     since = datetime.now(UTC) - timedelta(hours=hours)
     async with SessionLocal() as session:
         rows = await StatsRepository(session).top_chats(since, limit)
-    return [{"bot_id": b, "chat_id": c, "turns": n, "cost_usd": cost} for b, c, n, cost in rows]
+    return [{"bot_id": b, "chat_id": c, "turns": n} for b, c, n in rows]
 
 
 @router.get("/by-credential")
@@ -36,4 +36,4 @@ async def by_credential(hours: int = 168):
     since = datetime.now(UTC) - timedelta(hours=hours)
     async with SessionLocal() as session:
         rows = await StatsRepository(session).by_credential(since)
-    return [{"credential_id": c, "turns": n, "cost_usd": cost} for c, n, cost in rows]
+    return [{"credential_id": c, "turns": n} for c, n in rows]

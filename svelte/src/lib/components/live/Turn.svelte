@@ -19,8 +19,6 @@
 
   const STICK = 140;
   const TICK = 250;
-  const EASE = 0.16;
-  const EPS = 0.00002;
 
   let status = $state('loading');
   let meta = $state(null);
@@ -67,9 +65,6 @@
     return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
   }
 
-  const balance = $derived(feed.balance);
-  let shown = $state(0);
-
   const LABEL = {
     loading: 'connecting',
     live: 'live',
@@ -112,18 +107,7 @@
       if (follow && bottom() > 2) window.scrollTo({ top: document.documentElement.scrollHeight });
     }, TICK);
 
-    let frame;
-    const glide = () => {
-      if (balance !== null) {
-        const gap = balance - shown;
-        shown = Math.abs(gap) < EPS || !shown ? balance : shown + gap * EASE;
-      }
-      frame = requestAnimationFrame(glide);
-    };
-    frame = requestAnimationFrame(glide);
-
     return () => {
-      cancelAnimationFrame(frame);
       clearInterval(timer);
       window.removeEventListener('scroll', onScroll);
       stop();
@@ -153,11 +137,8 @@
   <div class="stats">
     <span title="elapsed"><b>{clock(elapsed)}</b></span>
     <span title="model requests">{feed.steps} steps</span>
-    <span class="calls" title="tool calls">{feed.calls} calls</span>
+    <span class="calls" title="commands run">{feed.calls} calls</span>
     {#if feed.model}<span class="mono model" title="model">{feed.model}</span>{/if}
-    {#if balance !== null}
-      <span class="mono balance" title="balance left">${shown.toFixed(4)}</span>
-    {/if}
   </div>
 
   <div class="side end">
@@ -292,13 +273,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 12rem;
-  }
-
-  .balance {
-    margin-left: auto;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
   }
 
   .what {

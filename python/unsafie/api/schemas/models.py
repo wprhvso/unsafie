@@ -23,9 +23,6 @@ class BotWrite(BaseModel):
 
 class UserRead(Base):
     id: int
-    balance: int
-    locked: int = 0
-    budget: int
     locale: str | None = None
     timezone: str | None = None
     model: str | None = None
@@ -34,21 +31,6 @@ class UserRead(Base):
     git_email: str | None = None
     has_ssh_key: bool = False
     github_logins: list[str] = []
-
-
-class TransactionRead(Base):
-    id: int
-    amount: int
-    kind: str
-    created_at: datetime
-
-
-class DepositWrite(BaseModel):
-    amount: int
-
-
-class BudgetWrite(BaseModel):
-    budget: int
 
 
 class OpalSessionRead(Base):
@@ -73,16 +55,6 @@ class OpalSessionPatch(BaseModel):
     enabled: bool | None = None
     label: str | None = None
     reset: bool = False
-
-
-class ConfigRead(Base):
-    ratio: float
-    oauth_ratio: float
-
-
-class ConfigWrite(BaseModel):
-    ratio: float | None = None
-    oauth_ratio: float | None = None
 
 
 class ChatRead(Base):
@@ -115,8 +87,6 @@ class TurnRead(Base):
     root_id: UUID
     status: str
     credential_id: int | None = None
-    cost_usd: float | None = None
-    charge: int
     num_turns: int
     result: str | None = None
     instance_id: str | None = None
@@ -281,15 +251,11 @@ class ArtifactRead(Base):
 class PeriodRead(BaseModel):
     turns: int
     failed: int
-    cost_usd: float
-    charge: int
 
 
 class DayPointRead(BaseModel):
     day: str
     turns: int
-    cost_usd: float
-    charge: int
 
 
 class OverviewRead(BaseModel):

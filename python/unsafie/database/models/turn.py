@@ -4,7 +4,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import UUID as SQL_UUID
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from unsafie.database import Base
@@ -42,9 +42,6 @@ class Turn(Base):
     credential_id: Mapped[int | None] = mapped_column(
         ForeignKey("opal_sessions.id", ondelete="SET NULL"), nullable=True
     )
-    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
-    charge: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
-    locked: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     num_turns: Mapped[int] = mapped_column(default=0, server_default="0")
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     instance_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

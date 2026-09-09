@@ -1,15 +1,3 @@
-export const UNITS_PER_USD = 10000;
-
-export function money(units) {
-  if (units === null || units === undefined) return '—';
-  return `$${(units / UNITS_PER_USD).toFixed(units % 100 === 0 ? 2 : 4)}`;
-}
-
-export function usd(value) {
-  if (value === null || value === undefined) return '—';
-  return `$${Number(value).toFixed(4)}`;
-}
-
 export function when(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -58,4 +46,12 @@ export function short(text, limit = 80) {
   if (!text) return '';
   const one = String(text).replace(/\s+/g, ' ').trim();
   return one.length > limit ? `${one.slice(0, limit)}…` : one;
+}
+
+export function money() {
+  return '';
+}
+
+export function usd() {
+  return '';
 }

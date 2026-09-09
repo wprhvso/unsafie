@@ -46,7 +46,6 @@ def _meta(turn: Turn | None) -> dict:
         "id": str(turn.id)[:8],
         "status": turn.status,
         "steps": turn.num_turns,
-        "cost_usd": turn.cost_usd,
         "created_at": turn.created_at,
         "finished_at": turn.finished_at,
     }

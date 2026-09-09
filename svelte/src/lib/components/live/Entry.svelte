@@ -1,5 +1,5 @@
 <script>
-  import { UNITS_PER_USD, short } from '$lib/format.js';
+  import { short } from '$lib/format.js';
   import Copy from './Copy.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
@@ -210,11 +210,7 @@
         <time class="muted tiny nowrap">{clock(item.at)}</time>
       </div>
       <div class="body">
-        <p class="small">
-          {item.steps ?? 0} steps
-          {#if item.charge} · ${(Number(item.charge) / UNITS_PER_USD).toFixed(4)} charged{/if}
-          {#if item.cost} · ${Number(item.cost).toFixed(4)} API{/if}
-        </p>
+        <p class="small">{item.steps ?? 0} steps</p>
         {#if item.note}<pre class="source">{item.note}</pre>{/if}
       </div>
     </div>

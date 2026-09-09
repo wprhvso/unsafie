@@ -1,7 +1,6 @@
 <script>
   import { admin } from '$lib/api.js';
   import { resource } from '$lib/resource.svelte.js';
-  import { usd, money } from '$lib/format.js';
   import Panel from '$lib/components/Panel.svelte';
   import Loader from '$lib/components/Loader.svelte';
 
@@ -11,15 +10,15 @@
   const top = resource(() => admin.get('/stats/top-chats', { hours, limit: 20 }));
   const byKey = resource(() => admin.get('/stats/by-credential', { hours }));
 
-  const max = $derived(Math.max(1, ...(daily.data ?? []).map((d) => d.cost_usd)));
-  const total = $derived((daily.data ?? []).reduce((a, d) => a + d.cost_usd, 0));
+  const max = $derived(Math.max(1, ...(daily.data ?? []).map((d) => d.turns)));
+  const total = $derived((daily.data ?? []).reduce((a, d) => a + d.turns, 0));
 </script>
 
 <svelte:head><title>unsafie — stats</title></svelte:head>
 <h1>Stats</h1>
 
 <div class="stack">
-  <Panel title="Daily spend">
+  <Panel title="Daily turns">
     {#snippet actions()}
       <select bind:value={days} onchange={() => daily.reload()}>
         {#each [7, 30, 90, 365] as d (d)}<option value={d}>{d} days</option>{/each}
@@ -28,12 +27,12 @@
     <Loader state={daily} empty="No activity.">
       <div class="chart">
         {#each daily.data as d (d.day)}
-          <div class="bar" title="{d.day}: {usd(d.cost_usd)} · {d.turns} turns · charged {money(d.charge)}">
-            <div class="fill" style="height: {Math.max(2, (d.cost_usd / max) * 100)}%"></div>
+          <div class="bar" title="{d.day}: {d.turns} turns">
+            <div class="fill" style="height: {Math.max(2, (d.turns / max) * 100)}%"></div>
           </div>
         {/each}
       </div>
-      <p class="muted small pad">Total for the period: {usd(total)}</p>
+      <p class="muted small pad">Total turns for the period: {total}</p>
     </Loader>
   </Panel>
 
@@ -46,13 +45,12 @@
       {/snippet}
       <Loader state={top} empty="No activity.">
         <table>
-          <thead><tr><th>chat</th><th>turns</th><th>cost</th></tr></thead>
+          <thead><tr><th>chat</th><th>turns</th></tr></thead>
           <tbody>
             {#each top.data as t (`${t.bot_id}-${t.chat_id}`)}
               <tr>
                 <td class="mono"><a href="/admin/chats/{t.bot_id}/{t.chat_id}">{t.chat_id}</a></td>
                 <td>{t.turns}</td>
-                <td>{usd(t.cost_usd)}</td>
               </tr>
             {/each}
           </tbody>
@@ -63,13 +61,12 @@
     <Panel title="By key">
       <Loader state={byKey} empty="No activity.">
         <table>
-          <thead><tr><th>key</th><th>turns</th><th>cost</th></tr></thead>
+          <thead><tr><th>key</th><th>turns</th></tr></thead>
           <tbody>
             {#each byKey.data as k (k.credential_id ?? 'none')}
               <tr>
                 <td class="mono">{k.credential_id ?? '—'}</td>
                 <td>{k.turns}</td>
-                <td>{usd(k.cost_usd)}</td>
               </tr>
             {/each}
           </tbody>

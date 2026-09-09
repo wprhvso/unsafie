@@ -1,5 +1,4 @@
 import logging
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from unsafie.agent import blocks, client, credentials, pricing, queue, request
@@ -17,7 +16,6 @@ logger = logging.getLogger(__name__)
 class Result:
     status: str = "ok"
     steps: int = 0
-    cost_usd: float = 0.0
     usage: dict = field(default_factory=dict)
     text: str | None = None
     error: str | None = None
@@ -44,24 +42,11 @@ async def run(
     model: str,
     prompt: str,
     effort: str | None,
-    budget_usd: float,
     recorder: Recorder,
-    on_cost: Callable[[float], Awaitable[int]] | None = None,
 ) -> Result:
     result = Result()
 
     while result.steps < settings.agent_max_steps:
-        if result.cost_usd >= budget_usd:
-            logger.warning(
-                "%s spent %.6f of %.6f after %s step(s)",
-                ctx.prefix,
-                result.cost_usd,
-                budget_usd,
-                result.steps,
-            )
-            result.status = "ok" if result.replied else "budget"
-            return result
-
         body = request.build(
             model=model,
             prompt=prompt,
@@ -96,10 +81,6 @@ async def run(
             )
             continue
 
-        step_cost = pricing.cost(model, reply.usage)
-        result.cost_usd += step_cost
-        if on_cost is not None:
-            await on_cost(step_cost)
         pricing.merge(result.usage, reply.usage)
         result.stop_reason = reply.stop_reason
         recorder.reply(reply)
