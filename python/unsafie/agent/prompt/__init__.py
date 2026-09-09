@@ -35,6 +35,8 @@ All `unsafie` commands output valid JSON to stdout.
 ## 5. `unsafie pages` — Web Publishing
 - `unsafie pages create <content_or_path> [--title <title>]` -> Publishes web page.
 - `unsafie pages update <slug> <content_or_path>` -> Updates web page.
+- `unsafie page read <slug>` -> Reads web page.
+- `unsafie page delete <slug>` -> Deletes web page.
 
 ## 6. `unsafie browser` — Real Chrome Automation (CDP)
 - `unsafie browser start`, `unsafie browser goto <url>`, `unsafie browser click <sel>`, `unsafie browser type <sel> <text>`, `unsafie browser shot`, `unsafie browser stop`.
