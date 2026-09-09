@@ -3,6 +3,7 @@ import os
 import platform
 import queue
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -63,6 +64,7 @@ class Daemon:
         self.outbox: queue.Queue[dict] = queue.Queue()
         self.stop = threading.Event()
         self.lease: dict[str, Any] = {}
+        self._exec_lock = threading.Lock()
 
     def facts(self) -> dict[str, Any]:
         total, _, free = shutil.disk_usage("/")
@@ -171,28 +173,49 @@ class Daemon:
         elif kind == wire.FrameKind.SHUTDOWN:
             self.stop.set()
 
+    def _terminate(self, proc: subprocess.Popen | None) -> None:
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, OSError):
+            pass
+        try:
+            proc.wait(timeout=2.0)
+        except (ProcessLookupError, OSError, subprocess.TimeoutExpired):
+            pass
+
     def _execute(self, raw: dict) -> None:
         cmd_id = str(raw.get("id") or "")
         cmd = str(raw.get("command") or raw.get("code") or "")
         if not cmd_id or not cmd:
             return
-        started = time.monotonic()
-        bash_bin = shutil.which("bash") or "/bin/bash"
-        try:
-            proc = subprocess.Popen(
-                [bash_bin, "-lc", cmd],
-                cwd=str(self.workdir),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-            out, _ = proc.communicate(timeout=float(raw.get("timeout") or 600.0))
-            text = out.decode(errors="replace")
-            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
-            self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
-        except Exception as e:
-            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
-            self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
+        with self._exec_lock:
+            started = time.monotonic()
+            bash_bin = shutil.which("bash") or "/bin/bash"
+            proc = None
+            try:
+                proc = subprocess.Popen(
+                    [bash_bin, "-lc", cmd],
+                    cwd=str(self.workdir),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                out, _ = proc.communicate(timeout=float(raw.get("timeout") or 600.0))
+                text = out.decode(errors="replace")
+                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
+                self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
+            except subprocess.TimeoutExpired as e:
+                self._terminate(proc)
+                partial = e.output.decode(errors="replace") if e.output else ""
+                msg = f"{partial}\ncommand timed out" if partial else "command timed out"
+                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": msg})
+                self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 124, "seconds": time.monotonic() - started})
+            except Exception as e:
+                self._terminate(proc)
+                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
+                self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
 
     def _sender(self) -> None:
         while not self.stop.is_set():
