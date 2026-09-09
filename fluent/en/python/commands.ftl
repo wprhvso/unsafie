@@ -40,3 +40,10 @@ commands-group-mode-all = All messages
 commands-group-mode-off = Disabled
 commands-group-mode-updated = Group mode set to: { $mode }
 commands-group-admin-only = Only group administrators can configure the bot.
+
+commands-retry-button = 🔄 Retry
+commands-retry-in-progress = ⏳ Retrying...
+commands-retry-toast = Retrying request...
+commands-retry-not-found = Could not find the original request.
+commands-retry-already-running = This request is already running.
+commands-retry-denied = Only the author or group admins can retry this request.

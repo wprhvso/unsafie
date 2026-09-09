@@ -78,3 +78,8 @@ class UpdateRepository:
             .limit(1)
         )
         return int(value) if value is not None else None
+
+    async def first_for_turn(self, turn_id: UUID) -> Update | None:
+        return await self.session.scalar(
+            select(Update).where(Update.turn_id == turn_id).order_by(Update.ordinal.asc()).limit(1)
+        )

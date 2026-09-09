@@ -5,10 +5,29 @@ from io import BytesIO
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
+from aiogram.filters.callback_data import CallbackData
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from unsafie import telemetry
+from unsafie.fluent import t
 
 logger = logging.getLogger(__name__)
+
+
+class RetryCallback(CallbackData, prefix="retry"):
+    turn_id: str
+
+
+def retry_markup(turn_id: str, locale: str, in_progress: bool = False) -> InlineKeyboardMarkup:
+    if in_progress:
+        text = t("commands-retry-in-progress", locale)
+        button = InlineKeyboardButton(text=text, callback_data="noop")
+    else:
+        text = t("commands-retry-button", locale)
+        button = InlineKeyboardButton(
+            text=text, callback_data=RetryCallback(turn_id=str(turn_id)).pack()
+        )
+    return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
 async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3) -> T:
