@@ -10,6 +10,7 @@ commands-start =
     /auth — رموز CLI وAPI
     /tasks — تذكيرات، جداول ومراقبات
     /tz — المنطقة الزمنية
+    /lang — اللغة (en, ru, es, fr, ar, fa)
     /help — هذه المساعدة
 
     /model NAME — تبديل النموذج
@@ -51,3 +52,12 @@ inline-text-hint = رد سريع داخل المحادثة
 inline-page-title = صفحة ويب (Page)
 inline-page-hint = نشر صفحة مفصلة مع رابط
 inline-pending = ⏳ جارٍ توليد الرد...
+commands-lang-status =
+    اللغة الحالية: { $current }
+    اللغات المتاحة: { $languages }
+
+    /lang CODE — تغيير اللغة
+    /lang default — تحديد تلقائي حسب تيليجرام
+commands-lang-set = تم تغيير اللغة إلى: { $language }
+commands-lang-reset = تمت إعادة التعيين إلى التحديد التلقائي: { $language }
+commands-lang-usage = اللغات المتاحة: { $languages }، مثل /lang ar

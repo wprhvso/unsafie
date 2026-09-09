@@ -4,6 +4,7 @@ from unsafie.telegram.handlers.commands.auth import build_auth_router
 from unsafie.telegram.handlers.commands.effort import build_effort_router
 from unsafie.telegram.handlers.commands.gh import build_gh_router
 from unsafie.telegram.handlers.commands.group import build_group_router
+from unsafie.telegram.handlers.commands.lang import build_lang_router
 from unsafie.telegram.handlers.commands.pool import build_pool_router
 from unsafie.telegram.handlers.commands.ssh import build_ssh_router
 from unsafie.telegram.handlers.commands.start import build_start_router
@@ -20,6 +21,7 @@ def build_commands_router() -> Router:
         build_effort_router,
         build_gh_router,
         build_group_router,
+        build_lang_router,
         build_pool_router,
         build_ssh_router,
         build_stop_router,

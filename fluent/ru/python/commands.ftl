@@ -10,6 +10,7 @@ commands-start =
     /auth — токены для CLI и API
     /tasks — напоминания, расписания и наблюдатели
     /tz — таймзона
+    /lang — язык интерфейса (en, ru, es, fr, ar, fa)
     /help — эта справка
 
 
@@ -56,3 +57,12 @@ inline-text-hint = Быстрый ответ прямо в чат
 inline-page-title = Веб-страница (Page)
 inline-page-hint = Опубликовать подробную статью со ссылкой
 inline-pending = ⏳ Генерирую ответ...
+commands-lang-status =
+    Язык: { $current }
+    Доступные языки: { $languages }
+
+    /lang КОД — переключить язык
+    /lang default — автоопределение по Telegram
+commands-lang-set = Язык изменен на: { $language }
+commands-lang-reset = Сброшено на автоопределение по Telegram: { $language }
+commands-lang-usage = Доступные языки: { $languages }, например /lang ru
