@@ -283,6 +283,8 @@ async def _once(
                         response.headers.get("retry-after"),
                     )
                 reply = await _read(response.content, model, on_event)
+                if not reply.text or not reply.text.strip():
+                    raise ApiError(0, "UNAVAILABLE", "model response contained no text blocks", request_id)
         except TimeoutError as e:
             raise ApiError(
                 0, "DEADLINE_EXCEEDED", f"no answer in {settings.gemini_timeout:.0f}s"
