@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from unsafie.agent import blocks, checkpoints, client, credentials, pricing, queue, request
+from unsafie.agent import blocks, checkpoints, client, credentials, pricing, queue, request, turns
 from unsafie.agent.client import ApiError
 from unsafie.agent.parser import extract_code
 from unsafie.agent.session import Ctx
@@ -118,6 +118,7 @@ async def run(
         result.steps = initial_step
 
     while result.steps < settings.agent_max_steps:
+        turns.touch(ctx.turn_id)
         await checkpoints.save(
             ctx.turn_id,
             result.steps + 1,
@@ -125,7 +126,6 @@ async def run(
             messages,
             credential_id=credential_id,
         )
-
         body = request.build(
             model=model,
             prompt=prompt,
@@ -203,6 +203,7 @@ async def run(
 
         runner = blocks.Runner(ctx, recorder)
         await runner.run(code)
+        turns.touch(ctx.turn_id)
         result.ran += runner.count
         if runner.replied:
             result.replied = True

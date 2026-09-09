@@ -129,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     p_bloat.add_argument("--max-pages", type=int, default=50)
     p_bloat.add_argument("--no-sandbox", action="store_true")
 
-    p_pages = subs.add_parser("pages")
+    p_pages = subs.add_parser("pages", aliases=["page"])
     s_pages = p_pages.add_subparsers(dest="subcmd")
 
     p_pcreate = s_pages.add_parser("create")
@@ -143,6 +143,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p_plist = s_pages.add_parser("list")
     p_plist.add_argument("--limit", type=int, default=20)
+
+    p_pread = s_pages.add_parser("read")
+    p_pread.add_argument("slug")
+    p_pread.add_argument("-o", "--output", default=None)
 
     p_pdel = s_pages.add_parser("delete")
     p_pdel.add_argument("slug")
@@ -359,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "download":
                 return _out(chat.download(args.file_id, output=args.output, chat=args.chat))
 
-        if args.cmd == "pages":
+        if args.cmd in ("pages", "page"):
             from unsafie.cli import pages
 
             if args.subcmd == "create":
@@ -368,6 +372,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(pages.update(args.slug, args.content, title=args.title))
             if args.subcmd == "list":
                 return _out(pages.listing(limit=args.limit))
+            if args.subcmd == "read":
+                return _out(pages.read(args.slug, output=args.output))
             if args.subcmd == "delete":
                 return _out(pages.delete(args.slug))
 

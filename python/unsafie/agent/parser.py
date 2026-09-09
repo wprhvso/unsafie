@@ -11,6 +11,8 @@ def extract_code(text: str | None) -> str:
     match = BLOCK_RE.search(text)
     if match:
         return match.group(1).strip()
-    code = STRIP_START_RE.sub("", text)
-    code = STRIP_END_RE.sub("", code)
-    return code.strip()
+    if STRIP_START_RE.search(text):
+        code = STRIP_START_RE.sub("", text)
+        code = STRIP_END_RE.sub("", code)
+        return code.strip()
+    return ""

@@ -1,6 +1,15 @@
+import asyncio
 import hashlib
-import json
 from unsafie import cluster
+import json
+from datetime import UTC, datetime
+from typing import Any
+from aiogram import Bot
+from sqlalchemy import select
+from unsafie.database import SessionLocal
+from unsafie.database.models.update import Update
+from unsafie.database.repositories.chat import ChatRepository
+from unsafie.database.repositories.response import ResponseRepository
 import base64
 import binascii
 import logging
@@ -208,19 +217,98 @@ def _markup(raw: str | None):
         raise HTTPException(400, str(bad)) from None
 
 
+def _trigger_bot_reply_turn(
+    *,
+    bot: Bot,
+    bot_id: int,
+    chat_id: int,
+    user_id: int,
+    reply_to: int,
+    text: str,
+    sent_message_id: int | None,
+    target_content: str,
+    target_created_at: datetime | None,
+) -> None:
+    async def _runner() -> None:
+        from unsafie.agent.runtime import dispatch
+
+        async with SessionLocal() as session:
+            chat_row = await ChatRepository(session).get(bot_id, chat_id)
+            latest_update = await session.scalar(
+                select(Update)
+                .where(Update.bot_id == bot_id, Update.user_id == user_id)
+                .order_by(Update.id.desc())
+                .limit(1)
+            )
+
+        chat_data: dict[str, Any] = {"id": chat_id}
+        if chat_row:
+            if chat_row.type:
+                chat_data["type"] = chat_row.type
+            if chat_row.title:
+                chat_data["title"] = chat_row.title
+            if chat_row.username:
+                chat_data["username"] = chat_row.username
+
+        from_data = None
+        if latest_update and "message" in latest_update.payload and "from" in latest_update.payload["message"]:
+            from_data = latest_update.payload["message"]["from"]
+        if not from_data:
+            from_data = {"id": user_id}
+
+        def _prompt(in_context: bool) -> str:
+            data: dict[str, Any] = {
+                "message_id": sent_message_id,
+                "date": datetime.now(UTC).isoformat(),
+                "from": from_data,
+                "text": text,
+                "chat": chat_data,
+                "reply_to": {
+                    "message_id": reply_to,
+                    "date": target_created_at.isoformat() if target_created_at else None,
+                    "from": {"is_bot": True},
+                    "text": target_content,
+                    "in_context": in_context,
+                },
+            }
+            return json.dumps(data, ensure_ascii=False)
+
+        try:
+            await dispatch(
+                bot,
+                bot_id=bot_id,
+                chat_id=chat_id,
+                user_id=user_id,
+                reply_to=reply_to,
+                update_db_id=None,
+                build_prompt=_prompt,
+                turn_reply_to=sent_message_id,
+                what=f"bot-reply={sent_message_id or reply_to}",
+            )
+        except Exception:
+            logger.exception(
+                "bot=%s chat=%s failed to dispatch turn for reply_to=%s",
+                bot_id,
+                chat_id,
+                reply_to,
+            )
+
+    asyncio.create_task(_runner(), name=f"bot-reply:{sent_message_id or reply_to}")
+
+
 @router.post("/messages")
 async def say(body: Message, who: Chat) -> dict:
     bot = await who.bot()
     turn = await who.turn(body.turn)
-    target_chat_id = who.chat(body.chat_id)
     bot_id = who.bot_id or 0
+    target_chat = await who.target_chat(body.chat_id)
 
     idemp_key = body.idempotency_key
     if not idemp_key and body.turn:
         raw = f"{body.text}:{body.reply_to}:{body.buttons}"
         idemp_key = f"{body.turn}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
 
-    cache_k = cluster.key("idemp", "msg", bot_id, target_chat_id, idemp_key) if idemp_key else None
+    cache_k = cluster.key("idemp", "msg", bot_id, target_chat, idemp_key) if idemp_key else None
     if cache_k:
         try:
             redis = cluster.client()
@@ -235,7 +323,7 @@ async def say(body: Message, who: Chat) -> dict:
         response = await sender.send(
             bot,
             bot_id=bot_id,
-            chat_id=target_chat_id,
+            chat_id=target_chat,
             markdown=body.text,
             kind=ResponseKind.AGENT,
             turn=turn,
@@ -245,6 +333,22 @@ async def say(body: Message, who: Chat) -> dict:
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
+
+    if body.reply_to is not None:
+        async with SessionLocal() as session:
+            bot_target = await ResponseRepository(session).by_message(bot_id, target_chat, body.reply_to)
+        if bot_target is not None:
+            _trigger_bot_reply_turn(
+                bot=bot,
+                bot_id=bot_id,
+                chat_id=target_chat,
+                user_id=who.user_id,
+                reply_to=body.reply_to,
+                text=body.text,
+                sent_message_id=response.message_ids[0] if response.message_ids else None,
+                target_content=bot_target.content,
+                target_created_at=bot_target.created_at,
+            )
 
     result = {"message_ids": response.message_ids, "reply_to": response.reply_to}
     if cache_k:
@@ -271,15 +375,15 @@ async def upload(body: Upload, who: Chat) -> dict:
         raise HTTPException(400, f"media must be one of {', '.join(MEDIA)}")
     bot = await who.bot()
     turn = await who.turn(body.turn)
-    target_chat_id = who.chat(body.chat_id)
     bot_id = who.bot_id or 0
+    target_chat = await who.target_chat(body.chat_id)
 
     idemp_key = body.idempotency_key
     if not idemp_key and body.turn:
         raw = f"{body.name}:{len(data)}:{body.caption}"
         idemp_key = f"{body.turn}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
 
-    cache_k = cluster.key("idemp", "file", bot_id, target_chat_id, idemp_key) if idemp_key else None
+    cache_k = cluster.key("idemp", "file", bot_id, target_chat, idemp_key) if idemp_key else None
     if cache_k:
         try:
             redis = cluster.client()
@@ -294,7 +398,7 @@ async def upload(body: Upload, who: Chat) -> dict:
         response, sent_as = await sender.send_file(
             bot,
             bot_id=bot_id,
-            chat_id=target_chat_id,
+            chat_id=target_chat,
             data=data,
             filename=body.name,
             caption=body.caption,
@@ -325,11 +429,12 @@ async def upload(body: Upload, who: Chat) -> dict:
 @router.post("/messages/{message_id}")
 async def edit(message_id: int, body: Edit, who: Chat) -> dict:
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
         what = await sender.edit(
             bot,
             bot_id=who.bot_id or 0,
-            chat_id=who.chat(body.chat_id),
+            chat_id=target_chat,
             message_id=message_id,
             markdown=body.text,
             reply_markup=_markup(body.buttons),
@@ -344,9 +449,10 @@ async def edit(message_id: int, body: Edit, who: Chat) -> dict:
 @router.delete("/messages/{message_id}")
 async def drop(message_id: int, who: Chat, chat_id: int | None = None) -> dict:
     bot = await who.bot()
+    target_chat = await who.target_chat(chat_id)
     try:
         await sender.delete(
-            bot, bot_id=who.bot_id or 0, chat_id=who.chat(chat_id), message_id=message_id
+            bot, bot_id=who.bot_id or 0, chat_id=target_chat, message_id=message_id
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -367,8 +473,9 @@ async def action(body: Action, who: Chat) -> dict:
     if body.action not in ACTIONS:
         raise HTTPException(400, f"action must be one of {', '.join(sorted(ACTIONS))}")
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
-        await bot.send_chat_action(who.chat(body.chat_id), body.action)
+        await bot.send_chat_action(target_chat, body.action)
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
     return {"action": body.action}
@@ -391,9 +498,10 @@ async def react(message_id: int, body: Reaction, who: Chat) -> dict:
     if body.emoji and body.emoji not in REACTIONS:
         raise HTTPException(400, "no such reaction; try " + " ".join(REACTIONS[:12]))
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
         await bot.set_message_reaction(
-            who.chat(body.chat_id),
+            target_chat,
             message_id,
             reaction=[ReactionTypeEmoji(emoji=body.emoji)] if body.emoji else [],
             is_big=body.big or None,
@@ -406,7 +514,7 @@ async def react(message_id: int, body: Reaction, who: Chat) -> dict:
 @router.post("/pins/{message_id}")
 async def pin(message_id: int, body: Pin, who: Chat) -> dict:
     bot = await who.bot()
-    chat_id = who.chat(body.chat_id)
+    chat_id = await who.target_chat(body.chat_id)
     try:
         if body.unpin:
             await bot.unpin_chat_message(chat_id, message_id or None)
@@ -420,10 +528,12 @@ async def pin(message_id: int, body: Pin, who: Chat) -> dict:
 @router.post("/forwards/{message_id}")
 async def forward(message_id: int, body: Forward, who: Chat) -> dict:
     bot = await who.bot()
-    source = who.chat(body.from_chat_id)
+    source = await who.target_chat(body.from_chat_id)
     target: int | str = body.to
     if isinstance(target, str) and target.lstrip("-").isdigit():
         target = int(target)
+    if isinstance(target, int):
+        target = await who.target_chat(target)
     try:
         if body.duplicate:
             sent = await bot.copy_message(
@@ -443,9 +553,10 @@ async def poll(body: Poll, who: Chat) -> dict:
     if not 2 <= len(body.options) <= 10:
         raise HTTPException(400, "a poll needs between two and ten options")
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
         sent = await bot.send_poll(
-            who.chat(body.chat_id),
+            target_chat,
             question=body.question,
             options=[InputPollOption(text=option) for option in body.options],
             is_anonymous=body.anonymous,
@@ -466,8 +577,9 @@ async def dice(body: Dice, who: Chat) -> dict:
     if body.emoji not in DICE:
         raise HTTPException(400, f"emoji must be one of {' '.join(DICE)}")
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
-        sent = await bot.send_dice(who.chat(body.chat_id), emoji=body.emoji)
+        sent = await bot.send_dice(target_chat, emoji=body.emoji)
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
     answer = await _record(who, body.turn, sent, f"dice {body.emoji}")
@@ -477,10 +589,11 @@ async def dice(body: Dice, who: Chat) -> dict:
 @router.post("/locations")
 async def location(body: Location, who: Chat) -> dict:
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
         if body.title:
             sent = await bot.send_venue(
-                who.chat(body.chat_id),
+                target_chat,
                 latitude=body.latitude,
                 longitude=body.longitude,
                 title=body.title,
@@ -488,7 +601,7 @@ async def location(body: Location, who: Chat) -> dict:
             )
         else:
             sent = await bot.send_location(
-                who.chat(body.chat_id), latitude=body.latitude, longitude=body.longitude
+                target_chat, latitude=body.latitude, longitude=body.longitude
             )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -498,9 +611,10 @@ async def location(body: Location, who: Chat) -> dict:
 @router.post("/contacts")
 async def contact(body: Contact, who: Chat) -> dict:
     bot = await who.bot()
+    target_chat = await who.target_chat(body.chat_id)
     try:
         sent = await bot.send_contact(
-            who.chat(body.chat_id),
+            target_chat,
             phone_number=body.phone,
             first_name=body.first_name,
             last_name=body.last_name,
@@ -524,10 +638,11 @@ async def history_search(
 
     if who.bot_id is None:
         raise HTTPException(400, "this token is not bound to a bot")
+    chat_id = await who.target_chat()
     async with SessionLocal() as session:
         hits, how = await HistoryRepository(session).search(
             who.bot_id,
-            who.chat(),
+            chat_id,
             query,
             who=kind,
             since=since,
@@ -546,21 +661,23 @@ async def history_get(
 
     if who.bot_id is None:
         raise HTTPException(400, "this token is not bound to a bot")
+    chat_id = await who.target_chat()
     async with SessionLocal() as session:
         repository = HistoryRepository(session)
         if message_id:
-            hits = await repository.around(who.bot_id, who.chat(), message_id, max(1, min(around, 30)))
+            hits = await repository.around(who.bot_id, chat_id, message_id, max(1, min(around, 30)))
         else:
-            hits = await repository.recent(who.bot_id, who.chat(), max(1, min(limit, 100)), before)
+            hits = await repository.recent(who.bot_id, chat_id, max(1, min(limit, 100)), before)
     return {"hits": [_hit(hit) for hit in hits]}
 
 
 @router.get("/info")
 async def chat_info(who: Chat, chat_id: int | None = None) -> dict:
     bot = await who.bot()
+    target_chat = await who.target_chat(chat_id)
     try:
-        found = await bot.get_chat(who.chat(chat_id))
-        members = await bot.get_chat_member_count(who.chat(chat_id))
+        found = await bot.get_chat(target_chat)
+        members = await bot.get_chat_member_count(target_chat)
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
     return {
@@ -577,8 +694,9 @@ async def chat_info(who: Chat, chat_id: int | None = None) -> dict:
 @router.get("/members/{user_id}")
 async def chat_member(user_id: int, who: Chat, chat_id: int | None = None) -> dict:
     bot = await who.bot()
+    target_chat = await who.target_chat(chat_id)
     try:
-        member = await bot.get_chat_member(who.chat(chat_id), user_id)
+        member = await bot.get_chat_member(target_chat, user_id)
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
     return {"user_id": user_id, "status": member.status, "member": member.model_dump(mode="json")}
@@ -587,7 +705,7 @@ async def chat_member(user_id: int, who: Chat, chat_id: int | None = None) -> di
 @router.post("/members/{user_id}/ban")
 async def chat_ban(user_id: int, who: Chat, body: Moderation) -> dict:
     bot = await who.bot()
-    chat_id = who.chat(body.chat_id)
+    chat_id = await who.target_chat(body.chat_id)
     try:
         if body.undo:
             await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
@@ -617,9 +735,10 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
         can_send_other_messages=bool(body.undo),
         can_add_web_page_previews=bool(body.undo),
     )
+    chat_id = await who.target_chat(body.chat_id)
     try:
         await bot.restrict_chat_member(
-            who.chat(body.chat_id), user_id, permissions=allowed, until_date=_until(body.until)
+            chat_id, user_id, permissions=allowed, until_date=_until(body.until)
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -629,9 +748,10 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
 @router.post("/invites")
 async def chat_invite(who: Chat, body: Invite) -> dict:
     bot = await who.bot()
+    chat_id = await who.target_chat(body.chat_id)
     try:
         link = await bot.create_chat_invite_link(
-            who.chat(body.chat_id),
+            chat_id,
             name=body.name,
             member_limit=body.member_limit,
             expire_date=_until(body.expires_in),
@@ -662,8 +782,9 @@ async def album(body: Album, who: Chat) -> dict:
             media.append(InputMediaDocument(media=payload, caption=caption))
         else:
             media.append(InputMediaPhoto(media=payload, caption=caption))
+    chat_id = await who.target_chat(body.chat_id)
     try:
-        sent = await bot.send_media_group(who.chat(body.chat_id), media=media)
+        sent = await bot.send_media_group(chat_id, media=media)
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
     turn = await who.turn(body.turn)

@@ -59,7 +59,7 @@ class OpalSessionRepository:
         await self.session.commit()
         return True
 
-    async def pick(self, exclude: set[int]) -> OpalSession | None:
+    async def pick(self, exclude: set[int] | None = None) -> OpalSession | None:
         now = datetime.now(UTC)
         stmt = (
             select(OpalSession)

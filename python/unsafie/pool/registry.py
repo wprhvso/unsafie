@@ -78,7 +78,8 @@ async def heartbeat(name: str, state: str | None = None) -> bool:
 
 
 async def alive(name: str) -> bool:
-    return bool(await cluster.client().exists(keys.machine(name)))
+    state = await state_of(name)
+    return state is not None and state != MachineState.GONE
 
 
 async def state_of(name: str) -> str | None:

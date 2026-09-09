@@ -331,5 +331,5 @@ async def send(
             )
             logger.warning("gemini %s, retrying in %.1fs", e.describe(), wait)
             await asyncio.sleep(wait)
-            delay *= 2
+            delay = 1.0 if delay <= 0.0 else delay * 2
     raise ApiError(0, "INTERNAL", "retries exhausted")

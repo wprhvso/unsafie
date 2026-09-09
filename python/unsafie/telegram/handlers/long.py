@@ -19,7 +19,7 @@ def _without_command(message: Message) -> Message:
     text = (message.text or message.caption or "").strip()
     parts = text.split(maxsplit=1)
     cleaned = parts[1] if len(parts) > 1 else ""
-    return message.model_copy(update={"text": cleaned})
+    return message.model_copy(update={"text": cleaned}).as_(message.bot)
 
 
 def is_collecting(message: Message, bot_id: int) -> bool:
@@ -117,8 +117,7 @@ def build_long_router() -> Router:
             pass
 
         first = collected.messages[0]
-        combined = first.model_copy(update={"text": full_text})
-        combined.bot = query.bot
+        combined = first.model_copy(update={"text": full_text}).as_(query.bot)
         await handle(combined, bot_id, update_db_id=None)
 
     @router.message(is_collecting)
