@@ -33,6 +33,7 @@ export function timeline() {
 
   let blocks = new Map();
   let codeBlocks = new Map();
+  let llmCalls = new Map();
   let steps = new Map();
   let attempts = [];
 
@@ -205,6 +206,42 @@ export function timeline() {
         break;
       }
 
+      case 'llm.start': {
+        const item = push({
+          id: data.id || crypto.randomUUID(),
+          at: when,
+          type: 'llm',
+          model: data.model || 'gemini-flash-latest',
+          thoughts: '',
+          text: '',
+          streaming: true,
+          usage: null
+        });
+        llmCalls.set(data.id, item);
+        break;
+      }
+
+      case 'llm.thought': {
+        const item = llmCalls.get(data.id);
+        if (item) item.thoughts += (data.text || '');
+        break;
+      }
+
+      case 'llm.delta': {
+        const item = llmCalls.get(data.id);
+        if (item) item.text += (data.text || '');
+        break;
+      }
+
+      case 'llm.end': {
+        const item = llmCalls.get(data.id);
+        if (item) {
+          item.streaming = false;
+          item.usage = data.usage;
+        }
+        break;
+      }
+
       case 'reply.sent':
         push({
           id: frame.id,
@@ -253,6 +290,7 @@ export function timeline() {
     state.endedAt = null;
     blocks.clear();
     codeBlocks.clear();
+    llmCalls.clear();
     steps.clear();
     attempts = [];
   }

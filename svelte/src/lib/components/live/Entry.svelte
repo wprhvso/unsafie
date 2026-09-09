@@ -68,6 +68,35 @@
     </article>
   {/if}
 
+{:else if item.type === 'llm'}
+  <article class="entry llm" class:open class:busy={item.streaming}>
+    <div class="rail">
+      <span class="bead llm-bead"><Icon name="think" size={12} /></span>
+    </div>
+    <div class="card">
+      <button class="head" onclick={toggle} aria-expanded={open}>
+        <span class="caret" class:open>▸</span>
+        <span class="title mono">LLM: {item.model || 'gemini-flash-latest'}</span>
+        <span class="spacer"></span>
+        <span class="status-tag {item.streaming ? 'running' : 'ok'}">{item.streaming ? 'streaming…' : 'done'}</span>
+        <time class="muted tiny nowrap">{clock(item.at)}</time>
+      </button>
+
+      {#if item.thoughts && item.thoughts.trim()}
+        <div class="thought" class:clamped={!open}>
+          <span class="muted tiny">Reasoning:</span>
+          {item.thoughts}
+        </div>
+      {/if}
+
+      {#if item.text && item.text.trim()}
+        <div class="prose" style="padding: 0.5rem 0.75rem;">
+          <Markdown source={item.text} streaming={item.streaming} />
+        </div>
+      {/if}
+    </div>
+  </article>
+
 {:else if item.type === 'code'}
   <article class="entry code {item.status}" class:open>
     <div class="rail">
@@ -272,6 +301,10 @@
   .entry.code .code-bead {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+  .entry.llm .llm-bead {
+    color: var(--live-think, #8250df);
+    border-color: color-mix(in srgb, var(--live-think, #8250df) 45%, var(--border));
   }
   .entry.think .bead {
     color: var(--live-think, #8250df);
