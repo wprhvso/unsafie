@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,14 @@ class ChatRepository:
         return await self.session.scalar(
             select(Chat).where(Chat.bot_id == bot_id, Chat.chat_id == chat_id)
         )
+
+    async def set_group_mode(self, bot_id: int, chat_id: int, mode: str) -> None:
+        await self.session.execute(
+            update(Chat)
+            .where(Chat.bot_id == bot_id, Chat.chat_id == chat_id)
+            .values(group_mode=mode)
+        )
+        await self.session.commit()
 
     async def page(
         self, offset: int = 0, limit: int = 50, bot_id: int | None = None

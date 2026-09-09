@@ -373,8 +373,15 @@ async def delete(bot: Bot, *, bot_id: int, chat_id: int, message_id: int) -> Non
         await ResponseRepository(session).forget(bot_id, chat_id, message_id)
 
 
-async def answer(message: Message, bot_id: int, text: str) -> Response:
+async def answer(
+    message: Message, bot_id: int, text: str, reply_markup: InlineKeyboardMarkup | None = None
+) -> Response:
     assert message.bot is not None
     return await send(
-        message.bot, bot_id=bot_id, chat_id=message.chat.id, markdown=text, kind=ResponseKind.SYSTEM
+        message.bot,
+        bot_id=bot_id,
+        chat_id=message.chat.id,
+        markdown=text,
+        kind=ResponseKind.SYSTEM,
+        reply_markup=reply_markup,
     )

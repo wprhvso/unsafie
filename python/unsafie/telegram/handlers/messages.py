@@ -1,10 +1,15 @@
 import logging
 
 from aiogram import Router
+from aiogram.enums import ChatType
 from aiogram.types import Message
 
 from unsafie.agent.runtime import handle
+from unsafie.database import SessionLocal
+from unsafie.database.models.chat import GroupMode
+from unsafie.database.repositories.chat import ChatRepository
 from unsafie.fluent import t
+from unsafie.telegram.group import addressed_to_bot, clean_mention
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
@@ -39,6 +44,22 @@ def build_messages_router() -> Router:
 
     @router.message()
     async def message_handler(message: Message, bot_id: int, update_db_id: int | None) -> None:
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
+            async with SessionLocal() as session:
+                chat_row = await ChatRepository(session).get(bot_id, message.chat.id)
+            mode = (chat_row.group_mode if chat_row else None) or GroupMode.MENTIONS.value
+            if mode == GroupMode.OFF.value:
+                return
+            if mode == GroupMode.MENTIONS.value:
+                me = await message.bot.me() if message.bot else None
+                username = me.username if me else None
+                if not addressed_to_bot(message, bot_id, username):
+                    return
+                if message.text and username:
+                    cleaned = clean_mention(message.text, username)
+                    if cleaned != message.text:
+                        message = message.model_copy(update={"text": cleaned})
+
         logger.info(
             "bot=%s chat=%s(%s) msg=%s from=%s content_type=%s reply_to=%s",
             bot_id,
