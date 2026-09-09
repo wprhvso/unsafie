@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 import shlex
@@ -160,45 +161,50 @@ class Controller:
         machine = await registry.grab_idle()
         if machine is None:
             return False
+        runner_id: int | None = None
         try:
             runner_id, runner_name, config = await self.api.jit(self.scale_set_id)
-        except ScaleSetError:
+            await self._occupy(machine)
+            command = " ".join(
+                [
+                    "unsafie ci-runner",
+                    "--jit",
+                    shlex.quote(config),
+                    "--name",
+                    shlex.quote(runner_name),
+                    "--repo",
+                    shlex.quote(self.repo.slug),
+                    "--idle",
+                    str(self.repo.idle),
+                    "--lifetime",
+                    str(self.repo.lifetime),
+                ]
+            )
+            command_id = await channel.send(
+                machine,
+                command,
+                user_id=self.repo.user_id,
+                timeout=float(self.repo.lifetime + self.repo.idle + 600),
+                background=True,
+            )
+            job = await repos.start_job(self.repo.id, machine, runner_name)
+            watcher = asyncio.create_task(
+                self._watch(machine, command_id, job.id, runner_id),
+                name=f"pool.ci.runner:{machine}",
+            )
+            self.watchers.add(watcher)
+            watcher.add_done_callback(self.watchers.discard)
+            logger.info(
+                "pool ci %s: runner %s dispatched to %s", self.repo.slug, runner_name, machine
+            )
+            return True
+        except Exception as e:
+            if runner_id is not None:
+                with contextlib.suppress(Exception):
+                    await self.api.forget(runner_id)
             await registry.mark(machine, MachineState.IDLE)
+            logger.warning("pool ci %s: failed to launch runner on %s: %s", self.repo.slug, machine, e)
             raise
-        await self._occupy(machine)
-        command = " ".join(
-            [
-                "unsafie ci-runner",
-                "--jit",
-                shlex.quote(config),
-                "--name",
-                shlex.quote(runner_name),
-                "--repo",
-                shlex.quote(self.repo.slug),
-                "--idle",
-                str(self.repo.idle),
-                "--lifetime",
-                str(self.repo.lifetime),
-            ]
-        )
-        command_id = await channel.send(
-            machine,
-            command,
-            user_id=self.repo.user_id,
-            timeout=float(self.repo.lifetime + self.repo.idle + 600),
-            background=True,
-        )
-        job = await repos.start_job(self.repo.id, machine, runner_name)
-        watcher = asyncio.create_task(
-            self._watch(machine, command_id, job.id, runner_id),
-            name=f"pool.ci.runner:{machine}",
-        )
-        self.watchers.add(watcher)
-        watcher.add_done_callback(self.watchers.discard)
-        logger.info(
-            "pool ci %s: runner %s dispatched to %s", self.repo.slug, runner_name, machine
-        )
-        return True
 
     async def _occupy(self, machine: str) -> None:
         await registry.mark(machine, MachineState.CI)
