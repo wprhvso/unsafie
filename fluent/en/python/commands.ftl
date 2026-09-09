@@ -32,3 +32,11 @@ commands-stop-many = Stopped { $n ->
     [one] { $n } turn
    *[other] { $n } turns
 }.
+
+commands-group-private = This command can only be used in group chats.
+commands-group-menu = Choose how the bot should behave in this group:
+commands-group-mode-mentions = Mentions only (@bot or reply)
+commands-group-mode-all = All messages
+commands-group-mode-off = Disabled
+commands-group-mode-updated = Group mode set to: { $mode }
+commands-group-admin-only = Only group administrators can configure the bot.

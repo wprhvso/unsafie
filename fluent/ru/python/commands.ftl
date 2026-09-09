@@ -33,3 +33,11 @@ commands-stop-many = Остановил { $n ->
     [few] { $n } хода
    *[other] { $n } ходов
 }.
+
+commands-group-private = Эта команда предназначена только для групповых чатов.
+commands-group-menu = Выберите режим работы бота в этой группе:
+commands-group-mode-mentions = Только упоминания (@бот или ответ)
+commands-group-mode-all = Все сообщения
+commands-group-mode-off = Выключен
+commands-group-mode-updated = Режим группы изменен на: { $mode }
+commands-group-admin-only = Только администраторы группы могут настраивать бота.
