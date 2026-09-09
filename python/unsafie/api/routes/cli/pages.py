@@ -53,6 +53,22 @@ async def listing(who: Pages, limit: int = 20) -> list[dict]:
     ]
 
 
+@router.get("/{slug}")
+async def read(slug: str, who: Pages) -> dict:
+    async with SessionLocal() as session:
+        repo = ArtifactRepository(session)
+        artifact = await repo.by_slug(slug)
+        if artifact is None or artifact.chat_id != who.chat_id:
+            raise HTTPException(404, "no such page")
+        return {
+            "slug": artifact.slug,
+            "title": artifact.title,
+            "content": artifact.content or "",
+            "url": artifacts.url(artifact.slug),
+            "created_at": artifact.created_at,
+        }
+
+
 @router.put("/{slug}")
 async def replace(slug: str, body: Page, who: Pages) -> dict:
     async with SessionLocal() as session:
