@@ -124,6 +124,19 @@ def main(argv: list[str] | None = None) -> int:
     p_cinfo = s_chat.add_parser("info")
     p_cinfo.add_argument("--chat", default=None)
 
+    p_cdownload = s_chat.add_parser("download")
+    p_cdownload.add_argument("file_id")
+    p_cdownload.add_argument("-o", "--output", default=None)
+    p_cdownload.add_argument("--chat", default=None)
+
+    p_bloat = subs.add_parser("bloat2md")
+    p_bloat.add_argument("path")
+    p_bloat.add_argument("-o", "--output", default=None)
+    p_bloat.add_argument("--images-dir", default=None)
+    p_bloat.add_argument("--stdout", action="store_true")
+    p_bloat.add_argument("--max-pages", type=int, default=50)
+    p_bloat.add_argument("--no-sandbox", action="store_true")
+
     p_pages = subs.add_parser("pages")
     s_pages = p_pages.add_subparsers(dest="subcmd")
 
@@ -292,6 +305,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(chat.history(query=args.query, limit=args.limit, since=args.since))
             if args.subcmd == "info":
                 return _out(chat.info(args.chat))
+            if args.subcmd == "download":
+                return _out(chat.download(args.file_id, output=args.output, chat=args.chat))
 
         if args.cmd == "pages":
             from unsafie.cli import pages
@@ -342,6 +357,20 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "cookies":
                 c_data = json.loads(args.cookie_json) if args.cookie_json else None
                 return _out(browser.cookies(c_data))
+
+        if args.cmd == "bloat2md":
+            from unsafie.cli import bloat2md
+            res = bloat2md.run(
+                args.path,
+                output=args.output,
+                images_dir=args.images_dir,
+                to_stdout=args.stdout,
+                max_pages=args.max_pages,
+                no_sandbox=args.no_sandbox,
+            )
+            if args.stdout and res.get("ok"):
+                return 0
+            return _out(res, ok=res.get("ok", True))
 
         return _out({"error": f"unknown command {args.cmd}"}, ok=False)
     except Exception as exc:
