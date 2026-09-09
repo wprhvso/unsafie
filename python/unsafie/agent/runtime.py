@@ -49,8 +49,6 @@ from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
 
-MAX_ATTEMPTS = 6
-
 LOST_CONTEXT = (
     "The earlier part of this conversation could not be restored, so you are seeing it for the "
     "first time. The message below may reply to something you cannot see: say so plainly instead "
@@ -109,157 +107,111 @@ async def _execute(
     system_prompt: str,
 ) -> Outcome:
     prefix = ctx.prefix
-    tried: set[int] = set()
 
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        with telemetry.span(
-            "agent.attempt",
-            attributes={attrs.ATTEMPT: attempt, attrs.TURN_ID: str(ctx.turn_id)},
-        ) as attempt_span:
-            async with SessionLocal() as session:
-                creds = OpalSessionRepository(session)
-                session_row = await creds.pick(tried)
-                if session_row is None:
-                    next_at = await creds.next_cooldown()
-                    telemetry.refused(
-                        attempt_span, f"no usable opal session (tried={sorted(tried)})"
-                    )
-                    logger.warning("%s no usable opal session (tried=%s)", prefix, sorted(tried))
-                    return Outcome("no_credentials", next_at=next_at)
-                user = await UserRepository(session).get_or_create(ctx.user_id)
-                model = settings.gemini_model
-                effort = user.effort or settings.gemini_thinking_level
+    async with SessionLocal() as session:
+        creds = OpalSessionRepository(session)
+        session_row = await creds.pick()
+        if session_row is None:
+            next_at = await creds.next_cooldown()
+            logger.warning("%s no usable opal session", prefix)
+            return Outcome("no_credentials", next_at=next_at)
+        user = await UserRepository(session).get_or_create(ctx.user_id)
+        model = settings.gemini_model
+        effort = user.effort or settings.gemini_thinking_level
 
-            try:
-                access_token = await opal.get_access_token(
-                    session_row.id, session_row.refresh_token
-                )
-            except opal.OpalRefreshFailed as e:
-                logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
-                tried.add(session_row.id)
-                await _punish(
-                    session_row,
-                    loop.Result(status="failed", error=str(e), failure=credentials.Failure.AUTH),
-                )
-                continue
+    try:
+        access_token = await opal.get_access_token(
+            session_row.id, session_row.refresh_token
+        )
+    except opal.OpalRefreshFailed as e:
+        logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
+        await _punish(
+            session_row,
+            loop.Result(status="failed", error=str(e), failure=credentials.Failure.AUTH),
+        )
+        return Outcome("failed", error=str(e))
 
-            telemetry.set_attrs(
-                attempt_span,
-                {
-                    attrs.CREDENTIAL_ID: session_row.id,
-                    attrs.GEN_AI_MODEL: model,
-                    attrs.EFFORT: effort,
-                },
-            )
-            logger.info(
-                "%s attempt=%s session=%s model=%s effort=%s messages=%s",
-                prefix,
-                attempt,
-                session_row.id,
-                model,
-                effort,
-                len(messages),
-            )
+    logger.info(
+        "%s session=%s model=%s effort=%s messages=%s",
+        prefix,
+        session_row.id,
+        model,
+        effort,
+        len(messages),
+    )
 
-            live.emit(
-                ctx.turn_id,
-                "attempt.start",
-                attempt=attempt,
-                model=model,
-                effort=effort,
-            )
-            started = time.perf_counter()
-            with telemetry.span(
-                "gen_ai.invoke_agent",
-                kind=telemetry.CLIENT,
-                attributes={
-                    attrs.GEN_AI_SYSTEM: "gemini",
-                    attrs.GEN_AI_OPERATION: "invoke_agent",
-                    attrs.GEN_AI_MODEL: model,
-                    attrs.EFFORT: effort,
-                    attrs.TURN_ID: str(ctx.turn_id),
-                },
-            ) as query_span:
-                result = await loop.run(
-                    ctx,
-                    messages=messages,
-                    access_token=access_token,
-                    model=model,
-                    prompt=system_prompt,
-                    effort=effort,
-                    recorder=Recorder(prefix, live.of(ctx.turn_id)),
-                )
-                elapsed = (time.perf_counter() - started) * 1000
-                _usage(query_span, result)
-                telemetry.set_attrs(
-                    query_span,
-                    {
-                        attrs.SDK_MESSAGES: len(messages),
-                        attrs.NUM_TURNS: result.steps,
-                        attrs.GEN_AI_FINISH_REASONS: [result.stop_reason]
-                        if result.stop_reason
-                        else None,
-                        attrs.COMPLETION: telemetry.content(result.text),
-                    },
-                )
-                if result.status != "ok":
-                    telemetry.fail(
-                        query_span, RuntimeError(short(result.error or result.status, 300))
-                    )
-
-            async with SessionLocal() as session:
-                await TurnRepository(session).record(
-                    ctx.turn_id,
-                    credential_id=session_row.id,
-                    num_turns=result.steps,
-                    result=result.text,
-                )
-
-            telemetry.set_attrs(
-                attempt_span,
-                {
-                    attrs.OUTCOME: result.status,
-                    attrs.NUM_TURNS: result.steps,
-                    attrs.FAILURE: str(result.failure) if result.failure else None,
-                },
-            )
-            logger.info(
-                "%s attempt=%s %s steps=%s in %.1fms",
-                prefix,
-                attempt,
-                result.status,
-                result.steps,
-                elapsed,
+    started = time.perf_counter()
+    with telemetry.span(
+        "gen_ai.invoke_agent",
+        kind=telemetry.CLIENT,
+        attributes={
+            attrs.GEN_AI_SYSTEM: "gemini",
+            attrs.GEN_AI_OPERATION: "invoke_agent",
+            attrs.GEN_AI_MODEL: model,
+            attrs.EFFORT: effort,
+            attrs.TURN_ID: str(ctx.turn_id),
+            attrs.CREDENTIAL_ID: session_row.id,
+        },
+    ) as query_span:
+        result = await loop.run(
+            ctx,
+            messages=messages,
+            access_token=access_token,
+            model=model,
+            prompt=system_prompt,
+            effort=effort,
+            recorder=Recorder(prefix, live.of(ctx.turn_id)),
+        )
+        elapsed = (time.perf_counter() - started) * 1000
+        _usage(query_span, result)
+        telemetry.set_attrs(
+            query_span,
+            {
+                attrs.SDK_MESSAGES: len(messages),
+                attrs.NUM_TURNS: result.steps,
+                attrs.GEN_AI_FINISH_REASONS: [result.stop_reason]
+                if result.stop_reason
+                else None,
+                attrs.COMPLETION: telemetry.content(result.text),
+                attrs.OUTCOME: result.status,
+                attrs.FAILURE: str(result.failure) if result.failure else None,
+            },
+        )
+        if result.status != "ok":
+            telemetry.fail(
+                query_span, RuntimeError(short(result.error or result.status, 300))
             )
 
-            live.emit(
-                ctx.turn_id,
-                "attempt.end",
-                attempt=attempt,
-                status=result.status,
-                steps=result.steps,
-                usage=result.usage,
-                stop_reason=result.stop_reason,
-                error=short(result.error, 300) if result.error else None,
-            )
+    async with SessionLocal() as session:
+        await TurnRepository(session).record(
+            ctx.turn_id,
+            credential_id=session_row.id,
+            num_turns=result.steps,
+            result=result.text,
+        )
 
-            if result.status == "ok":
-                async with SessionLocal() as session:
-                    await OpalSessionRepository(session).succeeded(session_row.id)
-                return Outcome("ok")
-            if result.failure is not None and credentials.blames_credential(result.failure):
-                logger.warning(
-                    "%s session=%s failed (%s): %s",
-                    prefix,
-                    session_row.id,
-                    result.failure,
-                    short(result.error, 600),
-                )
-                tried.add(session_row.id)
-                await _punish(session_row, result)
-                continue
-            return Outcome("failed", error=result.error)
-    return Outcome("failed", error="attempts exhausted")
+    logger.info(
+        "%s %s steps=%s in %.1fms",
+        prefix,
+        result.status,
+        result.steps,
+        elapsed,
+    )
+
+    if result.status == "ok":
+        async with SessionLocal() as session:
+            await OpalSessionRepository(session).succeeded(session_row.id)
+        return Outcome("ok")
+    if result.failure is not None and credentials.blames_credential(result.failure):
+        logger.warning(
+            "%s session=%s failed (%s): %s",
+            prefix,
+            session_row.id,
+            result.failure,
+            short(result.error, 600),
+        )
+        await _punish(session_row, result)
+    return Outcome("failed", error=result.error)
 
 
 async def notify(
@@ -312,6 +264,10 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         prompt = LOST_CONTEXT + "\n\n" + prompt
     status = TurnStatus.FAILED
     note: str | None = None
+    async with SessionLocal() as session:
+        user = await UserRepository(session).get_or_create(turn.user_id)
+        model = settings.gemini_model
+        effort = user.effort or settings.gemini_thinking_level
     stream = await live.begin(turn)
     if stream is not None:
         stream.emit(
@@ -321,6 +277,8 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             chat_id=turn.chat_id,
             resumed=len(messages),
             prompt=live.clip(prompt)[0],
+            model=model,
+            effort=effort,
         )
     events.publish(
         "turn.started",
@@ -435,6 +393,8 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
             return
         user = await UserRepository(session).get(turn.user_id)
         locale = user.locale if user and user.locale else settings.default_locale
+        model = settings.gemini_model
+        effort = user.effort if user and user.effort else settings.gemini_thinking_level
 
     bot = await bots.bot_for(turn.bot_id)
     if bot is None:
@@ -459,6 +419,8 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
             prompt=live.clip(prompt)[0],
             is_subagent=True,
             title=turn.title,
+            model=model,
+            effort=effort,
         )
     events.publish(
         "turn.started",

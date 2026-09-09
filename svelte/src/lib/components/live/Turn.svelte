@@ -137,6 +137,7 @@
   <div class="stats">
     <span title="elapsed"><b>{clock(elapsed)}</b></span>
     {#if feed.model}<span class="mono model" title="model">{feed.model}</span>{/if}
+    {#if feed.effort}<span class="chip" title="effort">effort {feed.effort}</span>{/if}
   </div>
 
   <div class="side end">
@@ -271,6 +272,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 12rem;
+  }
+
+  .chip {
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    background: var(--panel);
+    color: var(--muted);
   }
 
   .what {
@@ -414,6 +424,7 @@
     }
 
     .model,
+    .chip,
     .what {
       display: none;
     }

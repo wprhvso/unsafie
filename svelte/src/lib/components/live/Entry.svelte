@@ -28,16 +28,6 @@
     <time class="muted tiny">{clock(item.at)}</time>
   </div>
 
-{:else if item.type === 'attempt'}
-  <div class="divider attempt">
-    <Icon name="attempt" size={13} />
-    <span class="label">Attempt {item.attempt}</span>
-    {#if item.model}<span class="chip mono">{item.model}</span>{/if}
-    {#if item.effort}<span class="chip">effort {item.effort}</span>{/if}
-    <span class="line"></span>
-    <time class="muted tiny">{clock(item.at)}</time>
-  </div>
-
 {:else if item.type === 'think'}
   {#if item.text && item.text.trim()}
     <article class="entry think" class:open class:busy={item.streaming}>
@@ -253,10 +243,6 @@
     height: 1px;
     background: var(--border);
   }
-  .divider.attempt .label {
-    color: var(--warn);
-  }
-
   .chip {
     padding: 0.05rem 0.4rem;
     border: 1px solid var(--border);
