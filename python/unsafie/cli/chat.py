@@ -115,3 +115,21 @@ def history(query: str | None = None, *, limit: int = 20, since: str | None = No
 
 def info(chat: int | str | None = None) -> dict:
     return client().call("GET", "/chat/info", params={"chat_id": _chat(chat)})
+
+
+def download(
+    file_id: str,
+    output: str | Path | None = None,
+    *,
+    chat: int | str | None = None,
+) -> dict:
+    res = client().call("GET", f"/chat/files/{file_id}", params={"chat_id": _chat(chat)})
+    raw = base64.b64decode(res["data"])
+    if output is not None:
+        target = Path(output)
+    else:
+        name = Path(res.get("file_path") or file_id).name
+        target = Path(name)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(raw)
+    return {"file_id": file_id, "path": str(target), "bytes": len(raw)}

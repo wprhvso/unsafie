@@ -27,6 +27,17 @@ dependencies = [
     "unsafie-wire",
     "uvicorn>=0.52.4",
     "websockets[standard]>=17.1",
+    "charset-normalizer>=3.5.1",
+    "defusedxml>=0.7.1",
+    "lxml>=6.1",
+    "mammoth>=1.12",
+    "markdownify>=1.2",
+    "odfdo>=3.24",
+    "pillow>=12.3",
+    "pypdfium2>=5.13",
+    "python-calamine>=0.8.2",
+    "python-pptx>=1.0.2",
+    "striprtf>=0.0.33",
 ]
 
 [project.scripts]

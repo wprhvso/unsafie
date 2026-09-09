@@ -615,3 +615,24 @@ async def album(body: Album, who: Chat) -> dict:
         ids=ids,
     )
     return {"message_ids": ids}
+
+
+@router.get("/files/{file_id}")
+async def download_file(file_id: str, who: Chat) -> dict:
+    from io import BytesIO
+    bot = await who.bot()
+    try:
+        tg_file = await bot.get_file(file_id)
+        if not tg_file.file_path:
+            raise HTTPException(404, "file path not found")
+        buffer = BytesIO()
+        await bot.download_file(tg_file.file_path, destination=buffer)
+        data = buffer.getvalue()
+    except TelegramAPIError as refused:
+        raise HTTPException(502, f"telegram refused: {refused}") from None
+    return {
+        "file_id": file_id,
+        "file_path": tg_file.file_path,
+        "size": len(data),
+        "data": base64.b64encode(data).decode(),
+    }

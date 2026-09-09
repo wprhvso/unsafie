@@ -2,7 +2,7 @@ import os
 import shutil
 import subprocess
 
-TOOLCHAINS = ("chrome", "xvfb", "kasmvnc", "nix", "rust", "tools")
+TOOLCHAINS = ("chrome", "xvfb", "kasmvnc", "nix", "rust", "tools", "libreoffice")
 KASMVNC = "1.5.0"
 
 PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
@@ -12,6 +12,7 @@ PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
     "nix": (("nix",),),
     "rust": (("cargo",),),
     "tools": (("rg",), ("jq",), ("zstd",), ("convert", "magick"), ("gh",)),
+    "libreoffice": (("soffice", "libreoffice"),),
 }
 
 
@@ -51,6 +52,17 @@ def _toolchain(name: str, timeout: float) -> str:
         if name == "rust":
             return _shell(
                 "curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable",
+                timeout,
+            )
+        if name == "libreoffice":
+            return _apt(
+                [
+                    "libreoffice-writer-nogui",
+                    "libreoffice-calc-nogui",
+                    "libreoffice-impress-nogui",
+                    "fonts-dejavu-core",
+                    "fonts-liberation2",
+                ],
                 timeout,
             )
     except Exception as broken:
