@@ -288,3 +288,50 @@ class TurnRepository:
             turn.result = turn.result or f"instance {turn.instance_id or 'unknown'} stopped beating"
         await self.session.commit()
         return rows
+
+    async def create_subagent(
+        self,
+        *,
+        parent: Turn,
+        title: str | None = None,
+    ) -> Turn:
+        turn_id = uuid.uuid4()
+        turn = Turn(
+            id=turn_id,
+            bot_id=parent.bot_id,
+            chat_id=parent.chat_id,
+            user_id=parent.user_id,
+            parent_id=parent.id,
+            root_id=parent.root_id,
+            reply_to=parent.reply_to,
+            status=TurnStatus.RUNNING,
+            instance_id=settings.instance_id,
+            heartbeat_at=datetime.now(UTC),
+            is_subagent=True,
+            title=title,
+        )
+        self.session.add(turn)
+        await self.session.commit()
+        await self.session.refresh(turn)
+        logger.info(
+            "subagent turn=%s created parent=%s root=%s title=%s",
+            turn.id,
+            turn.parent_id,
+            turn.root_id,
+            turn.title,
+        )
+        return turn
+
+    async def subagents(self, parent_id: UUID) -> list[Turn]:
+        rows = await self.session.scalars(
+            select(Turn)
+            .where(Turn.parent_id == parent_id, Turn.is_subagent.is_(True))
+            .order_by(Turn.created_at)
+        )
+        return list(rows)
+
+    async def set_result(self, turn_id: UUID, result: str) -> None:
+        turn = await self.session.get(Turn, turn_id)
+        if turn is not None:
+            turn.result = result
+            await self.session.commit()

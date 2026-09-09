@@ -22,8 +22,7 @@
         <div class="row wide">
           <span><span class="muted">locale</span> {u.locale ?? '—'}</span>
           <span><span class="muted">timezone</span> {u.timezone ?? '—'}</span>
-          <span><span class="muted">model</span> {u.model ?? 'default'}</span>
-          <span><span class="muted">effort</span> {u.effort ?? 'default'}</span>
+                    <span><span class="muted">effort</span> {u.effort ?? 'default'}</span>
           <span><span class="muted">git</span> {u.git_name ? `${u.git_name} <${u.git_email}>` : '—'}</span>
           <span><span class="muted">github</span> {u.github_logins.join(', ') || '—'}</span>
           <span><span class="muted">ssh key</span> {u.has_ssh_key ? 'yes' : 'no'}</span>

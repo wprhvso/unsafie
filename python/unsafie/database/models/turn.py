@@ -4,7 +4,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import UUID as SQL_UUID
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from unsafie.database import Base
@@ -48,3 +48,5 @@ class Turn(Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_subagent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    title: Mapped[str | None] = mapped_column(String(128), nullable=True)

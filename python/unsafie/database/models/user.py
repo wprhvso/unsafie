@@ -10,7 +10,6 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     locale: Mapped[str | None] = mapped_column(String(8), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
     git_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     git_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

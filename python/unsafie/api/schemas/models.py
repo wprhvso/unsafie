@@ -25,7 +25,6 @@ class UserRead(Base):
     id: int
     locale: str | None = None
     timezone: str | None = None
-    model: str | None = None
     effort: str | None = None
     git_name: str | None = None
     git_email: str | None = None
@@ -92,6 +91,8 @@ class TurnRead(Base):
     instance_id: str | None = None
     created_at: datetime
     finished_at: datetime | None = None
+    is_subagent: bool = False
+    title: str | None = None
 
 
 class ResponseRead(Base):

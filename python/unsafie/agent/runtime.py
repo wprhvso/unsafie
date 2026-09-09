@@ -23,9 +23,14 @@ from unsafie.agent import (
     segments,
     turns,
 )
-from unsafie.agent.prompt import SYSTEM_PROMPT
+from unsafie.agent.prompt import SUBAGENT_SYSTEM_PROMPT, SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.session import Ctx
+from unsafie.agent.subagents import (
+    cancel_subagents_of,
+    notify_subagent_done,
+    register_subagent_task,
+)
 from unsafie.agent.trace import Recorder
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
@@ -36,7 +41,7 @@ from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
 from unsafie.log import short
 from unsafie.settings import settings
-from unsafie.telegram import render, sender
+from unsafie.telegram import bots, render, sender
 from unsafie.telegram.chat_action import typing
 from unsafie.telemetry import attrs
 
@@ -118,7 +123,7 @@ async def _execute(
                     logger.warning("%s no usable opal session (tried=%s)", prefix, sorted(tried))
                     return Outcome("no_credentials", next_at=next_at)
                 user = await UserRepository(session).get_or_create(ctx.user_id)
-                model = user.model or settings.gemini_model
+                model = settings.gemini_model
                 effort = user.effort or settings.gemini_thinking_level
 
             try:
@@ -365,6 +370,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             note = "crashed"
             await notify(bot, turn, t("agent-failure", locale))
         finally:
+            await cancel_subagents_of(turn.id)
             await cancel.clear(turn.id)
             await turns.seal(turn.id)
             await segments.save(turn, messages[base:], snapshot)
@@ -396,6 +402,148 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                 note=note,
             )
             await live.end(turn.id)
+
+
+async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) -> None:
+    async with SessionLocal() as session:
+        turn = await TurnRepository(session).get(turn_id)
+        if turn is None:
+            logger.error("subagent turn=%s not found", turn_id)
+            return
+        user = await UserRepository(session).get(turn.user_id)
+        locale = user.locale if user and user.locale else settings.default_locale
+
+    bot = await bots.bot_for(turn.bot_id)
+    if bot is None:
+        logger.error("subagent turn=%s bot=%s not found", turn_id, turn.bot_id)
+        return
+
+    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
+    prefix = f"[subagent] {ctx.prefix}"
+    system_prompt = SUBAGENT_SYSTEM_PROMPT
+    messages = [request.user(prompt)]
+
+    status = TurnStatus.FAILED
+    note: str | None = None
+    stream = await live.begin(turn)
+    if stream is not None:
+        stream.emit(
+            "turn.start",
+            turn_id=str(turn.id),
+            root_id=str(turn.root_id),
+            chat_id=turn.chat_id,
+            resumed=0,
+            prompt=live.clip(prompt)[0],
+            is_subagent=True,
+            title=turn.title,
+        )
+    events.publish(
+        "turn.started",
+        turn_id=str(turn.id),
+        root_id=str(turn.root_id),
+        parent_id=str(turn.parent_id),
+        bot_id=turn.bot_id,
+        chat_id=turn.chat_id,
+        user_id=turn.user_id,
+        is_subagent=True,
+        title=turn.title,
+    )
+
+    with telemetry.span(
+        "agent.subagent_turn",
+        attributes={
+            attrs.TURN_ID: str(turn.id),
+            attrs.ROOT_ID: str(turn.root_id),
+            attrs.BOT_ID: turn.bot_id,
+            attrs.CHAT_ID: turn.chat_id,
+            attrs.USER_ID: turn.user_id,
+            attrs.LOCALE: locale,
+            "unsafie.is_subagent": True,
+            "unsafie.title": turn.title or "",
+        },
+    ) as turn_span:
+        try:
+            async with turns.alive(turn.id):
+                async with asyncio.timeout(timeout):
+                    outcome = await _execute(ctx, messages, system_prompt)
+                    if outcome.status == "ok":
+                        status = TurnStatus.DONE
+                    else:
+                        status = TurnStatus.FAILED
+                        note = outcome.error or outcome.status
+        except TimeoutError:
+            status = TurnStatus.FAILED
+            note = f"timed out after {timeout:.0f}s"
+            logger.warning("%s timed out after %.0fs", prefix, timeout)
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
+            status = TurnStatus.CANCELLED
+            note = "stopped"
+            logger.info("%s stopped", prefix)
+        except Exception as e:
+            telemetry.fail(turn_span, e)
+            logger.exception("%s subagent crashed", prefix)
+            status = TurnStatus.FAILED
+            note = f"crashed: {e}"
+        finally:
+            await cancel.clear(turn.id)
+            await turns.seal(turn.id)
+            await segments.save(turn, messages, snapshot=system_prompt)
+            async with SessionLocal() as session:
+                repo = TurnRepository(session)
+                fresh = await repo.get(turn.id)
+                fallback_result = None
+                if messages and messages[-1].get("role") == "assistant":
+                    content = messages[-1].get("content")
+                    if isinstance(content, str):
+                        fallback_result = content
+                final_result = (
+                    fresh.result
+                    if fresh and fresh.result
+                    else (fallback_result or note or "done")
+                )
+                await repo.finish(turn.id, status, final_result)
+                fresh = await repo.get(turn.id)
+
+            telemetry.set_attrs(
+                turn_span,
+                {
+                    attrs.TURN_STATUS: str(status),
+                    attrs.REFUSAL: note,
+                },
+            )
+            events.publish(
+                "turn.finished",
+                turn_id=str(turn.id),
+                root_id=str(turn.root_id),
+                parent_id=str(turn.parent_id),
+                bot_id=turn.bot_id,
+                chat_id=turn.chat_id,
+                user_id=turn.user_id,
+                status=str(status),
+                is_subagent=True,
+                note=note,
+            )
+            live.emit(
+                turn.id,
+                "turn.end",
+                status=str(status),
+                steps=fresh.num_turns if fresh else 0,
+                note=note,
+            )
+            await live.end(turn.id)
+            await notify_subagent_done(turn.id)
+
+
+def spawn_subagent_task(turn_id: UUID, prompt: str, timeout: float = 600.0) -> asyncio.Task:
+    task = asyncio.create_task(
+        run_subagent_turn(turn_id, prompt, timeout=timeout),
+        name=f"subagent:{turn_id}",
+    )
+    register_subagent_task(turn_id, task)
+    return task
 
 
 async def dispatch(

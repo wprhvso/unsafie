@@ -37,12 +37,6 @@ class UserRepository:
         await self.session.commit()
         return user
 
-    async def set_model(self, user_id: int, model: str | None) -> User:
-        user = await self.get_or_create(user_id)
-        user.model = model
-        await self.session.commit()
-        return user
-
     async def set_effort(self, user_id: int, effort: str | None) -> User:
         user = await self.get_or_create(user_id)
         user.effort = effort
