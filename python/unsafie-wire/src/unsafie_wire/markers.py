@@ -16,6 +16,10 @@ class BlockKind(StrEnum):
     PROGRESS = "progress"
     ERROR = "error"
     STOP = "stop"
+    LLM_START = "llm.start"
+    LLM_THOUGHT = "llm.thought"
+    LLM_DELTA = "llm.delta"
+    LLM_END = "llm.end"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,3 +89,19 @@ def sent() -> str:
 
 def stop(message: str | None = None) -> str:
     return emit(BlockKind.STOP, message=message)
+
+
+def llm_start(id: str, model: str) -> str:
+    return emit(BlockKind.LLM_START, id=id, model=model)
+
+
+def llm_thought(id: str, text: str) -> str:
+    return emit(BlockKind.LLM_THOUGHT, id=id, text=text)
+
+
+def llm_delta(id: str, text: str) -> str:
+    return emit(BlockKind.LLM_DELTA, id=id, text=text)
+
+
+def llm_end(id: str, usage: dict[str, Any] | None = None) -> str:
+    return emit(BlockKind.LLM_END, id=id, usage=usage)

@@ -251,6 +251,34 @@ class Runner:
                 block.output += f"\nresult: {item.data.get('value')}"
             elif item.kind == markers.BlockKind.ERROR:
                 block.output += f"\nerror: {item.data.get('message')}"
+            elif item.kind == markers.BlockKind.LLM_START:
+                live.emit(
+                    self.ctx.turn_id,
+                    "llm.start",
+                    id=item.data.get("id"),
+                    model=item.data.get("model"),
+                )
+            elif item.kind == markers.BlockKind.LLM_THOUGHT:
+                live.emit(
+                    self.ctx.turn_id,
+                    "llm.thought",
+                    id=item.data.get("id"),
+                    text=item.data.get("text"),
+                )
+            elif item.kind == markers.BlockKind.LLM_DELTA:
+                live.emit(
+                    self.ctx.turn_id,
+                    "llm.delta",
+                    id=item.data.get("id"),
+                    text=item.data.get("text"),
+                )
+            elif item.kind == markers.BlockKind.LLM_END:
+                live.emit(
+                    self.ctx.turn_id,
+                    "llm.end",
+                    id=item.data.get("id"),
+                    usage=item.data.get("usage"),
+                )
 
     async def _image(self, block: Block, item: markers.Block) -> dict | None:
         key = str(item.data.get("blob") or "")

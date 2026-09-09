@@ -49,29 +49,23 @@ def main(argv: list[str] | None = None) -> int:
 
     subs.add_parser("stop")
 
-    p_sub = subs.add_parser("subagent")
-    s_sub = p_sub.add_subparsers(dest="subcmd")
+    p_llm = subs.add_parser("llm")
+    p_llm.add_argument("--raw", action="store_true")
 
-    p_s_spawn = s_sub.add_parser("spawn")
-    p_s_spawn.add_argument("prompt")
-    p_s_spawn.add_argument("--title", default=None)
-    p_s_spawn.add_argument("--timeout", type=float, default=600.0)
+    p_read = subs.add_parser("read")
+    p_read.add_argument("paths", nargs="+")
+    p_read.add_argument("--lines", "-l", default=None)
+    p_read.add_argument("--max-lines", type=int, default=2000)
+    p_read.add_argument("--raw", action="store_true")
 
-    p_s_wait = s_sub.add_parser("wait")
-    p_s_wait.add_argument("ids", nargs="+")
-    p_s_wait.add_argument("--timeout", type=float, default=600.0)
+    p_write = subs.add_parser("write")
+    p_write.add_argument("path")
+    p_write.add_argument("content", nargs="?", default=None)
 
-    p_s_status = s_sub.add_parser("status")
-    p_s_status.add_argument("id")
-
-    p_s_list = s_sub.add_parser("list")
-    p_s_list.add_argument("--limit", type=int, default=50)
-
-    p_s_cancel = s_sub.add_parser("cancel")
-    p_s_cancel.add_argument("ids", nargs="+")
-
-    p_s_finish = s_sub.add_parser("finish")
-    p_s_finish.add_argument("result")
+    p_edit = subs.add_parser("edit")
+    p_edit.add_argument("path")
+    p_edit.add_argument("search", nargs="?", default=None)
+    p_edit.add_argument("replace", nargs="?", default=None)
 
     p_chat = subs.add_parser("chat")
     s_chat = p_chat.add_subparsers(dest="subcmd")
@@ -220,12 +214,6 @@ def main(argv: list[str] | None = None) -> int:
     p_vision.add_argument("paths", nargs="+")
     p_vision.add_argument("--caption", default=None)
 
-    p_read = subs.add_parser("read")
-    p_read.add_argument("paths", nargs="+")
-    p_read.add_argument("--lines", "-l", default=None)
-    p_read.add_argument("--max-lines", type=int, default=2000)
-    p_read.add_argument("--raw", action="store_true")
-
     p_inline = subs.add_parser("inline")
     s_inline = p_inline.add_subparsers(dest="subcmd")
     p_iedit = s_inline.add_parser("edit")
@@ -270,7 +258,11 @@ def main(argv: list[str] | None = None) -> int:
             from unsafie.machine.runner import run_runner
 
             return run_runner(
-                args.jit, name=args.name, repo=args.repo, idle=args.idle, lifetime=args.lifetime
+                args.jit,
+                name=args.name,
+                repo=args.repo,
+                idle=args.idle,
+                lifetime=args.lifetime,
             )
 
         if args.cmd == "put":
@@ -295,22 +287,31 @@ def main(argv: list[str] | None = None) -> int:
 
             return _out(stop())
 
-        if args.cmd == "subagent":
-            from unsafie.cli import subagent
+        if args.cmd == "llm":
+            from unsafie.cli import llm
 
-            if args.subcmd == "spawn":
-                return _out(subagent.spawn(args.prompt, title=args.title, timeout=args.timeout))
-            if args.subcmd == "wait":
-                return _out(subagent.wait(*args.ids, timeout=args.timeout))
-            if args.subcmd == "status":
-                return _out(subagent.status(args.id))
-            if args.subcmd == "list":
-                return _out(subagent.listing(limit=args.limit))
-            if args.subcmd == "cancel":
-                return _out(subagent.cancel(*args.ids))
-            if args.subcmd == "finish":
-                return _out(subagent.finish(args.result))
-            return _out({"error": f"unknown subagent subcommand {args.subcmd}"}, ok=False)
+            res = llm.run(raw=args.raw)
+            if args.raw and res.get("ok"):
+                return 0
+            return _out(res, ok=res.get("ok", True))
+
+        if args.cmd == "read":
+            from unsafie.cli import read
+
+            res = read.read(args.paths, lines=args.lines, max_lines=args.max_lines, raw=args.raw)
+            if args.raw and res.get("ok"):
+                return 0
+            return _out(res, ok=res.get("ok", True))
+
+        if args.cmd == "write":
+            from unsafie.cli import write
+
+            return _out(write.run(args.path, content=args.content))
+
+        if args.cmd == "edit":
+            from unsafie.cli import edit
+
+            return _out(edit.run(args.path, search=args.search, replace=args.replace))
 
         if args.cmd == "chat":
             from unsafie.cli import chat
@@ -393,11 +394,17 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "stop":
                 return _out(browser.stop())
             if args.subcmd == "goto":
-                return _out(browser.goto(args.url, wait=args.wait, timeout=args.timeout))
+                return _out(
+                    browser.goto(args.url, wait=args.wait, timeout=args.timeout)
+                )
             if args.subcmd == "click":
-                return _out(browser.click(args.selector, button=args.button, clicks=args.clicks))
+                return _out(
+                    browser.click(args.selector, button=args.button, clicks=args.clicks)
+                )
             if args.subcmd == "type":
-                return _out(browser.type_text(args.selector, args.text, clear=args.clear))
+                return _out(
+                    browser.type_text(args.selector, args.text, clear=args.clear)
+                )
             if args.subcmd == "press":
                 return _out(browser.press(args.combination))
             if args.subcmd == "wait":
@@ -437,14 +444,6 @@ def main(argv: list[str] | None = None) -> int:
             from unsafie.cli import vision
 
             return _out(vision.attach(args.paths, caption=args.caption))
-
-        if args.cmd == "read":
-            from unsafie.cli import read
-
-            res = read.read(args.paths, lines=args.lines, max_lines=args.max_lines, raw=args.raw)
-            if args.raw and res.get("ok"):
-                return 0
-            return _out(res, ok=res.get("ok", True))
 
         if args.cmd == "inline":
             from unsafie.cli import inline
