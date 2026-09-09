@@ -51,7 +51,7 @@ class GithubAccountRepository:
             await self.session.scalars(
                 select(GithubAccount)
                 .where(GithubAccount.user_id == user_id)
-                .order_by(GithubAccount.id)
+                .order_by(GithubAccount.last_used_at.desc().nulls_last(), GithubAccount.id)
             )
         )
 

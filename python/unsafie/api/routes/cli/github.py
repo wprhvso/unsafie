@@ -53,11 +53,7 @@ def _repo(row: Repo, alias: str | None = None) -> dict:
 
 
 async def _identity(user_id: int, login: str) -> tuple[str, str]:
-    async with SessionLocal() as session:
-        user = await UserRepository(session).get(user_id)
-    if user is not None and user.git_name and user.git_email:
-        return user.git_name, user.git_email
-    return login, f"{login}@users.noreply.github.com"
+    return await pat.identity(user_id, login)
 
 
 @router.get("/accounts")
@@ -152,7 +148,9 @@ async def short_token(body: ShortToken, who: Github) -> dict:
                     "email": email,
                 }
     account = await _account(who.user_id, body.login)
-    name, email = await _identity(who.user_id, account.login)
+    async with SessionLocal() as db:
+        await GithubAccountRepository(db).touch(account.id)
+    name, email = await pat.identity(who.user_id, account.login)
     return {
         "token": account.token,
         "kind": "pat",

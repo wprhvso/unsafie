@@ -95,6 +95,7 @@ class Runner:
                 hours=2.0,
             )
             await self._install_ssh_keys()
+            await self._install_git_credentials()
         return self._cli_token
 
     async def _install_ssh_keys(self) -> None:
@@ -106,6 +107,67 @@ class Runner:
             await asyncio.to_thread(keys.install, cli=Client(api=api, token=self._cli_token))
         except Exception as e:
             logger.warning("%s failed to install ssh keys: %s", self.ctx.prefix, e)
+
+    async def _install_git_credentials(self) -> None:
+        try:
+            from unsafie.github import pat
+
+            account = await pat.account_of(self.ctx.user_id)
+            if account and account.token:
+                name, email = await pat.identity(self.ctx.user_id, account.login)
+                home = Path(os.environ.get("HOME") or Path.home())
+                store = home / ".git-credentials"
+                line = f"https://x-access-token:{account.token}@github.com\n"
+                body = store.read_text(encoding="utf-8") if store.is_file() else ""
+                kept = [row for row in body.splitlines(keepends=True) if "@github.com" not in row]
+                store.write_text("".join(kept) + line, encoding="utf-8")
+                store.chmod(0o600)
+                cmd = ["git", "config", "--global", "credential.helper", "store"]
+                proc = await asyncio.create_subprocess_exec(*cmd)
+                await proc.wait()
+                if name:
+                    proc = await asyncio.create_subprocess_exec("git", "config", "--global", "user.name", name)
+                    await proc.wait()
+                if email:
+                    proc = await asyncio.create_subprocess_exec("git", "config", "--global", "user.email", email)
+                    await proc.wait()
+        except Exception as e:
+            logger.warning("%s failed to install git credentials: %s", self.ctx.prefix, e)
+
+    async def _resolve_github_env(self) -> dict[str, str]:
+        env: dict[str, str] = {}
+        try:
+            from unsafie.github import pat
+
+            account = await pat.account_of(self.ctx.user_id)
+            if account and account.token:
+                name, email = await pat.identity(self.ctx.user_id, account.login)
+                token = account.token
+                env["GH_TOKEN"] = token
+                env["GITHUB_TOKEN"] = token
+                if name:
+                    env["GIT_AUTHOR_NAME"] = name
+                    env["GIT_COMMITTER_NAME"] = name
+                if email:
+                    env["GIT_AUTHOR_EMAIL"] = email
+                    env["GIT_COMMITTER_EMAIL"] = email
+
+                gh_helper = "!gh auth git-credential"
+                config = [
+                    ("credential.https://github.com.helper", gh_helper),
+                    ("credential.https://gist.github.com.helper", gh_helper),
+                ]
+                if name:
+                    config.append(("user.name", name))
+                if email:
+                    config.append(("user.email", email))
+                env["GIT_CONFIG_COUNT"] = str(len(config))
+                for idx, (k, v) in enumerate(config):
+                    env[f"GIT_CONFIG_KEY_{idx}"] = k
+                    env[f"GIT_CONFIG_VALUE_{idx}"] = v
+        except Exception as e:
+            logger.warning("%s failed to setup github env: %s", self.ctx.prefix, e)
+        return env
 
     async def run(self, code: str) -> Block:
         index = len(self.blocks) + 1
@@ -176,6 +238,8 @@ class Runner:
         env["UNSAFIE_TURN"] = str(self.ctx.turn_id)
         if self.ctx.inline_message_id:
             env["UNSAFIE_INLINE_MESSAGE_ID"] = self.ctx.inline_message_id
+        gh_env = await self._resolve_github_env()
+        env.update(gh_env)
 
         watch = asyncio.create_task(
             self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
