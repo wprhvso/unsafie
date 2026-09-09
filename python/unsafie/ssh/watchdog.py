@@ -104,20 +104,21 @@ class Watchdog(Loop):
             await self._reschedule(watch, failed=True)
             async with SessionLocal() as session:
                 row = await WatchRepository(session).get_any(watch.id)
-                if row and row.fails == MAX_FAILS:
-                    await sender.send(
-                        bot,
-                        bot_id=watch.bot_id,
-                        chat_id=watch.chat_id,
-                        markdown=t(
-                            "ssh-watch-disabled",
-                            None,
-                            name=watch.name,
-                            alias=host.alias,
-                            error=str(e),
-                        ),
-                        kind=ResponseKind.SYSTEM,
-                    )
+                disabled = row is not None and row.fails == MAX_FAILS
+            if disabled:
+                await sender.send(
+                    bot,
+                    bot_id=watch.bot_id,
+                    chat_id=watch.chat_id,
+                    markdown=t(
+                        "ssh-watch-disabled",
+                        None,
+                        name=watch.name,
+                        alias=host.alias,
+                        error=str(e),
+                    ),
+                    kind=ResponseKind.SYSTEM,
+                )
             return
         telemetry.annotate(**{attrs.WATCH_FIRES: fires, attrs.SSH_EXIT: result.exit_code})
         was_alerting = watch.alerting
