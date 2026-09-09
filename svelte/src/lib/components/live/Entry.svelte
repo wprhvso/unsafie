@@ -39,37 +39,34 @@
   </div>
 
 {:else if item.type === 'think'}
-  <article class="entry think" class:open class:busy={item.streaming}>
-    <div class="rail">
-      <span class="bead"><Icon name="think" size={12} /></span>
-    </div>
-    <div class="card">
-      <button class="head" onclick={toggle} aria-expanded={open}>
-        <span class="caret" class:open>▸</span>
-        <span class="title">Reasoning</span>
-        {#if item.signature}
-          <span class="sig-pill" title="Cryptographic proof of internal reasoning state">
-            🔒 Signed
-          </span>
-        {/if}
-        <span class="spacer"></span>
-        <span class="muted tiny nowrap">{item.text?.length?.toLocaleString() ?? 0} chars</span>
-        <time class="muted tiny nowrap">{clock(item.at)}</time>
-      </button>
-
-      <div class="thought" class:clamped={!open}>
-        {item.text || (item.streaming ? 'Thinking…' : 'No reasoning text.')}
+  {#if item.text && item.text.trim()}
+    <article class="entry think" class:open class:busy={item.streaming}>
+      <div class="rail">
+        <span class="bead"><Icon name="think" size={12} /></span>
       </div>
+      <div class="card">
+        <button class="head" onclick={toggle} aria-expanded={open}>
+          <span class="caret" class:open>▸</span>
+          <span class="title">Reasoning</span>
+          <span class="spacer"></span>
+          <span class="muted tiny nowrap">{item.text?.length?.toLocaleString() ?? 0} chars</span>
+          <time class="muted tiny nowrap">{clock(item.at)}</time>
+        </button>
 
-      {#if item.signature && open}
-        <div class="signature-bar">
-          <span class="muted tiny">Signature:</span>
-          <code class="sig-preview" title={item.signature}>{item.signature.slice(0, 32)}…</code>
-          <Copy text={item.signature} label="Copy Thought Signature" />
+        <div class="thought" class:clamped={!open}>
+          {item.text}
         </div>
-      {/if}
-    </div>
-  </article>
+
+        {#if item.signature && open}
+          <div class="signature-bar">
+            <span class="muted tiny">Signature:</span>
+            <code class="sig-preview" title={item.signature}>{item.signature.slice(0, 32)}…</code>
+            <Copy text={item.signature} label="Copy Thought Signature" />
+          </div>
+        {/if}
+      </div>
+    </article>
+  {/if}
 
 {:else if item.type === 'code'}
   <article class="entry code {item.status}" class:open>
@@ -80,8 +77,7 @@
     <div class="card">
       <button class="head" onclick={toggle} aria-expanded={open}>
         <span class="caret" class:open>▸</span>
-        <span class="title mono">Bash [#{item.index}]</span>
-        <span class="machine-tag mono">{item.machine || 'local'}</span>
+        <span class="title mono">Bash</span>
         <span class="spacer"></span>
         <span class="status-tag {item.status}">
           {item.status === 'running' ? 'running…' : item.status === 'ok' ? 'ok' : `exit ${item.exit_code ?? 1}`}
@@ -92,23 +88,13 @@
         <time class="muted tiny nowrap">{clock(item.at)}</time>
       </button>
 
-      <div class="code-box">
-        <div class="box-head">
-          <span class="muted tiny">Bash Code</span>
-          <Copy text={item.code} label="Copy Bash Code" />
-        </div>
-        <pre class="source"><code>{item.code}</code></pre>
-      </div>
-
       {#if item.output || item.error || item.images?.length}
         <div class="output-box">
-          <div class="box-head">
-            <span class="muted tiny">Terminal Output</span>
-            {#if item.output}<Copy text={item.output} label="Copy Output" />{/if}
-          </div>
-
           {#if item.output}
-            <pre class="terminal">{item.output}</pre>
+            <div class="terminal-wrap">
+              <div class="tools"><Copy text={item.output} label="Copy Output" /></div>
+              <pre class="terminal">{item.output}</pre>
+            </div>
           {/if}
 
           {#if item.error}
@@ -175,7 +161,7 @@
     <div class="card">
       <button class="head" onclick={toggle} aria-expanded={open}>
         <span class="caret" class:open>▸</span>
-        <span class="title">Note: {item.name}</span>
+        <span class="title">{item.name === 'unsafie.messages_injected' ? 'Injected' : `Note: ${item.name}`}</span>
         <span class="spacer"></span>
         <time class="muted tiny nowrap">{clock(item.at)}</time>
       </button>
@@ -362,14 +348,6 @@
     min-width: 0.3rem;
   }
 
-  .machine-tag {
-    font-size: 0.72rem;
-    padding: 0.05rem 0.35rem;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
-    color: var(--accent);
-  }
-
   .status-tag {
     font-size: 0.72rem;
     padding: 0.05rem 0.4rem;
@@ -388,15 +366,6 @@
   .status-tag.running {
     background: color-mix(in srgb, var(--warn) 16%, transparent);
     color: var(--warn);
-  }
-
-  .sig-pill {
-    font-size: 0.7rem;
-    padding: 0.05rem 0.4rem;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--live-think, #8250df) 14%, transparent);
-    color: var(--live-think, #8250df);
-    border: 1px solid color-mix(in srgb, var(--live-think, #8250df) 30%, transparent);
   }
 
   .signature-bar {
@@ -431,18 +400,31 @@
     overflow: hidden;
   }
 
-  .code-box,
   .output-box {
     border-top: 1px solid var(--border);
   }
 
-  .box-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.25rem 0.6rem;
-    background: var(--live-sunken);
-    border-bottom: 1px solid var(--border);
+  .terminal-wrap {
+    position: relative;
+  }
+
+  .terminal-wrap .tools {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .terminal-wrap:hover .tools,
+  .terminal-wrap .tools:focus-within {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .terminal-wrap .tools {
+      opacity: 1;
+    }
   }
 
   pre.source {
@@ -459,8 +441,8 @@
   pre.terminal {
     margin: 0;
     padding: 0.6rem 0.7rem;
-    background: #0d1117;
-    color: #c9d1d9;
+    background: var(--live-sunken);
+    color: var(--text);
     font-size: 0.82rem;
     font-family: var(--mono);
     line-height: 1.5;
@@ -481,13 +463,13 @@
     display: grid;
     gap: 0.5rem;
     padding: 0.6rem;
-    background: #0d1117;
+    background: var(--live-sunken);
     border-top: 1px solid var(--border);
   }
   .images-grid img {
     max-width: 100%;
     border-radius: 4px;
-    border: 1px solid #30363d;
+    border: 1px solid var(--border);
   }
 
   .prose {

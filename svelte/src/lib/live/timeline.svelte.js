@@ -139,7 +139,14 @@ export function timeline() {
         seeContext(data.usage, data.model);
 
         const thinkItem = blocks.get(`${data.step}:think`);
-        if (thinkItem) thinkItem.streaming = false;
+        if (thinkItem) {
+          thinkItem.streaming = false;
+          if (!thinkItem.text.trim()) {
+            const idx = state.items.indexOf(thinkItem);
+            if (idx >= 0) state.items.splice(idx, 1);
+            blocks.delete(`${data.step}:think`);
+          }
+        }
         const textItem = blocks.get(`${data.step}:text`);
         if (textItem) textItem.streaming = false;
         break;
@@ -152,8 +159,8 @@ export function timeline() {
       }
 
       case 'block.signature': {
-        const item = ensureBlock(data.step ?? state.steps, 'think');
-        item.signature = data.signature;
+        const item = blocks.get(`${data.step ?? state.steps}:think`);
+        if (item) item.signature = data.signature;
         break;
       }
 
