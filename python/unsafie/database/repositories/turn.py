@@ -105,18 +105,17 @@ class TurnRepository:
             return None
         return await self.session.get(Turn, turn_id)
 
-    async def running(self, bot_id: int, chat_id: int) -> list[Turn]:
+    async def running(self, bot_id: int | None = None, chat_id: int | None = None) -> list[Turn]:
         cutoff = datetime.now(UTC) - timedelta(seconds=settings.turn_stale_after)
-        rows = await self.session.scalars(
-            select(Turn)
-            .where(
-                Turn.bot_id == bot_id,
-                Turn.chat_id == chat_id,
-                Turn.status == TurnStatus.RUNNING,
-                func.coalesce(Turn.heartbeat_at, Turn.created_at) > cutoff,
-            )
-            .order_by(Turn.created_at)
+        stmt = select(Turn).where(
+            Turn.status == TurnStatus.RUNNING,
+            func.coalesce(Turn.heartbeat_at, Turn.created_at) > cutoff,
         )
+        if bot_id is not None:
+            stmt = stmt.where(Turn.bot_id == bot_id)
+        if chat_id is not None:
+            stmt = stmt.where(Turn.chat_id == chat_id)
+        rows = await self.session.scalars(stmt.order_by(Turn.created_at))
         return list(rows)
 
     async def lineage(self, turn_id: UUID) -> set[UUID]:
