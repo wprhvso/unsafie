@@ -128,9 +128,9 @@ class Settings(BaseSettings):
     gemini_timeout: float = 900.0
     gemini_connect_timeout: float = 20.0
     gemini_read_timeout: float = 180.0
-    gemini_retries: int = 3
-    gemini_retry_base: float = 2.0
-    gemini_retry_max: float = 60.0
+    gemini_retries: int = 30
+    gemini_retry_base: float = 0.0
+    gemini_retry_max: float = 1.0
     gemini_connections: int = 16
 
     opal_refresh_url: str = "https://opal.google/connection/refresh"
@@ -202,9 +202,7 @@ class Settings(BaseSettings):
     pool_launch_burst: int = 10
     pool_workflow: str = "unsafie.yml"
     pool_repo_name: str = "unsafie-pool"
-    pool_sdk_spec: str = (
-        "git+https://github.com/wprhvso/unsafie@main#subdirectory=python"
-    )
+    pool_sdk_spec: str = "git+https://github.com/wprhvso/unsafie@main#subdirectory=python"
     pool_wire_spec: str = (
         "git+https://github.com/wprhvso/unsafie@main#subdirectory=python/unsafie-wire"
     )
