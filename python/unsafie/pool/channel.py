@@ -157,36 +157,42 @@ async def collect(
     started = time.monotonic()
     pieces: list[str] = []
     size = 0
-    while time.monotonic() - started < timeout:
-        popped = await redis.blpop([keys.outbox(command_id)], timeout=BLOCK)
-        if popped is None:
-            if not await registry.alive(machine):
+    try:
+        while time.monotonic() - started < timeout:
+            popped = await redis.blpop([keys.outbox(command_id)], timeout=BLOCK)
+            if popped is None:
+                if not await registry.alive(machine):
+                    result.output = "".join(pieces)
+                    result.seconds = time.monotonic() - started
+                    await _finish(command_id, None, size, CommandStatus.LOST)
+                    return result
+                continue
+            frame = json.loads(popped[1])
+            kind = frame.get("kind")
+            if kind == str(wire.FrameKind.OUTPUT):
+                data = str(frame.get("data") or "")
+                size += len(data)
+                if size <= cap:
+                    pieces.append(data)
+                    await remember(command_id, data)
+                else:
+                    result.truncated = True
+                continue
+            result.frames.append(frame)
+            if kind == str(wire.FrameKind.EXIT):
+                result.exit_code = int(frame.get("code") or 0)
+                result.seconds = float(frame.get("seconds") or (time.monotonic() - started))
                 result.output = "".join(pieces)
-                result.seconds = time.monotonic() - started
-                await _finish(command_id, None, size, CommandStatus.LOST)
+                await _finish(command_id, result.exit_code, size, CommandStatus.DONE)
                 return result
-            continue
-        frame = json.loads(popped[1])
-        kind = frame.get("kind")
-        if kind == str(wire.FrameKind.OUTPUT):
-            data = str(frame.get("data") or "")
-            size += len(data)
-            if size <= cap:
-                pieces.append(data)
-                await remember(command_id, data)
-            else:
-                result.truncated = True
-            continue
-        result.frames.append(frame)
-        if kind == str(wire.FrameKind.EXIT):
-            result.exit_code = int(frame.get("code") or 0)
-            result.seconds = float(frame.get("seconds") or (time.monotonic() - started))
-            result.output = "".join(pieces)
-            await _finish(command_id, result.exit_code, size, CommandStatus.DONE)
-            return result
-    result.output = "".join(pieces)
-    result.seconds = time.monotonic() - started
-    await _finish(command_id, None, size, CommandStatus.FAILED)
+        result.output = "".join(pieces)
+        result.seconds = time.monotonic() - started
+        await _finish(command_id, None, size, CommandStatus.FAILED)
+    except asyncio.CancelledError:
+        result.output = "".join(pieces)
+        result.seconds = time.monotonic() - started
+        await _finish(command_id, None, size, CommandStatus.CANCELLED)
+        raise
     return result
 
 
