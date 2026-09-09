@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, ChosenInlineResult, InlineKeyboardMarku
 from unsafie import events, telemetry
 from unsafie.agent import (
     cancel,
+    checkpoints,
     credentials,
     live,
     loop,
@@ -107,6 +108,7 @@ async def _execute(
     ctx: Ctx,
     messages: list[dict],
     system_prompt: str,
+    initial_checkpoint: checkpoints.CheckpointData | None = None,
 ) -> Outcome:
     prefix = ctx.prefix
 
@@ -163,6 +165,8 @@ async def _execute(
             prompt=system_prompt,
             effort=effort,
             recorder=Recorder(prefix, live.of(ctx.turn_id)),
+            credential_id=session_row.id,
+            initial_checkpoint=initial_checkpoint,
         )
         elapsed = (time.perf_counter() - started) * 1000
         _usage(query_span, result)
@@ -214,6 +218,7 @@ async def _execute(
         )
         await _punish(session_row, result)
     return Outcome("failed", error=result.error)
+
 
 
 async def notify(
@@ -649,17 +654,19 @@ async def handle_callback(
 
 
 async def run_scheduled(bot: Bot, task) -> None:
+    from unsafie.database.repositories.schedule import ScheduleRepository
+
     prompt = json.dumps(render.describe_scheduled(task), ensure_ascii=False)
-    await dispatch(
-        bot,
+    plan = await turns.route(
         bot_id=task.bot_id,
         chat_id=task.chat_id,
         user_id=task.user_id,
         reply_to=task.origin_message_id,
         update_db_id=None,
-        build_prompt=lambda _: prompt,
-        what=f"task={task.id}",
     )
+    async with SessionLocal() as session:
+        await ScheduleRepository(session).bind_turn(task.id, plan.turn.id)
+    await run_turn(bot, plan, prompt, settings.default_locale)
 
 
 async def run_watch(bot: Bot, watch, host, output: str, exit_code: int) -> None:
@@ -738,3 +745,138 @@ async def handle_inline(chosen: ChosenInlineResult, bot_id: int) -> None:
         inline_message_id=chosen.inline_message_id,
         what=f"inline={chosen.inline_message_id}",
     )
+
+
+
+async def resume_turn(turn_id: UUID) -> None:
+    async with SessionLocal() as session:
+        repo = TurnRepository(session)
+        turn = await repo.get(turn_id)
+        if turn is None or turn.status != TurnStatus.RUNNING:
+            return
+        user_repo = UserRepository(session)
+        user = await user_repo.get(turn.user_id)
+        locale = user.locale if user and user.locale else settings.default_locale
+
+    bot = await bots.bot_for(turn.bot_id)
+    if bot is None:
+        logger.error("turn=%s bot=%s not found", turn.id, turn.bot_id)
+        return
+
+    ctx = Ctx(
+        bot,
+        turn.bot_id,
+        turn.chat_id,
+        turn.user_id,
+        turn.id,
+        locale,
+        inline_message_id=turn.inline_message_id,
+    )
+    prefix = ctx.prefix
+
+    async with cluster.lock(
+        turns.chat_lock(turn.bot_id, turn.chat_id),
+        ttl=settings.chat_lock_ttl,
+        wait=settings.chat_lock_wait,
+        renew=True,
+    ):
+        checkpoint = await checkpoints.load(turn.id)
+        stream = await live.begin(turn)
+        if stream is not None:
+            step = checkpoint.step if checkpoint else 0
+            phase = checkpoint.phase if checkpoint else "init"
+            stream.emit(
+                "turn.resumed",
+                turn_id=str(turn.id),
+                root_id=str(turn.root_id),
+                chat_id=turn.chat_id,
+                step=step,
+                phase=phase,
+            )
+
+        history = await segments.load(turn)
+        system_prompt = history.system or SYSTEM_PROMPT
+        snapshot = None if history.system else system_prompt
+
+        messages = checkpoint.messages if checkpoint else list(history.messages)
+        if not messages:
+            async with SessionLocal() as session:
+                update_repo = UpdateRepository(session)
+                update_row = await update_repo.first_for_turn(turn.id)
+            if update_row is not None and "message" in update_row.payload:
+                msg = Message.model_validate(update_row.payload["message"])
+                prompt = prompt_for(msg, False)
+            else:
+                prompt = f"Resume turn {turn.id}"
+            async with SessionLocal() as session:
+                context = await build_context(session, ctx)
+            messages = [request.user(prompt, context)]
+
+        status = TurnStatus.FAILED
+        note: str | None = None
+        base = len(history.messages)
+
+        try:
+            async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
+                while True:
+                    outcome = await _execute(
+                        ctx,
+                        messages,
+                        system_prompt,
+                        initial_checkpoint=checkpoint,
+                    )
+                    checkpoint = None
+                    if outcome.status != "ok":
+                        await queue.clear(turn.id)
+                        note = (
+                            outcome.status if outcome.error is None else short(outcome.error, 1000)
+                        )
+                        logger.info("%s resume finished with %s", prefix, outcome.status)
+                        await notify(
+                            bot,
+                            turn,
+                            _failure_text(locale, outcome),
+                            reply_markup=retry_markup(str(turn.id), locale),
+                        )
+                        return
+                    leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
+                    if leftover is None:
+                        status = TurnStatus.DONE
+                        return
+                    messages.append(request.user(leftover))
+                    logger.info("%s re-running with messages that arrived after the reply", prefix)
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
+            status = TurnStatus.CANCELLED
+            note = "stopped by the user"
+            await queue.clear(turn.id)
+            await notify(bot, turn, t("agent-stopped", locale))
+        except Exception as e:
+            logger.exception("%s resume turn crashed", prefix)
+            await queue.clear(turn.id)
+            note = "crashed"
+            await notify(
+                bot,
+                turn,
+                t("agent-failure", locale),
+                reply_markup=retry_markup(str(turn.id), locale),
+            )
+        finally:
+            await cancel_subagents_of(turn.id)
+            await cancel.clear(turn.id)
+            await turns.seal(turn.id)
+            await segments.save(turn, messages[base:], snapshot)
+            async with SessionLocal() as session:
+                await TurnRepository(session).finish(turn.id, status, note)
+                fresh = await TurnRepository(session).get(turn.id)
+            await checkpoints.clear(turn.id)
+            live.emit(
+                turn.id,
+                "turn.end",
+                status=str(status),
+                steps=fresh.num_turns if fresh else 0,
+                note=note,
+            )
+            await live.end(turn.id)

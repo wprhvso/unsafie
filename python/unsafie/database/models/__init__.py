@@ -27,6 +27,7 @@ from unsafie.database.models.scheduled_task import ScheduledTask, TaskKind
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch, WatchMode
 from unsafie.database.models.subscription import GithubSubscription
+from unsafie.database.models.turn_checkpoint import CheckpointPhase, TurnCheckpoint
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.models.turn_message import TurnMessages
 from unsafie.database.models.update import Update
@@ -39,6 +40,7 @@ __all__ = [
     "Artifact",
     "ArtifactKind",
     "Bot",
+    "CheckpointPhase",
     "Chat",
     "CommandStatus",
     "CommitLog",
@@ -66,6 +68,7 @@ __all__ = [
     "TaskKind",
     "TokenKind",
     "Turn",
+    "TurnCheckpoint",
     "TurnMessages",
     "TurnStatus",
     "Update",

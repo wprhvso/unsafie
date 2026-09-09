@@ -29,6 +29,7 @@ def send(
     buttons: Any = None,
     silent: bool = False,
     chat: int | str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     body = {
         "text": text,
@@ -37,6 +38,7 @@ def send(
         "buttons": json.dumps(buttons, ensure_ascii=False) if buttons is not None else None,
         "silent": silent,
         "turn": _turn(),
+        "idempotency_key": idempotency_key or os.environ.get("UNSAFIE_IDEMPOTENCY_KEY"),
     }
     res = client().call("POST", "/chat/messages", body)
     sys.stderr.write(markers.sent() + "\n")
@@ -52,6 +54,7 @@ def send_file(
     kind: str = "document",
     silent: bool = False,
     chat: int | str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict:
     if isinstance(path, bytes):
         data = path
@@ -72,6 +75,7 @@ def send_file(
         "silent": silent,
         "chat_id": _chat(chat),
         "turn": _turn(),
+        "idempotency_key": idempotency_key or os.environ.get("UNSAFIE_IDEMPOTENCY_KEY"),
     }
     res = client().call("POST", "/chat/files", body)
     sys.stderr.write(markers.sent() + "\n")

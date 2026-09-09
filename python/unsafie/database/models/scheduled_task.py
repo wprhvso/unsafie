@@ -1,5 +1,8 @@
 from datetime import datetime
 from enum import StrEnum
+from uuid import UUID
+
+from sqlalchemy import UUID as SQL_UUID
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,6 +36,12 @@ class ScheduledTask(Base):
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     runs: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    active_turn_id: Mapped[UUID | None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("turns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     @property

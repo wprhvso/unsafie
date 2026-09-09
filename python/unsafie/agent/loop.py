@@ -2,11 +2,12 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from unsafie.agent import blocks, client, credentials, pricing, queue, request, turns
+from unsafie.agent import blocks, checkpoints, client, credentials, pricing, queue, request, turns
 from unsafie.agent.client import ApiError
 from unsafie.agent.parser import extract_code
 from unsafie.agent.session import Ctx
 from unsafie.agent.trace import Recorder
+from unsafie.database.models.turn_checkpoint import CheckpointPhase
 from unsafie.log import short
 from unsafie.settings import settings
 
@@ -44,11 +45,87 @@ async def run(
     prompt: str,
     effort: str | None,
     recorder: Recorder,
+    initial_step: int = 0,
+    initial_checkpoint: checkpoints.CheckpointData | None = None,
+    credential_id: int | None = None,
 ) -> Result:
     result = Result()
 
+    if initial_checkpoint is not None:
+        result.steps = initial_checkpoint.step
+        if (
+            initial_checkpoint.phase == CheckpointPhase.TOOL_EXEC
+            and initial_checkpoint.active_block
+        ):
+            code = initial_checkpoint.active_block.get("code") or ""
+            runner = blocks.Runner(ctx, recorder)
+            await runner.resume(initial_checkpoint.step, code)
+            result.ran += runner.count
+            if runner.replied:
+                result.replied = True
+
+            extra, injected_raw = await queue.drain(ctx.turn_id)
+            if runner.stopped:
+                if extra is not None:
+                    injected_data = []
+                    for raw in injected_raw:
+                        try:
+                            injected_data.append(json.loads(raw))
+                        except Exception:
+                            injected_data.append(raw)
+                    payload = (
+                        injected_data[0]
+                        if len(injected_data) == 1 and isinstance(injected_data[0], dict)
+                        else {"messages": injected_data}
+                    )
+                    recorder.note(
+                        "unsafie.stop_blocked",
+                        {"reason": "pending messages", "injected": payload},
+                    )
+                    content = runner.content()
+                    content.append({"type": "text", "text": extra})
+                    messages.append({"role": "user", "content": content})
+                else:
+                    result.replied = True
+                    await checkpoints.clear(ctx.turn_id)
+                    return result
+            else:
+                content = runner.content()
+                if extra is not None:
+                    injected_data = []
+                    for raw in injected_raw:
+                        try:
+                            injected_data.append(json.loads(raw))
+                        except Exception:
+                            injected_data.append(raw)
+                    payload = (
+                        injected_data[0]
+                        if len(injected_data) == 1 and isinstance(injected_data[0], dict)
+                        else {"messages": injected_data}
+                    )
+                    recorder.note("unsafie.messages_injected", payload)
+                    content.append({"type": "text", "text": extra})
+                messages.append({"role": "user", "content": content})
+
+            await checkpoints.save(
+                ctx.turn_id,
+                result.steps,
+                CheckpointPhase.TOOL_DONE,
+                messages,
+                credential_id=credential_id,
+            )
+    elif initial_step > 0:
+        result.steps = initial_step
+
     while result.steps < settings.agent_max_steps:
         turns.touch(ctx.turn_id)
+        await checkpoints.save(
+            ctx.turn_id,
+            result.steps + 1,
+            CheckpointPhase.LLM_QUERY,
+            messages,
+            credential_id=credential_id,
+        )
         body = request.build(
             model=model,
             prompt=prompt,
@@ -114,6 +191,16 @@ async def run(
             )
             continue
 
+        active_block = {"index": result.steps, "code": code}
+        await checkpoints.save(
+            ctx.turn_id,
+            result.steps,
+            CheckpointPhase.TOOL_EXEC,
+            messages,
+            active_block=active_block,
+            credential_id=credential_id,
+        )
+
         runner = blocks.Runner(ctx, recorder)
         await runner.run(code)
         turns.touch(ctx.turn_id)
@@ -146,12 +233,22 @@ async def run(
                 content = runner.content()
                 content.append({"type": "text", "text": extra})
                 messages.append({"role": "user", "content": content})
+                await checkpoints.save(
+                    ctx.turn_id,
+                    result.steps,
+                    CheckpointPhase.TOOL_DONE,
+                    messages,
+                    injected=injected_data,
+                    credential_id=credential_id,
+                )
                 continue
             result.replied = True
             logger.info("%s turn stopped via stop()", ctx.prefix)
+            await checkpoints.clear(ctx.turn_id)
             return result
 
         content = runner.content()
+        injected_payload = None
         if extra is not None:
             injected_data = []
             for raw in injected_raw:
@@ -167,7 +264,17 @@ async def run(
             recorder.note("unsafie.messages_injected", payload)
             logger.info("%s injecting messages that arrived mid-turn", ctx.prefix)
             content.append({"type": "text", "text": extra})
+            injected_payload = injected_data
+
         messages.append({"role": "user", "content": content})
+        await checkpoints.save(
+            ctx.turn_id,
+            result.steps,
+            CheckpointPhase.TOOL_DONE,
+            messages,
+            injected=injected_payload,
+            credential_id=credential_id,
+        )
         continue
 
     logger.warning("%s hit the %s step ceiling", ctx.prefix, settings.agent_max_steps)
