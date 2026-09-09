@@ -66,3 +66,20 @@ commands-lang-status =
 commands-lang-set = Язык изменен на: { $language }
 commands-lang-reset = Сброшено на автоопределение по Telegram: { $language }
 commands-lang-usage = Доступные языки: { $languages }, например /lang ru
+cmd-system-help =
+    Инструкции для модели, которые направляют её для достижения лучшей производительности.
+
+    Примеры:
+    <code>/system Отвечай как можно более кратко</code>
+    <code>/system Не используй технические термины в своем ответе</code>
+
+    Вернуть как было: /system_clear
+cmd-system-ok = Системный промпт установлен
+cmd-system-clear-ok = Системный промпт сброшен
+cmd-long-prompt = Отправить сообщение?
+cmd-system-long-prompt = Сохранить системный промпт?
+cmd-long-send = Отправить
+cmd-long-reset = Сбросить
+cmd-long-reset-ok = Сброшено
+cmd-long-empty = Пока нечего отправлять
+cmd-long-expired = Время вышло — ничего не отправлено

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.agent.session import Ctx
+from unsafie.database.repositories.chat import ChatRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.github import pat
 from unsafie.scheduler.when import zone
@@ -65,6 +66,13 @@ async def servers_context(ctx: Ctx) -> str:
     return f"SSH servers configured in ~/.ssh: {listed}."
 
 
+async def chat_system_context(session: AsyncSession, ctx: Ctx) -> str:
+    chat = await ChatRepository(session).get(ctx.bot_id, ctx.chat_id)
+    if chat and chat.system:
+        return f"User system instructions for this chat:\n{chat.system}"
+    return ""
+
+
 async def build_context(session: AsyncSession, ctx: Ctx) -> str:
     reminder = (
         INLINE_REMINDER.format(inline_message_id=ctx.inline_message_id)
@@ -75,6 +83,7 @@ async def build_context(session: AsyncSession, ctx: Ctx) -> str:
         await time_context(session, ctx),
         await accounts_context(ctx),
         await servers_context(ctx),
+        await chat_system_context(session, ctx),
         reminder,
     ]
     return "\n".join(part for part in parts if part)

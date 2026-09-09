@@ -61,3 +61,20 @@ commands-lang-status =
 commands-lang-set = زبان به { $language } تغییر یافت
 commands-lang-reset = بازنشانی به تشخیص خودکار تلگرام: { $language }
 commands-lang-usage = زبان‌های در دسترس: { $languages }، مثلاً /lang fa
+cmd-system-help =
+    دستورالعمل‌هایی برای مدل که آن را به سمت عملکرد بهتر هدایت می‌کند.
+
+    نمونه‌ها:
+    <code>/system تا جای ممکن کوتاه پاسخ بده</code>
+    <code>/system در پاسخت از اصطلاحات فنی استفاده نکن</code>
+
+    بازگشت به حالت پیش‌فرض: /system_clear
+cmd-system-ok = پرامپت سیستمی تنظیم شد
+cmd-system-clear-ok = پرامپت سیستمی بازنشانی شد
+cmd-long-prompt = پیام ارسال شود؟
+cmd-system-long-prompt = پرامپت سیستمی ذخیره شود؟
+cmd-long-send = ارسال
+cmd-long-reset = انصراف
+cmd-long-reset-ok = لغو شد
+cmd-long-empty = فعلاً چیزی برای ارسال نیست
+cmd-long-expired = زمان تمام شد — چیزی ارسال نشد

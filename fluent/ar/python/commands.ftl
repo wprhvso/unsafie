@@ -61,3 +61,20 @@ commands-lang-status =
 commands-lang-set = تم تغيير اللغة إلى: { $language }
 commands-lang-reset = تمت إعادة التعيين إلى التحديد التلقائي: { $language }
 commands-lang-usage = اللغات المتاحة: { $languages }، مثل /lang ar
+cmd-system-help =
+    تعليمات للنموذج توجّهه نحو أداء أفضل.
+
+    أمثلة:
+    <code>/system أجب بأقصى قدر ممكن من الإيجاز</code>
+    <code>/system لا تستخدم مصطلحات تقنية في ردك</code>
+
+    للعودة إلى الوضع الافتراضي: /system_clear
+cmd-system-ok = تم ضبط موجّه النظام
+cmd-system-clear-ok = تمت إعادة ضبط موجّه النظام
+cmd-long-prompt = هل أرسل الرسالة؟
+cmd-system-long-prompt = هل أحفظ موجّه النظام؟
+cmd-long-send = إرسال
+cmd-long-reset = إلغاء
+cmd-long-reset-ok = تم الإلغاء
+cmd-long-empty = لا يوجد ما يُرسل بعد
+cmd-long-expired = انتهت المهلة — لم يُرسل شيء
