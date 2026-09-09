@@ -46,10 +46,35 @@ class Caller:
         return scope in self.token.scope_set
 
     def chat(self, override: int | None = None) -> int:
-        chat_id = override or self.chat_id
+        if self.chat_id is not None:
+            if override is not None and override != self.chat_id:
+                raise HTTPException(403, "cross-chat access is forbidden for this token")
+            return self.chat_id
+        chat_id = override
         if chat_id is None:
             raise HTTPException(400, "no chat: pass chat_id or use a token bound to a chat")
         return chat_id
+
+    async def target_chat(self, override: int | None = None) -> int:
+        if self.chat_id is not None:
+            if override is not None and override != self.chat_id:
+                raise HTTPException(403, "cross-chat access is forbidden for this token")
+            return self.chat_id
+        target = override
+        if target is None:
+            raise HTTPException(400, "no chat: pass chat_id or use a token bound to a chat")
+        if target == self.user_id:
+            return target
+        bot = await self.bot()
+        try:
+            member = await bot.get_chat_member(target, self.user_id)
+            if member.status in ("left", "kicked"):
+                raise HTTPException(403, "user is not a member of the target chat")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(403, f"cannot access target chat: {e}") from None
+        return target
 
     async def bot(self) -> Bot:
         if self.bot_id is None:
