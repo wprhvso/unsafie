@@ -15,21 +15,6 @@ IGNORED_DIRS = {
 }
 
 
-def parse_range(spec: str | None) -> tuple[int, int | None]:
-    if not spec:
-        return 1, None
-    spec = spec.strip()
-    if "-" in spec:
-        parts = spec.split("-", 1)
-        start = int(parts[0]) if parts[0].strip() else 1
-        end = int(parts[1]) if parts[1].strip() else None
-        return max(1, start), end
-    if spec.isdigit():
-        val = int(spec)
-        return max(1, val), val
-    return 1, None
-
-
 def is_binary(data: bytes) -> bool:
     if not data:
         return False
@@ -67,7 +52,6 @@ def collect_paths(targets: list[str]) -> list[Path]:
 def read(
     paths: list[str],
     *,
-    lines: str | None = None,
     max_lines: int = 2000,
     raw: bool = False,
 ) -> dict[str, Any]:
@@ -78,7 +62,6 @@ def read(
     if not target_paths:
         return {"ok": False, "error": "no matching files found"}
 
-    start_line, end_line = parse_range(lines)
     rendered_blocks: list[str] = []
     file_results: list[dict[str, Any]] = []
     total_lines_read = 0
@@ -118,33 +101,19 @@ def read(
         all_lines = content_str.splitlines()
         total_count = len(all_lines)
 
-        actual_start = min(start_line, total_count) if total_count > 0 else 1
-        if end_line is not None:
-            actual_end = min(end_line, total_count)
-        else:
-            actual_end = total_count
-
-        if actual_end < actual_start:
-            slice_lines: list[str] = []
-        else:
-            slice_lines = all_lines[actual_start - 1 : actual_end]
-
+        slice_lines = all_lines
         truncated = False
         if len(slice_lines) > max_lines:
             slice_lines = slice_lines[:max_lines]
-            actual_end = actual_start + len(slice_lines) - 1
             truncated = True
-
+        actual_start = 1
+        actual_end = len(slice_lines)
         width = len(str(actual_end)) if actual_end > 0 else 1
         formatted_slice: list[str] = []
-        for idx, line in enumerate(slice_lines, start=actual_start):
-            formatted_slice.append(f"{idx:>{width}} | {line}")
-
+        for idx, line_str in enumerate(slice_lines, start=1):
+            formatted_slice.append(f"{idx:>{width}} | {line_str}")
         formatted_content = "\n".join(formatted_slice)
-
         header = f"=== {path} ({total_count} lines"
-        if actual_start > 1 or (end_line is not None and actual_end < total_count):
-            header += f", lines {actual_start}-{actual_end}"
         if truncated:
             header += f", truncated to {max_lines} lines"
         header += ") ==="

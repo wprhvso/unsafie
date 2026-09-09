@@ -41,17 +41,3 @@ def test_cli_read_files():
         assert "line1" in res["rendered"]
         assert "beta" in res["rendered"]
 
-
-def test_cli_read_line_range():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        f = Path(tmpdir) / "sample.py"
-        f.write_text("\n".join(f"item_{i}" for i in range(1, 21)), encoding="utf-8")
-
-        res = read.read([str(f)], lines="5-10")
-        assert res["ok"] is True
-        assert res["total_lines_read"] == 6
-        assert "item_5" in res["rendered"]
-        assert "item_10" in res["rendered"]
-        assert "item_1\n" not in res["rendered"]
-        assert "item_4\n" not in res["rendered"]
-        assert "item_11" not in res["rendered"]

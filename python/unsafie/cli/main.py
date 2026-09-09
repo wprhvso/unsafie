@@ -54,7 +54,6 @@ def main(argv: list[str] | None = None) -> int:
 
     p_read = subs.add_parser("read")
     p_read.add_argument("paths", nargs="+")
-    p_read.add_argument("--lines", "-l", default=None)
     p_read.add_argument("--max-lines", type=int, default=2000)
     p_read.add_argument("--raw", action="store_true")
 
@@ -298,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "read":
             from unsafie.cli import read
 
-            res = read.read(args.paths, lines=args.lines, max_lines=args.max_lines, raw=args.raw)
+            res = read.read(args.paths, max_lines=args.max_lines, raw=args.raw)
             if args.raw and res.get("ok"):
                 return 0
             return _out(res, ok=res.get("ok", True))
