@@ -188,6 +188,7 @@ async def _execute(
                     prompt=system_prompt,
                     effort=effort,
                     recorder=Recorder(prefix, live.of(ctx.turn_id)),
+                    credential_id=session_row.id,
                 )
                 elapsed = (time.perf_counter() - started) * 1000
                 _usage(query_span, result)
