@@ -17,6 +17,13 @@ def use(login: str | None) -> dict:
     secret = str(answer["token"])
     name, email = str(answer.get("name") or ""), str(answer.get("email") or "")
     os.environ["GH_TOKEN"] = secret
+    os.environ["GITHUB_TOKEN"] = secret
+    if name:
+        os.environ["GIT_AUTHOR_NAME"] = name
+        os.environ["GIT_COMMITTER_NAME"] = name
+    if email:
+        os.environ["GIT_AUTHOR_EMAIL"] = email
+        os.environ["GIT_COMMITTER_EMAIL"] = email
     if name and email:
         for line in (
             ["git", "config", "--global", "user.name", name],
@@ -33,6 +40,7 @@ def use(login: str | None) -> dict:
     subprocess.run(
         ["git", "config", "--global", "credential.helper", "store"], check=False, capture_output=True
     )
+    subprocess.run(["gh", "auth", "setup-git"], check=False, capture_output=True)
     return {"login": login, "name": name, "email": email}
 
 

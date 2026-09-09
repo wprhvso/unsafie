@@ -83,6 +83,19 @@ async def account_of(user_id: int, login: str | None = None) -> GithubAccount | 
     return next((a for a in rows if a.login.lower() == login.lower()), None)
 
 
+async def identity(user_id: int, login: str | None = None) -> tuple[str, str]:
+    async with SessionLocal() as db:
+        user = await UserRepository(db).get(user_id)
+    if user is not None and user.git_name and user.git_email:
+        return user.git_name, user.git_email
+    if not login:
+        account = await account_of(user_id)
+        login = account.login if account else ""
+    if login:
+        return login, f"{login}@users.noreply.github.com"
+    return "", ""
+
+
 async def require_account(user_id: int, login: str | None = None) -> GithubAccount:
     account = await account_of(user_id, login)
     if account is None:

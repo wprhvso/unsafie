@@ -162,16 +162,9 @@ async def save(state: Session) -> None:
 
 
 async def author_for(user_id: int, repo: Repo) -> dict | None:
-    async with SessionLocal() as session:
-        user = await UserRepository(session).get(user_id)
-    if user and user.git_name and user.git_email:
-        return {"name": user.git_name, "email": user.git_email}
-    account = await pat.account_of(user_id)
-    if account:
-        return {
-            "name": account.login,
-            "email": f"{account.login}@users.noreply.github.com",
-        }
+    name, email = await pat.identity(user_id)
+    if name and email:
+        return {"name": name, "email": email}
     return None
 
 
