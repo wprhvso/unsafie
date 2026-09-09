@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -49,6 +50,7 @@ async def route(
     update_db_id: int | None,
     is_inline: bool = False,
     inline_message_id: str | None = None,
+    turn_reply_to: int | None = None,
 ) -> Plan:
     prefix = f"bot={bot_id} chat={chat_id}"
     async with cluster.lock(
@@ -79,7 +81,7 @@ async def route(
                 chat_id=chat_id,
                 user_id=user_id,
                 parent=owner,
-                reply_to=reply_to,
+                reply_to=turn_reply_to if turn_reply_to is not None else reply_to,
                 is_inline=is_inline,
                 inline_message_id=inline_message_id,
             )
@@ -106,10 +108,27 @@ async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | 
         return leftover
 
 
+_last_progress: dict[UUID, float] = {}
+
+
+def touch(turn_id: UUID) -> None:
+    _last_progress[turn_id] = time.monotonic()
+
+
 async def _beat(turn_id: UUID, owner: asyncio.Task) -> None:
     while True:
         await asyncio.sleep(settings.turn_heartbeat)
         try:
+            last = _last_progress.get(turn_id, time.monotonic())
+            stall_limit = settings.agent_block_timeout + settings.turn_stale_after
+            if time.monotonic() - last > stall_limit:
+                logger.warning(
+                    "turn=%s stalled for %.0fs with no progress, cancelling",
+                    turn_id,
+                    time.monotonic() - last,
+                )
+                owner.cancel()
+                return
             async with SessionLocal() as session:
                 await TurnRepository(session).beat(turn_id)
             if await cancel.asked(turn_id):
@@ -156,6 +175,7 @@ async def alive(turn_id: UUID) -> AsyncIterator[None]:
     owner = asyncio.current_task()
     assert owner is not None
     _here[turn_id] = owner
+    touch(turn_id)
     _idle.clear()
     await cancel.clear(turn_id)
     task = asyncio.create_task(_beat(turn_id, owner), name=f"heartbeat:{turn_id}")
@@ -166,5 +186,6 @@ async def alive(turn_id: UUID) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await task
         _here.pop(turn_id, None)
+        _last_progress.pop(turn_id, None)
         if not _here:
             _idle.set()

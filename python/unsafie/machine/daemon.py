@@ -173,18 +173,6 @@ class Daemon:
         elif kind == wire.FrameKind.SHUTDOWN:
             self.stop.set()
 
-    def _terminate(self, proc: subprocess.Popen | None) -> None:
-        if proc is None or proc.poll() is not None:
-            return
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, OSError):
-            pass
-        try:
-            proc.wait(timeout=2.0)
-        except (ProcessLookupError, OSError, subprocess.TimeoutExpired):
-            pass
-
     def _execute(self, raw: dict) -> None:
         cmd_id = str(raw.get("id") or "")
         cmd = str(raw.get("command") or raw.get("code") or "")
@@ -193,6 +181,7 @@ class Daemon:
         with self._exec_lock:
             started = time.monotonic()
             bash_bin = shutil.which("bash") or "/bin/bash"
+            limit = float(raw.get("timeout") or 600.0)
             proc = None
             try:
                 proc = subprocess.Popen(
@@ -202,20 +191,41 @@ class Daemon:
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
-                out, _ = proc.communicate(timeout=float(raw.get("timeout") or 600.0))
+                out, _ = proc.communicate(timeout=limit)
                 text = out.decode(errors="replace")
                 self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
-            except subprocess.TimeoutExpired as e:
-                self._terminate(proc)
-                partial = e.output.decode(errors="replace") if e.output else ""
-                msg = f"{partial}\ncommand timed out" if partial else "command timed out"
-                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": msg})
+            except subprocess.TimeoutExpired:
+                if proc is not None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except Exception:
+                        pass
+                    try:
+                        out, _ = proc.communicate(timeout=2.0)
+                        text = out.decode(errors="replace") if out else ""
+                        if text:
+                            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
+                    except Exception:
+                        pass
+                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": f"
+[command timed out after {limit:.0f}s]
+"})
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 124, "seconds": time.monotonic() - started})
             except Exception as e:
-                self._terminate(proc)
+                if proc is not None and proc.poll() is None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except Exception:
+                        pass
                 self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
+            finally:
+                if proc is not None and proc.poll() is None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except Exception:
+                        pass
 
     def _sender(self) -> None:
         while not self.stop.is_set():

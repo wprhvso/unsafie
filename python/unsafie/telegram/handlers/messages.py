@@ -58,7 +58,7 @@ def build_messages_router() -> Router:
                 if message.text and username:
                     cleaned = clean_mention(message.text, username)
                     if cleaned != message.text:
-                        message = message.model_copy(update={"text": cleaned})
+                        message = message.model_copy(update={"text": cleaned}).as_(message.bot)
 
         logger.info(
             "bot=%s chat=%s(%s) msg=%s from=%s content_type=%s reply_to=%s",

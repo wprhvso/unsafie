@@ -543,6 +543,7 @@ async def dispatch(
     locale: str | None = None,
     is_inline: bool = False,
     inline_message_id: str | None = None,
+    turn_reply_to: int | None = None,
     what: str,
 ) -> None:
     with telemetry.span(
@@ -562,6 +563,7 @@ async def dispatch(
             update_db_id=update_db_id,
             is_inline=is_inline,
             inline_message_id=inline_message_id,
+            turn_reply_to=turn_reply_to,
         )
         telemetry.set_attrs(
             span,
@@ -680,8 +682,9 @@ async def retry_turn(bot: Bot, origin: Turn, locale: str) -> None:
         update_row = await update_repo.first_for_turn(origin.id)
 
     if update_row is not None and "message" in update_row.payload:
-        msg = Message.model_validate(update_row.payload["message"])
-        msg.bot = bot
+        msg = Message.model_validate(
+            update_row.payload["message"], context={"bot": bot}
+        ).as_(bot)
         reply_to = msg.reply_to_message.message_id if msg.reply_to_message else origin.reply_to
         await dispatch(
             bot,
