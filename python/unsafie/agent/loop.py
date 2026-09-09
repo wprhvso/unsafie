@@ -105,9 +105,11 @@ async def run(
             logger.warning(
                 "%s step=%s model returned zero executable blocks", ctx.prefix, result.steps
             )
+            if messages and messages[-1].get("role") == "assistant" and not (reply.text or "").strip():
+                messages.pop()
             _ask(
                 messages,
-                "Error: No executable bash block found. Please provide an executable bash code block.",
+                "Error: No executable bash block found. Please provide an executable bash code block enclosed in ```bash ... ```.",
             )
             continue
 

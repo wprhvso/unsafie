@@ -220,6 +220,12 @@ def main(argv: list[str] | None = None) -> int:
     p_vision.add_argument("paths", nargs="+")
     p_vision.add_argument("--caption", default=None)
 
+    p_read = subs.add_parser("read")
+    p_read.add_argument("paths", nargs="+")
+    p_read.add_argument("--lines", "-l", default=None)
+    p_read.add_argument("--max-lines", type=int, default=2000)
+    p_read.add_argument("--raw", action="store_true")
+
     p_inline = subs.add_parser("inline")
     s_inline = p_inline.add_subparsers(dest="subcmd")
     p_iedit = s_inline.add_parser("edit")
@@ -431,6 +437,14 @@ def main(argv: list[str] | None = None) -> int:
             from unsafie.cli import vision
 
             return _out(vision.attach(args.paths, caption=args.caption))
+
+        if args.cmd == "read":
+            from unsafie.cli import read
+
+            res = read.read(args.paths, lines=args.lines, max_lines=args.max_lines, raw=args.raw)
+            if args.raw and res.get("ok"):
+                return 0
+            return _out(res, ok=res.get("ok", True))
 
         if args.cmd == "inline":
             from unsafie.cli import inline
