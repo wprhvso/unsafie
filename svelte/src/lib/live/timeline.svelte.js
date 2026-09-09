@@ -35,7 +35,6 @@ export function timeline() {
   let codeBlocks = new Map();
   let llmCalls = new Map();
   let steps = new Map();
-  let attempts = [];
 
   const at = (frame) => frame.at ?? null;
 
@@ -78,34 +77,11 @@ export function timeline() {
       case 'turn.start':
         state.turn = { id: data.turn_id, chat: data.chat_id, resumed: data.resumed ?? 0 };
         state.startedAt = when;
-        push({ id: frame.id, at: when, type: 'prompt', text: data.prompt ?? '' });
-        break;
-
-      case 'attempt.start': {
         state.model = data.model ?? state.model;
         state.effort = data.effort ?? state.effort;
-        state.contextLimit = contextLimit(state.model);
-        const item = push({
-          id: frame.id,
-          at: when,
-          type: 'attempt',
-          attempt: data.attempt,
-          model: data.model,
-          effort: data.effort
-        });
-        attempts.push(item);
+        if (state.model) state.contextLimit = contextLimit(state.model);
+        push({ id: frame.id, at: when, type: 'prompt', text: data.prompt ?? '' });
         break;
-      }
-
-      case 'attempt.end': {
-        const item = attempts[attempts.length - 1];
-        if (item) {
-          item.status = data.status;
-          item.stop = data.stop_reason;
-          item.error = data.error;
-        }
-        break;
-      }
 
       case 'step.start': {
         state.steps = Math.max(state.steps, data.step ?? 0);
@@ -292,7 +268,6 @@ export function timeline() {
     codeBlocks.clear();
     llmCalls.clear();
     steps.clear();
-    attempts = [];
   }
 
   return { state, apply, reset };
