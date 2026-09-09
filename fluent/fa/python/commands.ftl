@@ -10,6 +10,7 @@ commands-start =
     /auth — توکن‌ها برای CLI و API
     /tasks — یادآوری‌ها، زمان‌بندی‌ها و پایش‌ها
     /tz — منطقه زمانی
+    /lang — زبان (en, ru, es, fr, ar, fa)
     /help — این راهنما
 
     /model NAME — تغییر مدل
@@ -51,3 +52,12 @@ inline-text-hint = پاسخ سریع در همین گفتگو
 inline-page-title = صفحه وب (Page)
 inline-page-hint = انتشار صفحه کامل به همراه پیوند
 inline-pending = ⏳ در حال آماده‌سازی پاسخ...
+commands-lang-status =
+    زبان فعلی: { $current }
+    زبان‌های در دسترس: { $languages }
+
+    /lang CODE — تغییر زبان
+    /lang default — تشخیص خودکار بر اساس تلگرام
+commands-lang-set = زبان به { $language } تغییر یافت
+commands-lang-reset = بازنشانی به تشخیص خودکار تلگرام: { $language }
+commands-lang-usage = زبان‌های در دسترس: { $languages }، مثلاً /lang fa
