@@ -2,7 +2,7 @@ import os
 import stat
 from pathlib import Path
 
-from unsafie.cli.client import client
+from unsafie.cli.client import Client, client
 
 WILDCARD = (
     "Host *\n"
@@ -10,25 +10,6 @@ WILDCARD = (
     "    StrictHostKeyChecking accept-new\n"
     "    ServerAliveInterval 15\n"
 )
-
-
-def install(home: str | Path | None = None) -> list[str]:
-    material = client().call("GET", "/ssh/key")
-    root = Path(home or os.environ.get("HOME") or Path.home()) / ".ssh"
-    root.mkdir(parents=True, exist_ok=True)
-    root.chmod(stat.S_IRWXU)
-    private = root / "id_ed25519"
-    private.write_text(material["private"], encoding="utf-8")
-    private.chmod(0o600)
-    (root / "id_ed25519.pub").write_text(material["public"] + "\n", encoding="utf-8")
-    known = material.get("known_hosts") or []
-    if known:
-        (root / "known_hosts").write_text("\n".join(known) + "\n", encoding="utf-8")
-    hosts = client().call("GET", "/ssh/hosts").get("hosts", [])
-    config = root / "config"
-    config.write_text(_config(hosts), encoding="utf-8")
-    config.chmod(0o600)
-    return [str(row["alias"]) for row in hosts if row.get("alias")]
 
 
 def _config(hosts: list[dict]) -> str:
@@ -46,3 +27,31 @@ def _config(hosts: list[dict]) -> str:
         blocks.append("\n".join(block) + "\n")
     blocks.append(WILDCARD)
     return "\n".join(blocks)
+
+
+def write_keys(
+    material: dict,
+    hosts: list[dict],
+    home: str | Path | None = None,
+) -> list[str]:
+    root = Path(home or os.environ.get("HOME") or Path.home()) / ".ssh"
+    root.mkdir(parents=True, exist_ok=True)
+    root.chmod(stat.S_IRWXU)
+    private = root / "id_ed25519"
+    private.write_text(material["private"], encoding="utf-8")
+    private.chmod(0o600)
+    (root / "id_ed25519.pub").write_text(material["public"] + "\n", encoding="utf-8")
+    known = material.get("known_hosts") or []
+    if known:
+        (root / "known_hosts").write_text("\n".join(known) + "\n", encoding="utf-8")
+    config = root / "config"
+    config.write_text(_config(hosts), encoding="utf-8")
+    config.chmod(0o600)
+    return [str(row["alias"]) for row in hosts if row.get("alias")]
+
+
+def install(home: str | Path | None = None, cli: Client | None = None) -> list[str]:
+    cli = cli or client()
+    material = cli.call("GET", "/ssh/key")
+    hosts = cli.call("GET", "/ssh/hosts").get("hosts", [])
+    return write_keys(material, hosts, home=home)

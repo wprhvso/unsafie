@@ -1,10 +1,8 @@
 import logging
 
 from unsafie import telemetry
-from unsafie.agent import live as stream
 from unsafie.agent.live import Live
 from unsafie.log import short
-from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 

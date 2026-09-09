@@ -7,7 +7,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -155,6 +154,20 @@ class Daemon:
             if self.lease["turn"]:
                 os.environ["UNSAFIE_TURN"] = str(self.lease["turn"])
             os.environ["UNSAFIE_API"] = self.link.base
+            if self.lease["token"]:
+                try:
+                    from unsafie.cli.client import Client
+                    from unsafie.machine import keys
+
+                    keys.install(cli=Client(api=self.link.base, token=self.lease["token"]))
+                except Exception as e:
+                    sys.stderr.write(f"failed to install ssh keys: {e}\n")
+                try:
+                    from unsafie.cli import github
+
+                    github.use(None)
+                except Exception:
+                    pass
         elif kind == wire.FrameKind.SHUTDOWN:
             self.stop.set()
 

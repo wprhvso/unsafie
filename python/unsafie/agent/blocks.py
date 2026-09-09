@@ -93,7 +93,18 @@ class Runner:
                 name=f"agent-{self.ctx.turn_id}",
                 hours=2.0,
             )
+            await self._install_ssh_keys()
         return self._cli_token
+
+    async def _install_ssh_keys(self) -> None:
+        try:
+            from unsafie.cli.client import Client
+            from unsafie.machine import keys
+
+            api = settings.public_base_url or f"http://{settings.host}:{settings.port}"
+            await asyncio.to_thread(keys.install, cli=Client(api=api, token=self._cli_token))
+        except Exception as e:
+            logger.warning("%s failed to install ssh keys: %s", self.ctx.prefix, e)
 
     async def run(self, code: str) -> Block:
         index = len(self.blocks) + 1
