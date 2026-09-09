@@ -9,7 +9,7 @@ from uuid import UUID
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from unsafie import events, telemetry
 from unsafie.agent import (
@@ -37,12 +37,14 @@ from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.repositories.opal_session import OpalSessionRepository
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.database.repositories.update import UpdateRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
 from unsafie.log import short
 from unsafie.settings import settings
 from unsafie.telegram import bots, render, sender
 from unsafie.telegram.chat_action import typing
+from unsafie.telegram.retry import retry_markup
 from unsafie.telemetry import attrs
 
 logger = logging.getLogger(__name__)
@@ -119,7 +121,9 @@ async def _execute(
                 session_row = await creds.pick(tried)
                 if session_row is None:
                     next_at = await creds.next_cooldown()
-                    telemetry.refused(attempt_span, f"no usable opal session (tried={sorted(tried)})")
+                    telemetry.refused(
+                        attempt_span, f"no usable opal session (tried={sorted(tried)})"
+                    )
                     logger.warning("%s no usable opal session (tried=%s)", prefix, sorted(tried))
                     return Outcome("no_credentials", next_at=next_at)
                 user = await UserRepository(session).get_or_create(ctx.user_id)
@@ -127,7 +131,9 @@ async def _execute(
                 effort = user.effort or settings.gemini_thinking_level
 
             try:
-                access_token = await opal.get_access_token(session_row.id, session_row.refresh_token)
+                access_token = await opal.get_access_token(
+                    session_row.id, session_row.refresh_token
+                )
             except opal.OpalRefreshFailed as e:
                 logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
                 tried.add(session_row.id)
@@ -190,7 +196,9 @@ async def _execute(
                     {
                         attrs.SDK_MESSAGES: len(messages),
                         attrs.NUM_TURNS: result.steps,
-                        attrs.GEN_AI_FINISH_REASONS: [result.stop_reason] if result.stop_reason else None,
+                        attrs.GEN_AI_FINISH_REASONS: [result.stop_reason]
+                        if result.stop_reason
+                        else None,
                         attrs.COMPLETION: telemetry.content(result.text),
                     },
                 )
@@ -254,7 +262,9 @@ async def _execute(
     return Outcome("failed", error="attempts exhausted")
 
 
-async def notify(bot: Bot, turn: Turn, text: str) -> None:
+async def notify(
+    bot: Bot, turn: Turn, text: str, reply_markup: InlineKeyboardMarkup | None = None
+) -> None:
     try:
         await sender.send(
             bot,
@@ -263,6 +273,7 @@ async def notify(bot: Bot, turn: Turn, text: str) -> None:
             markdown=text,
             kind=ResponseKind.SYSTEM,
             turn=turn,
+            reply_markup=reply_markup,
         )
     except TelegramAPIError as e:
         logger.error(
@@ -336,24 +347,23 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                     if outcome.status != "ok":
                         await queue.clear(turn.id)
                         note = (
-                            outcome.status
-                            if outcome.error is None
-                            else short(outcome.error, 1000)
+                            outcome.status if outcome.error is None else short(outcome.error, 1000)
                         )
                         logger.info("%s finished with %s", prefix, outcome.status)
-                        await notify(bot, turn, _failure_text(locale, outcome))
+                        await notify(
+                            bot,
+                            turn,
+                            _failure_text(locale, outcome),
+                            reply_markup=retry_markup(str(turn.id), locale),
+                        )
                         return
-                    leftover = await turns.finish_or_continue(
-                        turn.id, turn.bot_id, turn.chat_id
-                    )
+                    leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
                     if leftover is None:
                         status = TurnStatus.DONE
                         return
                     messages.append(request.user(leftover))
                     telemetry.event("unsafie.turn_rerun")
-                    logger.info(
-                        "%s re-running with messages that arrived after the reply", prefix
-                    )
+                    logger.info("%s re-running with messages that arrived after the reply", prefix)
         except asyncio.CancelledError:
             current = asyncio.current_task()
             if current is not None:
@@ -368,7 +378,12 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             logger.exception("%s turn crashed", prefix)
             await queue.clear(turn.id)
             note = "crashed"
-            await notify(bot, turn, t("agent-failure", locale))
+            await notify(
+                bot,
+                turn,
+                t("agent-failure", locale),
+                reply_markup=retry_markup(str(turn.id), locale),
+            )
         finally:
             await cancel_subagents_of(turn.id)
             await cancel.clear(turn.id)
@@ -500,9 +515,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                     if isinstance(content, str):
                         fallback_result = content
                 final_result = (
-                    fresh.result
-                    if fresh and fresh.result
-                    else (fallback_result or note or "done")
+                    fresh.result if fresh and fresh.result else (fallback_result or note or "done")
                 )
                 await repo.finish(turn.id, status, final_result)
                 fresh = await repo.get(turn.id)
@@ -677,4 +690,40 @@ async def run_watch(bot: Bot, watch, host, output: str, exit_code: int) -> None:
         update_db_id=None,
         build_prompt=lambda _: prompt,
         what=f"watch={watch.id}",
+    )
+
+
+async def retry_turn(bot: Bot, origin: Turn, locale: str) -> None:
+    async with SessionLocal() as session:
+        update_repo = UpdateRepository(session)
+        update_row = await update_repo.first_for_turn(origin.id)
+
+    if update_row is not None and "message" in update_row.payload:
+        msg = Message.model_validate(update_row.payload["message"])
+        msg.bot = bot
+        reply_to = msg.reply_to_message.message_id if msg.reply_to_message else origin.reply_to
+        await dispatch(
+            bot,
+            bot_id=origin.bot_id,
+            chat_id=origin.chat_id,
+            user_id=origin.user_id,
+            reply_to=reply_to,
+            update_db_id=update_row.id,
+            build_prompt=lambda in_context: prompt_for(msg, in_context),
+            locale=locale,
+            what=f"retry={origin.id}",
+        )
+        return
+
+    prompt = f"Retry previous request for turn {origin.id}"
+    await dispatch(
+        bot,
+        bot_id=origin.bot_id,
+        chat_id=origin.chat_id,
+        user_id=origin.user_id,
+        reply_to=origin.reply_to,
+        update_db_id=None,
+        build_prompt=lambda _: prompt,
+        locale=locale,
+        what=f"retry={origin.id}",
     )

@@ -41,3 +41,10 @@ commands-group-mode-all = Все сообщения
 commands-group-mode-off = Выключен
 commands-group-mode-updated = Режим группы изменен на: { $mode }
 commands-group-admin-only = Только администраторы группы могут настраивать бота.
+
+commands-retry-button = 🔄 Повторить
+commands-retry-in-progress = ⏳ Повторяется...
+commands-retry-toast = Перезапускаю запрос...
+commands-retry-not-found = Не удалось найти исходный запрос.
+commands-retry-already-running = Этот запрос уже выполняется.
+commands-retry-denied = Только автор запроса или администраторы группы могут повторить его.
