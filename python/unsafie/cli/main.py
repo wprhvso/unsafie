@@ -220,6 +220,13 @@ def main(argv: list[str] | None = None) -> int:
     p_vision.add_argument("paths", nargs="+")
     p_vision.add_argument("--caption", default=None)
 
+    p_inline = subs.add_parser("inline")
+    s_inline = p_inline.add_subparsers(dest="subcmd")
+    p_iedit = s_inline.add_parser("edit")
+    p_iedit.add_argument("text")
+    p_iedit.add_argument("--inline-message-id", default=None)
+    p_iedit.add_argument("--buttons", default=None)
+
     p_bcookies = s_br.add_parser("cookies")
     p_bcookies.add_argument("--set", dest="cookie_json", default=None)
 
@@ -424,6 +431,15 @@ def main(argv: list[str] | None = None) -> int:
             from unsafie.cli import vision
 
             return _out(vision.attach(args.paths, caption=args.caption))
+
+        if args.cmd == "inline":
+            from unsafie.cli import inline
+
+            if args.subcmd == "edit":
+                btns = json.loads(args.buttons) if args.buttons else None
+                return _out(
+                    inline.edit(args.text, inline_message_id=args.inline_message_id, buttons=btns)
+                )
 
         return _out({"error": f"unknown command {args.cmd}"}, ok=False)
     except Exception as exc:

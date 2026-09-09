@@ -47,3 +47,11 @@ commands-retry-toast = Retrying request...
 commands-retry-not-found = Could not find the original request.
 commands-retry-already-running = This request is already running.
 commands-retry-denied = Only the author or group admins can retry this request.
+
+inline-prompt = Ask a question or search...
+inline-again = 🔍 Ask another question
+inline-text-title = Text Answer
+inline-text-hint = Quick answer directly in chat
+inline-page-title = Web Page
+inline-page-hint = Publish comprehensive page with link
+inline-pending = ⏳ Generating answer...

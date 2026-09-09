@@ -50,3 +50,5 @@ class Turn(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_subagent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     title: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    is_inline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    inline_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
