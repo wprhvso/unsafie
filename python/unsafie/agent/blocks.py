@@ -13,6 +13,7 @@ from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.log import short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
+from unsafie.gh import ensure_gh
 from unsafie.pool import blobs
 from unsafie.settings import settings
 from unsafie_wire import markers
@@ -152,10 +153,17 @@ class Runner:
             self._finished(block)
             return
 
+        gh_bin = None
+        try:
+            gh_bin = await ensure_gh()
+        except Exception as e:
+            logger.warning("%s failed to ensure gh: %s", self.ctx.prefix, e)
+
         env = dict(os.environ)
         extra_paths = [
             str(Path(sys.prefix) / "bin"),
             str(Path(sys.executable).parent),
+            str(Path(gh_bin).parent) if gh_bin else "",
             str(Path.home() / ".cargo" / "bin"),
             str(Path.home() / ".local" / "bin"),
             "/usr/local/bin",
