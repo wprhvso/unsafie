@@ -675,8 +675,9 @@ async def retry_turn(bot: Bot, origin: Turn, locale: str) -> None:
         update_row = await update_repo.first_for_turn(origin.id)
 
     if update_row is not None and "message" in update_row.payload:
-        msg = Message.model_validate(update_row.payload["message"])
-        msg.bot = bot
+        msg = Message.model_validate(
+            update_row.payload["message"], context={"bot": bot}
+        ).as_(bot)
         reply_to = msg.reply_to_message.message_id if msg.reply_to_message else origin.reply_to
         await dispatch(
             bot,
