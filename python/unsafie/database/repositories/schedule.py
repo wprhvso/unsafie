@@ -1,10 +1,12 @@
 import logging
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.scheduled_task import ScheduledTask
+from unsafie.database.models.turn import Turn, TurnStatus
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,12 @@ class ScheduleRepository:
             or 0
         )
 
+    async def bind_turn(self, task_id: int, turn_id: UUID | None) -> None:
+        await self.session.execute(
+            update(ScheduledTask).where(ScheduledTask.id == task_id).values(active_turn_id=turn_id)
+        )
+        await self.session.commit()
+
     async def claim(self, now: datetime, limit: int, lease: float) -> list[ScheduledTask]:
         rows = list(
             await self.session.scalars(
@@ -64,16 +72,32 @@ class ScheduleRepository:
                 .with_for_update(skip_locked=True)
             )
         )
+        result: list[ScheduledTask] = []
         for row in rows:
+            if row.active_turn_id is not None:
+                turn = await self.session.get(Turn, row.active_turn_id)
+                if turn is not None and turn.status == TurnStatus.RUNNING:
+                    row.next_run_at = now + timedelta(seconds=lease)
+                    continue
+                if turn is not None and turn.status == TurnStatus.DONE:
+                    row.active_turn_id = None
+                    row.runs += 1
+                    row.last_run_at = now
+                    continue
+                row.active_turn_id = None
+
             row.next_run_at = now + timedelta(seconds=lease)
+            result.append(row)
+
         await self.session.commit()
-        if rows:
-            logger.info("claimed task(s) %s for %ss", [r.id for r in rows], lease)
-        return rows
+        if result:
+            logger.info("claimed task(s) %s for %ss", [r.id for r in result], lease)
+        return result
 
     async def fired(self, task: ScheduledTask, next_run_at: datetime | None) -> None:
         task.runs += 1
         task.last_run_at = datetime.now(UTC)
+        task.active_turn_id = None
         if next_run_at is None:
             await self.session.delete(task)
         else:

@@ -40,17 +40,22 @@ async def wait_subagents(turn_ids: list[UUID], timeout: float = 600.0) -> None:
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
             break
-        async with SessionLocal() as session:
-            t = await TurnRepository(session).get(tid)
-            if t and t.status in (TurnStatus.DONE, TurnStatus.FAILED, TurnStatus.CANCELLED):
-                continue
         ev = _events.setdefault(tid, asyncio.Event())
-        try:
-            await asyncio.wait_for(ev.wait(), timeout=remaining)
-        except TimeoutError:
-            break
-        except Exception:
-            pass
+        while not ev.is_set():
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            async with SessionLocal() as session:
+                t = await TurnRepository(session).get(tid)
+                if t and t.status in (TurnStatus.DONE, TurnStatus.FAILED, TurnStatus.CANCELLED):
+                    ev.set()
+                    break
+            try:
+                await asyncio.wait_for(ev.wait(), timeout=min(3.0, max(0.5, remaining)))
+            except (TimeoutError, asyncio.TimeoutError):
+                pass
+            except Exception:
+                break
 
 
 async def cancel_subagents_of(parent_id: UUID) -> None:

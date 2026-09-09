@@ -683,17 +683,19 @@ async def handle_callback(
 
 
 async def run_scheduled(bot: Bot, task) -> None:
+    from unsafie.database.repositories.schedule import ScheduleRepository
+
     prompt = json.dumps(render.describe_scheduled(task), ensure_ascii=False)
-    await dispatch(
-        bot,
+    plan = await turns.route(
         bot_id=task.bot_id,
         chat_id=task.chat_id,
         user_id=task.user_id,
         reply_to=task.origin_message_id,
         update_db_id=None,
-        build_prompt=lambda _: prompt,
-        what=f"task={task.id}",
     )
+    async with SessionLocal() as session:
+        await ScheduleRepository(session).bind_turn(task.id, plan.turn.id)
+    await run_turn(bot, plan, prompt, settings.default_locale)
 
 
 async def run_watch(bot: Bot, watch, host, output: str, exit_code: int) -> None:
