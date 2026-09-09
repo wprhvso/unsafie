@@ -47,8 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     p_get.add_argument("key")
     p_get.add_argument("file")
 
-    p_stop = subs.add_parser("stop")
-    p_stop.add_argument("message", nargs="?", default=None)
+    subs.add_parser("stop")
 
     p_chat = subs.add_parser("chat")
     s_chat = p_chat.add_subparsers(dest="subcmd")
@@ -227,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.cmd == "stop":
             from unsafie.cli.stop import stop
-            return _out(stop(args.message))
+            return _out(stop())
 
         if args.cmd == "chat":
             from unsafie.cli import chat
