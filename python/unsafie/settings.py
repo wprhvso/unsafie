@@ -194,7 +194,8 @@ class Settings(BaseSettings):
     pool_command_timeout: float = 600.0
     pool_block_timeout: float = 900.0
     pool_max_command_timeout: float = 21600.0
-    pool_max_output: int = 60_000
+    pool_max_output: int = 4_000_000
+    pool_max_output_lines: int = 4_000_000
     pool_output_ttl: float = 3600.0
     pool_job_ttl: float = 19_800.0
     pool_keeper_interval: float = 30.0

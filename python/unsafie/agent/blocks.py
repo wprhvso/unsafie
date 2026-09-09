@@ -218,7 +218,11 @@ class Runner:
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
 
-        if len(combined) > settings.pool_max_output:
+        lines = combined.splitlines(keepends=True)
+        if len(lines) > settings.pool_max_output_lines:
+            combined = "".join(lines[: settings.pool_max_output_lines])
+            block.truncated = True
+        elif len(combined) > settings.pool_max_output:
             combined = combined[: settings.pool_max_output]
             block.truncated = True
 
