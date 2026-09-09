@@ -4,7 +4,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import UUID as SQL_UUID
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from unsafie.database import Base
@@ -52,3 +52,6 @@ class Turn(Base):
     title: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_inline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     inline_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    recovery_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_checkpoint_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    active_spool_dir: Mapped[str | None] = mapped_column(String(255), nullable=True)
