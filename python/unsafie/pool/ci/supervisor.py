@@ -47,14 +47,21 @@ class CiSupervisor(Loop):
     async def _drop(self, repo_id: int, task: asyncio.Task) -> None:
         task.cancel()
         try:
-            await task
-        except (asyncio.CancelledError, Exception):
+            await asyncio.wait_for(task, timeout=2.0)
+        except (asyncio.CancelledError, TimeoutError, Exception):
             pass
         self.tasks.pop(repo_id, None)
 
     async def on_stop(self) -> None:
-        for repo_id, task in list(self.tasks.items()):
-            await self._drop(repo_id, task)
+        tasks = list(self.tasks.items())
+        for _, task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(
+                *(self._drop(repo_id, task) for repo_id, task in tasks),
+                return_exceptions=True,
+            )
+        self.tasks.clear()
 
 
 ci_supervisor = CiSupervisor()

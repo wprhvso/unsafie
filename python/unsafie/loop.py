@@ -34,11 +34,14 @@ class Loop:
             return
         self._task.cancel()
         try:
-            await self._task
-        except asyncio.CancelledError:
+            await asyncio.wait_for(self._task, timeout=5.0)
+        except (asyncio.CancelledError, TimeoutError):
             pass
         self._task = None
-        await self.on_stop()
+        try:
+            await asyncio.wait_for(self.on_stop(), timeout=5.0)
+        except (asyncio.CancelledError, TimeoutError):
+            pass
         logger.info("%s stopped", self.name)
 
     async def on_stop(self) -> None:
