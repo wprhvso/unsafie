@@ -9,6 +9,7 @@ from unsafie.telegram.handlers.commands.pool import build_pool_router
 from unsafie.telegram.handlers.commands.ssh import build_ssh_router
 from unsafie.telegram.handlers.commands.start import build_start_router
 from unsafie.telegram.handlers.commands.stop import build_stop_router
+from unsafie.telegram.handlers.commands.system import build_system_router
 from unsafie.telegram.handlers.commands.tasks import build_tasks_router
 from unsafie.telegram.handlers.commands.tz import build_tz_router
 
@@ -25,6 +26,7 @@ def build_commands_router() -> Router:
         build_pool_router,
         build_ssh_router,
         build_stop_router,
+        build_system_router,
         build_tasks_router,
         build_tz_router,
     ):

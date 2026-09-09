@@ -44,6 +44,12 @@ class ChatRepository:
         )
         await self.session.commit()
 
+    async def set_system(self, bot_id: int, chat_id: int, system: str | None) -> None:
+        await self.session.execute(
+            update(Chat).where(Chat.bot_id == bot_id, Chat.chat_id == chat_id).values(system=system)
+        )
+        await self.session.commit()
+
     async def page(
         self, offset: int = 0, limit: int = 50, bot_id: int | None = None
     ) -> tuple[list[Chat], int]:

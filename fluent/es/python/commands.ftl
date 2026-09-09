@@ -64,3 +64,20 @@ commands-lang-status =
 commands-lang-set = Idioma cambiado a: { $language }
 commands-lang-reset = Restablecido a detección automática: { $language }
 commands-lang-usage = Idiomas disponibles: { $languages }, ej. /lang es
+cmd-system-help =
+    Instrucciones para el modelo que lo orientan hacia un mejor rendimiento.
+
+    Ejemplos:
+    <code>/system Responde de la forma más concisa posible</code>
+    <code>/system No uses términos técnicos en tu respuesta</code>
+
+    Volver a lo predeterminado: /system_clear
+cmd-system-ok = Prompt del sistema establecido
+cmd-system-clear-ok = Prompt del sistema restablecido
+cmd-long-prompt = ¿Envío el mensaje?
+cmd-system-long-prompt = ¿Guardo el prompt del sistema?
+cmd-long-send = Enviar
+cmd-long-reset = Cancelar
+cmd-long-reset-ok = Cancelado
+cmd-long-empty = Todavía no hay nada que enviar
+cmd-long-expired = Se agotó el tiempo: no se envió nada

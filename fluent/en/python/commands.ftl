@@ -65,3 +65,20 @@ commands-lang-status =
 commands-lang-set = Language changed to: { $language }
 commands-lang-reset = Language reset to auto-detect: { $language }
 commands-lang-usage = Languages: { $languages }, e.g. /lang es
+cmd-system-help =
+    Instructions for the model to steer it toward better performance.
+
+    Examples:
+    <code>/system Answer as concisely as possible</code>
+    <code>/system Don't use technical terms in your response</code>
+
+    Reset to default: /system_clear
+cmd-system-ok = System prompt set
+cmd-system-clear-ok = System prompt reset
+cmd-long-prompt = Send the message?
+cmd-system-long-prompt = Save the system prompt?
+cmd-long-send = Send
+cmd-long-reset = Reset
+cmd-long-reset-ok = Discarded
+cmd-long-empty = Nothing to send yet
+cmd-long-expired = Timed out — nothing was sent
