@@ -12,9 +12,9 @@ from unsafie import tokens
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.agent.spool import BashSpool, SpoolStatus
+from unsafie.gh import ensure_gh
 from unsafie.log import short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
-from unsafie.gh import ensure_gh
 from unsafie.pool import blobs
 from unsafie.settings import settings
 from unsafie_wire import markers
@@ -171,8 +171,9 @@ class Runner:
             logger.warning("%s failed to setup github env: %s", self.ctx.prefix, e)
         return env
 
-    async def run(self, code: str) -> Block:
-        index = len(self.blocks) + 1
+    async def run(self, code: str, index: int | None = None) -> Block:
+        if index is None:
+            index = len(self.blocks) + 1
         block = Block(index=index, code=code)
         self.blocks.append(block)
         self.recorder.code_started(index, code, "local")

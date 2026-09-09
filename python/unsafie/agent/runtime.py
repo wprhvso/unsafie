@@ -27,6 +27,7 @@ from unsafie.agent import (
 from unsafie.agent.prompt import SUBAGENT_SYSTEM_PROMPT, SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.session import Ctx
+from unsafie.agent.spool import cleanup_turn
 from unsafie.agent.subagents import (
     cancel_subagents_of,
     notify_subagent_done,
@@ -220,7 +221,6 @@ async def _execute(
     return Outcome("failed", error=result.error)
 
 
-
 async def notify(
     bot: Bot, turn: Turn, text: str, reply_markup: InlineKeyboardMarkup | None = None
 ) -> None:
@@ -365,6 +365,8 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             async with SessionLocal() as session:
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)
+            if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
+                cleanup_turn(turn.id)
             telemetry.set_attrs(
                 turn_span,
                 {
@@ -496,6 +498,9 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                 )
                 await repo.finish(turn.id, status, final_result)
                 fresh = await repo.get(turn.id)
+
+            if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
+                cleanup_turn(turn.id)
 
             telemetry.set_attrs(
                 turn_span,
@@ -747,7 +752,6 @@ async def handle_inline(chosen: ChosenInlineResult, bot_id: int) -> None:
     )
 
 
-
 async def resume_turn(turn_id: UUID) -> None:
     async with SessionLocal() as session:
         repo = TurnRepository(session)
@@ -872,6 +876,8 @@ async def resume_turn(turn_id: UUID) -> None:
                 await TurnRepository(session).finish(turn.id, status, note)
                 fresh = await TurnRepository(session).get(turn.id)
             await checkpoints.clear(turn.id)
+            if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
+                cleanup_turn(turn.id)
             live.emit(
                 turn.id,
                 "turn.end",

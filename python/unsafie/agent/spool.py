@@ -79,8 +79,10 @@ class BashSpool:
         except OSError:
             pass
 
-        if not self.stdout_file.exists():
-            self.stdout_file.touch(mode=0o600)
+        self.stdout_file.unlink(missing_ok=True)
+        self.exit_code_file.unlink(missing_ok=True)
+        self.meta_file.unlink(missing_ok=True)
+        self.stdout_file.touch(mode=0o600)
 
         return self.dir
 
@@ -90,7 +92,11 @@ class BashSpool:
         env: dict[str, str] | None = None,
         cwd: str | Path | None = None,
     ) -> int:
-        out_fd = os.open(self.stdout_file, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        out_fd = os.open(
+            self.stdout_file,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_APPEND,
+            0o600,
+        )
         try:
             proc = await asyncio.create_subprocess_exec(
                 bash_bin,
@@ -296,3 +302,8 @@ class BashSpool:
         if self._waiter and not self._waiter.done():
             self._waiter.cancel()
         shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def cleanup_turn(turn_id: UUID | str, base_dir: Path | None = None) -> None:
+    root = base_dir or _get_spool_base()
+    shutil.rmtree(root / str(turn_id), ignore_errors=True)

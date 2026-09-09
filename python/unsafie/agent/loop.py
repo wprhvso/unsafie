@@ -6,6 +6,7 @@ from unsafie.agent import blocks, checkpoints, client, credentials, pricing, que
 from unsafie.agent.client import ApiError
 from unsafie.agent.parser import extract_code
 from unsafie.agent.session import Ctx
+from unsafie.agent.spool import BashSpool
 from unsafie.agent.trace import Recorder
 from unsafie.database.models.turn_checkpoint import CheckpointPhase
 from unsafie.log import short
@@ -116,6 +117,8 @@ async def run(
             )
     elif initial_step > 0:
         result.steps = initial_step
+    else:
+        result.steps = sum(1 for m in messages if m.get("role") == "assistant")
 
     while result.steps < settings.agent_max_steps:
         turns.touch(ctx.turn_id)
@@ -191,7 +194,8 @@ async def run(
             )
             continue
 
-        active_block = {"index": result.steps, "code": code}
+        spool = BashSpool(ctx.turn_id, result.steps)
+        active_block = {"index": result.steps, "code": code, "spool_dir": str(spool.dir)}
         await checkpoints.save(
             ctx.turn_id,
             result.steps,
@@ -202,7 +206,7 @@ async def run(
         )
 
         runner = blocks.Runner(ctx, recorder)
-        await runner.run(code)
+        await runner.run(code, index=result.steps)
         turns.touch(ctx.turn_id)
         result.ran += runner.count
         if runner.replied:
