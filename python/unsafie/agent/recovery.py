@@ -3,7 +3,6 @@ import logging
 from uuid import UUID
 
 from unsafie.database import SessionLocal
-from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.loop import Loop
 from unsafie.settings import settings
