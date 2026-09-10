@@ -532,7 +532,17 @@ async def forward(message_id: int, body: Forward, who: Chat) -> dict:
     target: int | str = body.to
     if isinstance(target, str) and target.lstrip("-").isdigit():
         target = int(target)
-    if isinstance(target, int):
+    if isinstance(target, str):
+        if who.chat_id is not None:
+            raise HTTPException(403, "cross-chat access is forbidden for this token")
+        try:
+            resolved_chat = await bot.get_chat(target)
+            target = await who.target_chat(resolved_chat.id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(403, f"cannot access target chat: {e}") from None
+    else:
         target = await who.target_chat(target)
     try:
         if body.duplicate:
@@ -768,11 +778,19 @@ async def album(body: Album, who: Chat) -> dict:
         raise HTTPException(400, "an album holds between two and ten files")
     bot = await who.bot()
     media = []
+    total_size = 0
     for index, item in enumerate(body.items):
         try:
             data = base64.b64decode(item.data, validate=True)
         except (binascii.Error, ValueError):
             raise HTTPException(400, f"{item.name}: data is not base64") from None
+        if not data:
+            raise HTTPException(400, f"{item.name}: file is empty")
+        if len(data) > MAX_FILE:
+            raise HTTPException(413, f"{item.name}: {human_size(len(data))} is over the {human_size(MAX_FILE)} limit")
+        total_size += len(data)
+        if total_size > 50 * 1024 * 1024:
+            raise HTTPException(413, f"album size {human_size(total_size)} is over the 50 MB limit")
         payload = BufferedInputFile(data, filename=item.name)
         caption = body.caption if index == 0 else None
         kind = item.media or "photo"

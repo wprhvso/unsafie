@@ -20,6 +20,8 @@ auth-usage =
     /auth list — liste des tokens
     /auth rm NOM — révoquer
 
+auth-private-only = La gestion des jetons est uniquement autorisée dans les messages privés avec le bot.
+
 pool-empty =
     Aucune machine disponible.
 

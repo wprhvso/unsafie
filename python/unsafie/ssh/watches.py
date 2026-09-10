@@ -7,7 +7,7 @@ from unsafie.ssh.errors import SshError
 logger = logging.getLogger(__name__)
 
 NUMBER_RE = re.compile(r"-?\d+(?:[.,]\d+)?")
-OPERATORS = ("!=", ">=", "<=", "=", ">", "<")
+OPERATORS = ("==", "!=", ">=", "<=", "=", ">", "<")
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ def parse(raw: str) -> Condition:
                 value = rest[len(op) :].strip()
                 if not value.lstrip("-").isdigit():
                     raise SshError(f"'{raw}': a number is expected after {op}")
-                return Condition(text, "exit", "==" if op == "=" else op, float(value))
+                return Condition(text, "exit", "==" if op in ("=", "==") else op, float(value))
         raise SshError("'exit' needs a comparison, e.g. 'exit != 0'")
     for prefix, kind in (
         ("contains:", "contains"),
@@ -64,9 +64,9 @@ def parse(raw: str) -> Condition:
                 number = float(value)
             except ValueError:
                 raise SshError(f"'{raw}': a number is expected after {op}") from None
-            return Condition(text, "number", "==" if op == "=" else op, number)
+            return Condition(text, "number", "==" if op in ("=", "==") else op, number)
     raise SshError(
-        f"cannot parse the condition '{raw}'. Available: '>90', '<10', '=0', 'exit != 0', "
+        f"cannot parse the condition '{raw}'. Available: '>90', '<10', '=0', '==0', 'exit != 0', "
         "'contains:ERROR', '!contains:ok', 'matches:regex', 'changed', 'empty', 'any'"
     )
 

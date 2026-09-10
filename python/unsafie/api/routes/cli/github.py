@@ -193,7 +193,4 @@ async def _find(user_id: int, ref: str) -> Repo | None:
         found = await UserRepoRepository(session).resolve(user_id, ref)
         if found is not None:
             return found[1]
-        owner, _, name = ref.partition("/")
-        if owner and name:
-            return await RepoRepository(session).by_full_name(owner, name)
     return None

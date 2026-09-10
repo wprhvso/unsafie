@@ -274,7 +274,7 @@ class BashSpool:
 
             await asyncio.sleep(poll_interval)
 
-    def terminate(self, grace: float = 2.0) -> None:
+    async def terminate(self, grace: float = 2.0) -> None:
         if not self.meta_file.is_file():
             return
         try:
@@ -293,7 +293,7 @@ class BashSpool:
         while time.monotonic() < deadline:
             if not self.is_alive():
                 return
-            time.sleep(0.05)
+            await asyncio.sleep(0.05)
 
         with contextlib.suppress(OSError):
             os.killpg(pgid, signal.SIGKILL)

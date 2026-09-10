@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
@@ -24,6 +25,11 @@ def build_auth_router() -> Router:
             return
         user_id = message.from_user.id
         locale = await locale_for(user_id, message.from_user)
+
+        if message.chat.type != ChatType.PRIVATE:
+            await answer(message, bot_id, t("auth-private-only", locale))
+            return
+
         parts = (command.args or "").split()
         action = parts[0].lower() if parts else ""
 
@@ -57,7 +63,7 @@ def build_auth_router() -> Router:
         _, raw = await tokens.issue(
             user_id=user_id,
             bot_id=bot_id,
-            chat_id=message.chat.id,
+            chat_id=user_id,
             name=name,
         )
         logger.info("user=%s issued cli token '%s'", user_id, name)

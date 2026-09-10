@@ -45,12 +45,10 @@ async def create(body: Page, who: Pages) -> dict:
 @router.get("")
 async def listing(who: Pages, limit: int = 20) -> list[dict]:
     async with SessionLocal() as session:
-        rows, _ = await ArtifactRepository(session).page(0, min(max(limit, 1), 100))
-    return [
-        _view(row.slug, row.title, row.created_at)
-        for row in rows
-        if row.kind == ArtifactKind.MARKDOWN and row.chat_id == who.chat_id
-    ]
+        rows = await ArtifactRepository(session).for_chat(
+            who.chat_id, kind=ArtifactKind.MARKDOWN, limit=min(max(limit, 1), 100)
+        )
+    return [_view(row.slug, row.title, row.created_at) for row in rows]
 
 
 @router.get("/{slug}")

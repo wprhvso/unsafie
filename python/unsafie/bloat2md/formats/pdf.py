@@ -35,7 +35,9 @@ def _hidden_text(page: pdfium.PdfPage, textpage: pdfium.PdfTextPage) -> Iterator
 
 
 def _overlaps(line: str, hidden: str) -> bool:
-    return len(line) >= MIN_HIDDEN_CHARS and (line in hidden or hidden in line)
+    s_line = line.strip()
+    s_hidden = hidden.strip()
+    return len(s_line) >= MIN_HIDDEN_CHARS and s_line == s_hidden
 
 
 def _visible_text(page: pdfium.PdfPage) -> tuple[str, int]:

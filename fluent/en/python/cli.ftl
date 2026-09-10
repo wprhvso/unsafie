@@ -20,6 +20,8 @@ auth-usage =
     /auth list — what is issued
     /auth rm NAME — revoke
 
+auth-private-only = Managing API tokens is only allowed in private messages with the bot.
+
 pool-empty =
     No machines yet.
 

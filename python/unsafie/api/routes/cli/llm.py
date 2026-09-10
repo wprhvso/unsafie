@@ -138,7 +138,10 @@ async def stream(data: LLMGenerateIn, who: Who) -> StreamingResponse:
         done = False
         while not done:
             get_task = asyncio.create_task(loop_queue.get())
-            finished, _ = await asyncio.wait([get_task, send_task], return_when=asyncio.FIRST_COMPLETED)
+            finished, pending = await asyncio.wait([get_task, send_task], return_when=asyncio.FIRST_COMPLETED)
+            for p in pending:
+                if p is not send_task:
+                    p.cancel()
 
             while not loop_queue.empty():
                 evt_name, evt_data = loop_queue.get_nowait()

@@ -20,6 +20,8 @@ auth-usage =
     /auth list — الرموز الصادرة
     /auth rm NAME — إلغاء
 
+auth-private-only = إدارة الرموز مسموح بها فقط في الرسائل الخاصة مع البوت.
+
 pool-empty =
     لا توجد أجهزة في المجمع بعد.
 

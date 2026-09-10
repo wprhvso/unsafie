@@ -82,6 +82,21 @@ class ArtifactRepository:
         )
         return list(rows), int(total)
 
+    async def for_chat(
+        self,
+        chat_id: int | None,
+        kind: ArtifactKind = ArtifactKind.MARKDOWN,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> list[Artifact]:
+        query = select(Artifact).where(Artifact.kind == kind)
+        if chat_id is not None:
+            query = query.where(Artifact.chat_id == chat_id)
+        rows = await self.session.scalars(
+            query.order_by(Artifact.id.desc()).offset(offset).limit(limit)
+        )
+        return list(rows)
+
     async def delete(self, slug: str) -> bool:
         row = await self.by_slug(slug)
         if row is None:

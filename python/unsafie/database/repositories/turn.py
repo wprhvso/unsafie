@@ -174,7 +174,7 @@ class TurnRepository:
             return
         if credential_id is not None:
             turn.credential_id = credential_id
-        turn.num_turns += num_turns
+        turn.num_turns = max(turn.num_turns, num_turns)
         if result:
             turn.result = result
         await self.session.commit()

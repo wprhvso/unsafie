@@ -36,24 +36,27 @@ class Runner(Loop):
             async with SessionLocal() as session:
                 due = await ScheduleRepository(session).claim(now, BATCH, settings.job_lease)
         for task in due:
-            with telemetry.span(
-                "scheduler.task",
-                kind=telemetry.CONSUMER,
-                attributes={
-                    attrs.TASK_ID: task.id,
-                    attrs.TASK_KIND: str(task.kind),
-                    attrs.BOT_ID: task.bot_id,
-                    attrs.CHAT_ID: task.chat_id,
-                    attrs.USER_ID: task.user_id,
-                    attrs.PROMPT: telemetry.content(task.text),
-                },
-            ) as span:
-                try:
-                    await self._fire(task)
-                except Exception as e:
-                    telemetry.fail(span, e)
-                    logger.exception("task=%s failed", task.id)
-                    await self._advance(task)
+            asyncio.create_task(self._safe_fire(task))
+
+    async def _safe_fire(self, task) -> None:
+        with telemetry.span(
+            "scheduler.task",
+            kind=telemetry.CONSUMER,
+            attributes={
+                attrs.TASK_ID: task.id,
+                attrs.TASK_KIND: str(task.kind),
+                attrs.BOT_ID: task.bot_id,
+                attrs.CHAT_ID: task.chat_id,
+                attrs.USER_ID: task.user_id,
+                attrs.PROMPT: telemetry.content(task.text),
+            },
+        ) as span:
+            try:
+                await self._fire(task)
+            except Exception as e:
+                telemetry.fail(span, e)
+                logger.exception("task=%s failed", task.id)
+                await self._advance(task)
 
     async def _advance(self, task) -> None:
         run_at = await service.advance(task)
