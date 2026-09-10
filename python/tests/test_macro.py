@@ -5,7 +5,6 @@ from pathlib import Path
 
 from unsafie.agent.parser import extract_code
 from unsafie.agent.spool import BashSpool
-from unsafie.cli import read
 from unsafie.settings import settings
 
 
@@ -27,22 +26,6 @@ def test_parser_extract_code_no_markdown_fence() -> None:
 def test_settings_limits() -> None:
     assert settings.pool_max_output == 4_000_000
     assert getattr(settings, "pool_max_output_lines", None) == 4_000_000
-
-
-def test_cli_read_files() -> None:
-    with tempfile.TemporaryDirectory() as tmpdir:
-        f1 = Path(tmpdir) / "file1.txt"
-        f2 = Path(tmpdir) / "file2.txt"
-        f1.write_text("line1\nline2\nline3\n", encoding="utf-8")
-        f2.write_text("alpha\nbeta\n", encoding="utf-8")
-
-        res = read.read([str(f1), str(f2)])
-        assert res["ok"] is True
-        assert res["count"] == 2
-        assert res["total_lines_read"] == 5
-        assert "=== " in res["rendered"]
-        assert "line1" in res["rendered"]
-        assert "beta" in res["rendered"]
 
 
 def test_spool_step_isolation() -> None:

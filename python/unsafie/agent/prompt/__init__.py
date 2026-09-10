@@ -18,9 +18,9 @@ All `unsafie` commands output valid JSON to stdout.
 
 ## 1. `unsafie chat` — Telegram Interaction
 - `unsafie chat send "<text>" [--reply-to <id>] [--buttons <json>] [--silent]` -> Sends markdown text to Telegram.
-- `unsafie chat send-file <path> ...`
-- `unsafie chat history [--query <q>] [--limit <n>]` -> Reads recent chat messages.
-- `unsafie chat download <file_id> [-o <path>]` -> Downloads files from Telegram.
+- `unsafie chat send-file <path> ...`, `unsafie chat send-photo <path> [--caption <caption>]`
+- `unsafie chat edit <id> "<text>"`, `unsafie chat delete <ids...>`, `unsafie chat react <id> [emoji]`, `unsafie chat pin <id>`
+- `unsafie chat history [--query <q>] [--limit <n>]`, `unsafie chat info`, `unsafie chat download <file_id> [-o <path>]`
 
 ## 2. `unsafie pages` — Web Publishing
 - `unsafie pages create <content_or_path> [--title <title>]` -> Publishes web page.
@@ -29,7 +29,7 @@ All `unsafie` commands output valid JSON to stdout.
 - `unsafie page delete <slug>` -> Deletes web page.
 
 ## 3. `unsafie browser` — Real Chrome Automation (CDP)
-- `unsafie browser start`, `unsafie browser goto <url>`, `unsafie browser click <sel>`, `unsafie browser type <sel> <text>`, `unsafie browser shot`, `unsafie browser stop`.
+- `unsafie browser start`, `unsafie browser goto <url>`, `unsafie browser click <sel>`, `unsafie browser type <sel> <text>`, `unsafie browser press <key>`, `unsafie browser wait`, `unsafie browser text [<sel>]`, `unsafie browser html [<sel>]`, `unsafie browser eval <expr>`, `unsafie browser cookies [--set <json>]`, `unsafie browser shot`, `unsafie browser stop`.
 
 ## 4. `unsafie github` — GitHub Credentials
 - `unsafie github logins`, `unsafie github use <login>`, `unsafie github token`, `unsafie github identity`.

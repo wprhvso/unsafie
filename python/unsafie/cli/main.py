@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import sys
-from pathlib import Path
 from typing import Any
 
 
@@ -23,8 +22,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="unsafie")
     subs = parser.add_subparsers(dest="cmd")
 
-    subs.add_parser("me")
-
     p_serve = subs.add_parser("serve")
     p_serve.add_argument("--token", default=None)
     p_serve.add_argument("--api", default=None)
@@ -39,32 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     p_runner.add_argument("--idle", type=float, default=300.0)
     p_runner.add_argument("--lifetime", type=float, default=3600.0)
 
-    p_put = subs.add_parser("put")
-    p_put.add_argument("key")
-    p_put.add_argument("file")
-
-    p_get = subs.add_parser("get")
-    p_get.add_argument("key")
-    p_get.add_argument("file")
-
     subs.add_parser("stop")
-
-    p_llm = subs.add_parser("llm")
-    p_llm.add_argument("--raw", action="store_true")
-
-    p_read = subs.add_parser("read")
-    p_read.add_argument("paths", nargs="+")
-    p_read.add_argument("--max-lines", type=int, default=2000)
-    p_read.add_argument("--raw", action="store_true")
-
-    p_write = subs.add_parser("write")
-    p_write.add_argument("path")
-    p_write.add_argument("content", nargs="?", default=None)
-
-    p_edit = subs.add_parser("edit")
-    p_edit.add_argument("path")
-    p_edit.add_argument("search", nargs="?", default=None)
-    p_edit.add_argument("replace", nargs="?", default=None)
 
     p_chat = subs.add_parser("chat")
     s_chat = p_chat.add_subparsers(dest="subcmd")
@@ -141,9 +113,6 @@ def main(argv: list[str] | None = None) -> int:
     p_pupdate.add_argument("content")
     p_pupdate.add_argument("--title", default=None)
 
-    p_plist = s_pages.add_parser("list")
-    p_plist.add_argument("--limit", type=int, default=20)
-
     p_pread = s_pages.add_parser("read")
     p_pread.add_argument("slug")
     p_pread.add_argument("-o", "--output", default=None)
@@ -213,6 +182,9 @@ def main(argv: list[str] | None = None) -> int:
     p_bshot.add_argument("-o", "--output", default=None)
     p_bshot.add_argument("--full", action="store_true")
 
+    p_bcookies = s_br.add_parser("cookies")
+    p_bcookies.add_argument("--set", dest="cookie_json", default=None)
+
     p_vision = subs.add_parser("vision")
     p_vision.add_argument("paths", nargs="+")
     p_vision.add_argument("--caption", default=None)
@@ -223,27 +195,6 @@ def main(argv: list[str] | None = None) -> int:
     p_iedit.add_argument("text")
     p_iedit.add_argument("--inline-message-id", default=None)
     p_iedit.add_argument("--buttons", default=None)
-
-    p_subagent = subs.add_parser("subagent", aliases=["subagents"])
-    s_subagent = p_subagent.add_subparsers(dest="subcmd")
-    p_sspawn = s_subagent.add_parser("spawn")
-    p_sspawn.add_argument("prompt")
-    p_sspawn.add_argument("--title", default=None)
-    p_sspawn.add_argument("--timeout", type=float, default=600.0)
-    p_swait = s_subagent.add_parser("wait")
-    p_swait.add_argument("ids", nargs="+")
-    p_swait.add_argument("--timeout", type=float, default=600.0)
-    p_sstatus = s_subagent.add_parser("status")
-    p_sstatus.add_argument("turn_id")
-    p_slist = s_subagent.add_parser("list")
-    p_slist.add_argument("--limit", type=int, default=50)
-    p_scancel = s_subagent.add_parser("cancel")
-    p_scancel.add_argument("ids", nargs="+")
-    p_sfinish = s_subagent.add_parser("finish")
-    p_sfinish.add_argument("result")
-
-    p_bcookies = s_br.add_parser("cookies")
-    p_bcookies.add_argument("--set", dest="cookie_json", default=None)
 
     args = parser.parse_args(argv)
 
@@ -286,53 +237,10 @@ def main(argv: list[str] | None = None) -> int:
                 lifetime=args.lifetime,
             )
 
-        if args.cmd == "put":
-            from unsafie.cli import blobs
-
-            return _out(blobs.put(args.key, Path(args.file)))
-
-        if args.cmd == "get":
-            from unsafie.cli import blobs
-
-            data = blobs.get(args.key)
-            Path(args.file).write_bytes(data)
-            return _out({"downloaded": args.key, "bytes": len(data)})
-
-        if args.cmd == "me":
-            from unsafie.cli.client import client
-
-            return _out(client().call("GET", "/me"))
-
         if args.cmd == "stop":
             from unsafie.cli.stop import stop
 
             return _out(stop())
-
-        if args.cmd == "llm":
-            from unsafie.cli import llm
-
-            res = llm.run(raw=args.raw)
-            if args.raw and res.get("ok"):
-                return 0
-            return _out(res, ok=res.get("ok", True))
-
-        if args.cmd == "read":
-            from unsafie.cli import read
-
-            res = read.read(args.paths, max_lines=args.max_lines, raw=args.raw)
-            if args.raw and res.get("ok"):
-                return 0
-            return _out(res, ok=res.get("ok", True))
-
-        if args.cmd == "write":
-            from unsafie.cli import write
-
-            return _out(write.run(args.path, content=args.content))
-
-        if args.cmd == "edit":
-            from unsafie.cli import edit
-
-            return _out(edit.run(args.path, search=args.search, replace=args.replace))
 
         if args.cmd == "chat":
             from unsafie.cli import chat
@@ -388,8 +296,6 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(pages.create(args.content, title=args.title))
             if args.subcmd == "update":
                 return _out(pages.update(args.slug, args.content, title=args.title))
-            if args.subcmd == "list":
-                return _out(pages.listing(limit=args.limit))
             if args.subcmd == "read":
                 return _out(pages.read(args.slug, output=args.output))
             if args.subcmd == "delete":
@@ -476,22 +382,6 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(
                     inline.edit(args.text, inline_message_id=args.inline_message_id, buttons=btns),
                 )
-
-        if args.cmd in ("subagent", "subagents"):
-            from unsafie.cli import subagent
-
-            if args.subcmd == "spawn":
-                return _out(subagent.spawn(args.prompt, title=args.title, timeout=args.timeout))
-            if args.subcmd == "wait":
-                return _out(subagent.wait(*args.ids, timeout=args.timeout))
-            if args.subcmd == "status":
-                return _out(subagent.status(args.turn_id))
-            if args.subcmd == "list":
-                return _out(subagent.listing(limit=args.limit))
-            if args.subcmd == "cancel":
-                return _out(subagent.cancel(*args.ids))
-            if args.subcmd == "finish":
-                return _out(subagent.finish(args.result))
 
         return _out({"error": f"unknown command {args.cmd}"}, ok=False)
     except Exception as exc:
