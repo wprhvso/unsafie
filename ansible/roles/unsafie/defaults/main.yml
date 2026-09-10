@@ -10,6 +10,8 @@ unsafie_version: main
 
 unsafie_host: 127.0.0.1
 unsafie_port: 8000
+unsafie_blue_port: 8001
+unsafie_green_port: 8002
 unsafie_log_level: INFO
 
 unsafie_domain: "{{ domain }}"

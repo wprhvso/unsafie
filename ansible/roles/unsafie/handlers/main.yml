@@ -1,8 +1,6 @@
 - name: restart unsafie
-  ansible.builtin.systemd_service:
-    name: unsafie
-    state: restarted
-    daemon_reload: true
+  ansible.builtin.command: /usr/local/bin/unsafie-reload reload
+  changed_when: true
 
 - name: reload nginx
   ansible.builtin.systemd_service:
