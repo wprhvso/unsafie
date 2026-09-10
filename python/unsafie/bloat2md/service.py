@@ -40,7 +40,8 @@ def _fallback(kind: Kind, raw: bytes, error: ConversionError) -> Payload:
 def convert(raw: bytes, name: str) -> tuple[Kind, Payload]:
     kind = detect(raw, name)
     if kind is None:
-        raise UnsupportedFile("the file is not a document bloat2md can read")
+        msg = "the file is not a document bloat2md can read"
+        raise UnsupportedFile(msg)
 
     if kind is Kind.IMAGE:
         mime = image_mime(raw) or "image/png"
@@ -48,7 +49,8 @@ def convert(raw: bytes, name: str) -> tuple[Kind, Payload]:
 
     handler = _BY_KIND.get(kind)
     if handler is None:
-        raise UnsupportedFile("the file is not a document bloat2md can read")
+        msg = "the file is not a document bloat2md can read"
+        raise UnsupportedFile(msg)
 
     try:
         payload = handler(raw)

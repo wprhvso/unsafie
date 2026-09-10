@@ -2,8 +2,10 @@ from collections.abc import Sequence
 
 from alembic import op
 
-import unsafie.database.models  # noqa: F401
+import unsafie.database.models as _models
 from unsafie.database import Base
+
+_ = _models
 
 revision: str = "0001"
 down_revision: str | Sequence[str] | None = None
@@ -16,11 +18,11 @@ IN_TSV = "to_tsvector('simple', coalesce(payload #>> '{message,text}', payload #
 def upgrade() -> None:
     Base.metadata.create_all(op.get_bind())
     op.execute(
-        "INSERT INTO config (id, ratio, oauth_ratio) VALUES (1, 1, 0.5) ON CONFLICT DO NOTHING"
+        "INSERT INTO config (id, ratio, oauth_ratio) VALUES (1, 1, 0.5) ON CONFLICT DO NOTHING",
     )
     op.execute(f"CREATE INDEX ix_updates_fts ON updates USING gin ({IN_TSV})")
     op.execute(
-        "CREATE INDEX ix_responses_fts ON responses USING gin (to_tsvector('simple', content))"
+        "CREATE INDEX ix_responses_fts ON responses USING gin (to_tsvector('simple', content))",
     )
 
 

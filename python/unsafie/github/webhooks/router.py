@@ -63,7 +63,7 @@ async def process(row) -> None:
         await deliveries.failed(delivery_id, error, row.attempts, give_up)
         if give_up:
             logger.error(
-                "delivery=%s %s given up after %s attempts", delivery_id, event, row.attempts
+                "delivery=%s %s given up after %s attempts", delivery_id, event, row.attempts,
             )
 
 
@@ -86,14 +86,14 @@ async def _lifecycle(event: str, payload: dict) -> None:
             if action == "unsuspend":
                 await installations.set_suspended(installation_id, False)
             saved = await install.sync_repos(
-                session, installation_id, payload.get("repositories") or []
+                session, installation_id, payload.get("repositories") or [],
             )
             await _bind_all(session, installation_id, saved)
             return
         if event == "installation_repositories":
             await install.sync_installation(session, data)
             added = await install.sync_repos(
-                session, installation_id, payload.get("repositories_added") or []
+                session, installation_id, payload.get("repositories_added") or [],
             )
             await _bind_all(session, installation_id, added)
             for item in payload.get("repositories_removed") or []:
@@ -119,7 +119,7 @@ async def _users_of(session, installation_id: int) -> list[int]:
         select(GithubAccount.user_id)
         .join(InstallationAccount, InstallationAccount.github_account_id == GithubAccount.id)
         .where(InstallationAccount.installation_id == installation_id)
-        .distinct()
+        .distinct(),
     )
     return list(rows)
 
@@ -141,7 +141,7 @@ async def _notify(event: str, payload: dict) -> int:
         for sub in subs:
             if sub.user_id not in logins_by_user:
                 logins_by_user[sub.user_id] = await GithubAccountRepository(session).logins(
-                    sub.user_id
+                    sub.user_id,
                 )
     sent = 0
     for sub in subs:

@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class SshRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def hosts(self, user_id: int) -> list[SshHost]:
         return list(
             await self.session.scalars(
-                select(SshHost).where(SshHost.user_id == user_id).order_by(SshHost.alias)
-            )
+                select(SshHost).where(SshHost.user_id == user_id).order_by(SshHost.alias),
+            ),
         )
 
     async def get(self, host_id: int) -> SshHost | None:
@@ -26,7 +26,7 @@ class SshRepository:
     async def host(self, user_id: int, ref: str) -> SshHost | None:
         ref = ref.strip()
         row = await self.session.scalar(
-            select(SshHost).where(SshHost.user_id == user_id, SshHost.alias == ref)
+            select(SshHost).where(SshHost.user_id == user_id, SshHost.alias == ref),
         )
         if row is not None:
             return row
@@ -96,6 +96,6 @@ class SshRepository:
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[SshHost], int]:
         total = await self.session.scalar(select(func.count()).select_from(SshHost)) or 0
         rows = await self.session.scalars(
-            select(SshHost).order_by(SshHost.id).offset(offset).limit(limit)
+            select(SshHost).order_by(SshHost.id).offset(offset).limit(limit),
         )
         return list(rows), int(total)

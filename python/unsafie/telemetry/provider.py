@@ -43,7 +43,7 @@ def resource() -> Resource:
             attrs.ROLE: settings.role,
             attrs.HOST_NAME: host,
             attrs.PROCESS_PID: os.getpid(),
-        }
+        },
     )
 
 
@@ -63,17 +63,20 @@ def exporter():
     url = endpoint()
     if settings.otel_protocol.startswith("http"):
         try:
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-        except ImportError as e:
+            import importlib
+            exporter_mod = importlib.import_module("opentelemetry.exporter.otlp.proto.http.trace_exporter")
+            otlp_exporter = exporter_mod.OTLPSpanExporter
+        except (ImportError, AttributeError) as e:
+            msg = "OTEL_PROTOCOL=http needs the opentelemetry-exporter-otlp-proto-http package"
             raise RuntimeError(
-                "OTEL_PROTOCOL=http needs the opentelemetry-exporter-otlp-proto-http package"
+                msg,
             ) from e
 
-        return OTLPSpanExporter(endpoint=url, timeout=settings.otel_export_timeout)
+        return otlp_exporter(endpoint=url, timeout=settings.otel_export_timeout)
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as Grpc
 
     return Grpc(
-        endpoint=url, insecure=url.startswith("http://"), timeout=settings.otel_export_timeout
+        endpoint=url, insecure=url.startswith("http://"), timeout=settings.otel_export_timeout,
     )
 
 
@@ -102,7 +105,7 @@ def setup() -> None:
                 max_queue_size=settings.otel_queue_size,
                 max_export_batch_size=settings.otel_batch_size,
                 schedule_delay_millis=settings.otel_schedule_delay,
-            )
+            ),
         )
     except Exception:
         logger.exception("tracing setup failed, continuing without traces")

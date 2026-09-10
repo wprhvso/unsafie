@@ -61,6 +61,6 @@ def make_results(question: str, locale: str) -> list[InlineQueryResultUnion]:
                 input_message_content=InputTextMessageContent(
                     message_text=content,
                 ),
-            )
+            ),
         )
     return items

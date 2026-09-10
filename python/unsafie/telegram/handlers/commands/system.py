@@ -18,8 +18,7 @@ def build_system_router() -> Router:
     async def system_command(message: Message, command: CommandObject, bot_id: int) -> None:
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
-        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
-            if not await is_admin(message.bot, message.chat.id, user_id):
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot and not await is_admin(message.bot, message.chat.id, user_id):
                 await answer(message, bot_id, t("commands-group-admin-only", locale))
                 return
 
@@ -44,8 +43,7 @@ def build_system_router() -> Router:
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
 
-        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
-            if not await is_admin(message.bot, message.chat.id, user_id):
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot and not await is_admin(message.bot, message.chat.id, user_id):
                 await answer(message, bot_id, t("commands-group-admin-only", locale))
                 return
 

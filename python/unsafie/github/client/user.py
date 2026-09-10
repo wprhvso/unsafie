@@ -24,7 +24,7 @@ class UserClient(GithubHTTP):
         return await self.paginate("/user/orgs").all(100)
 
     async def search_issues(
-        self, query: str, sort: str | None = None, limit: int = 30
+        self, query: str, sort: str | None = None, limit: int = 30,
     ) -> list[dict]:
         params: dict[str, Any] = {"q": query}
         if sort:

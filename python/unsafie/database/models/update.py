@@ -25,7 +25,7 @@ class Update(Base):
     message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     turn_id: Mapped[UUID | None] = mapped_column(
-        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="SET NULL"), nullable=True
+        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="SET NULL"), nullable=True,
     )
     ordinal: Mapped[int] = mapped_column(default=0, server_default="0")
     payload: Mapped[dict] = mapped_column(JSONB)

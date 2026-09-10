@@ -137,11 +137,11 @@ class Supervisor(Loop):
             await cluster.mark(cooldown_name(bot_id), "1", settings.poll_failure_cooldown)
             logger.exception("bot=%s could not start polling", bot_id)
             events.publish(
-                "bot.crashed", bot_id=bot_id, instance=settings.instance_id, error=str(e)[:500]
+                "bot.crashed", bot_id=bot_id, instance=settings.instance_id, error=str(e)[:500],
             )
 
     async def _start(
-        self, bot_id: int, token: str, held: cluster.Held, restart_mark: str | None
+        self, bot_id: int, token: str, held: cluster.Held, restart_mark: str | None,
     ) -> Polling:
         bot = bots.build(token)
         try:
@@ -166,7 +166,7 @@ class Supervisor(Loop):
                 name=f"poller-{bot_id}",
             )
         events.publish(
-            "bot.started", bot_id=bot_id, username=me.username, instance=settings.instance_id
+            "bot.started", bot_id=bot_id, username=me.username, instance=settings.instance_id,
         )
         logger.info(
             "bot=%s polling started by %s as @%s (tg_id=%s), polling=%s",

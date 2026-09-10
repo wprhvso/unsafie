@@ -93,7 +93,7 @@ async def hydrate(client: RepoClient, commit_sha: str) -> int:
     if await cluster.marked(name):
         return 0
     async with cluster.try_lock(
-        name, ttl=settings.snapshot_lock_ttl, wait=settings.snapshot_wait, renew=True
+        name, ttl=settings.snapshot_lock_ttl, wait=settings.snapshot_wait, renew=True,
     ) as held:
         if held is None:
             logger.info(

@@ -12,7 +12,7 @@ class GithubAccount(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True,
     )
     github_id: Mapped[int] = mapped_column(BigInteger, index=True)
     login: Mapped[str] = mapped_column(String(255))

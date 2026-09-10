@@ -8,7 +8,7 @@ from unsafie.github.client.settings import SettingsMixin
 
 
 class RepoClient(
-    GithubHTTP, GitMixin, IssuesMixin, PullsMixin, ActionsMixin, ReleasesMixin, SettingsMixin
+    GitMixin, IssuesMixin, PullsMixin, ActionsMixin, ReleasesMixin, SettingsMixin, GithubHTTP,
 ):
     def __init__(
         self,

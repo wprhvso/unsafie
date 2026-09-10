@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -55,7 +56,7 @@ def _meta(turn: Turn | None) -> dict:
 async def snapshot(
     token: str,
     after: str | None = None,
-    limit: int = Query(default=20_000, ge=1, le=100_000),
+    limit: Annotated[int, Query(ge=1, le=100_000)] = 20_000,
 ):
     turn_id = await _resolve(token)
     async with SessionLocal() as session:
@@ -85,9 +86,10 @@ async def _pump(queue: asyncio.Queue, turn_id: UUID, after: str | None) -> None:
             if item == live.GAP:
                 await queue.put("event: gap\ndata: {}\n\n")
                 continue
-            await queue.put(_sse(item))
-            if item.get("kind") == "turn.end":
-                break
+            if isinstance(item, dict):
+                await queue.put(_sse(item))
+                if item.get("kind") == "turn.end":
+                    break
     except asyncio.CancelledError:
         raise
     except DOWN:
@@ -121,8 +123,8 @@ async def _body(request: Request, turn_id: UUID, after: str | None) -> AsyncIter
 async def stream(
     request: Request,
     token: str,
-    after: str | None = Query(default=None),
-    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    after: Annotated[str | None, Query()] = None,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
 ):
     turn_id = await _resolve(token)
     return StreamingResponse(

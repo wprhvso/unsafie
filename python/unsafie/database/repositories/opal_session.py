@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 class OpalSessionRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def all(self) -> list[OpalSession]:
         return list(
-            await self.session.scalars(select(OpalSession).order_by(OpalSession.id))
+            await self.session.scalars(select(OpalSession).order_by(OpalSession.id)),
         )
 
     async def get(self, session_id: int) -> OpalSession | None:
@@ -89,7 +89,7 @@ class OpalSessionRepository:
             select(func.min(OpalSession.cooldown_until)).where(
                 OpalSession.enabled.is_(True),
                 OpalSession.cooldown_until.is_not(None),
-            )
+            ),
         )
 
     async def succeeded(self, session_id: int) -> None:
@@ -101,7 +101,7 @@ class OpalSessionRepository:
         await self.session.commit()
 
     async def failed(
-        self, session_id: int, *, error: str, cooldown_until: datetime | None, disable: bool
+        self, session_id: int, *, error: str, cooldown_until: datetime | None, disable: bool,
     ) -> None:
         row = await self.get(session_id)
         if row is None:

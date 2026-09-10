@@ -60,12 +60,10 @@ def matches(sub, event: str, payload: dict, logins: set[str]) -> bool:
     sender = ((payload.get("sender") or {}).get("login") or "").lower()
     if filters.get("ignore_self") and sender and sender in logins:
         return False
-    if branch := filters.get("branch"):
-        if _branch_of(event, payload) not in (None, branch):
-            return False
-    if author := filters.get("author"):
-        if _author_of(payload).lower() != str(author).lower():
-            return False
+    if (branch := filters.get("branch")) and _branch_of(event, payload) not in (None, branch):
+        return False
+    if (author := filters.get("author")) and _author_of(payload).lower() != str(author).lower():
+        return False
     if label := filters.get("label"):
         labels = {
             (item.get("name") or "").lower()

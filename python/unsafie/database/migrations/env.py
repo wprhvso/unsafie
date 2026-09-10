@@ -4,10 +4,12 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import unsafie.database.models  # noqa: F401
+import unsafie.database.models as _models
 from unsafie.database import Base
 from unsafie.log import setup
 from unsafie.settings import settings
+
+_ = _models
 
 setup()
 
@@ -37,7 +39,7 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection) -> None:
     context.configure(
-        connection=connection, target_metadata=target_metadata, include_object=include_object
+        connection=connection, target_metadata=target_metadata, include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()

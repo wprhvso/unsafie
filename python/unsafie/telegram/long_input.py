@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -120,15 +121,13 @@ class LongInputService:
         text = _prompt_text(col.target, col.locale, len(col.messages), total_chars)
 
         if col.prompt_message_id:
-            try:
+            with contextlib.suppress(Exception):
                 await bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=col.prompt_message_id,
                     text=text,
                     reply_markup=prompt_markup(col.locale),
                 )
-            except Exception:
-                pass
 
     async def close(self, bot_id: int, chat_id: int) -> Collected | None:
         col = self._collections.pop((bot_id, chat_id), None)
@@ -149,15 +148,13 @@ class LongInputService:
         if col is None:
             return
         if col.prompt_message_id:
-            try:
+            with contextlib.suppress(Exception):
                 await bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=col.prompt_message_id,
                     text=t("cmd-long-expired", locale),
                     reply_markup=None,
                 )
-            except Exception:
-                pass
 
 
 long_input_service = LongInputService()

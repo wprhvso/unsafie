@@ -13,15 +13,15 @@ class Failure(StrEnum):
 _AUTH = re.compile(
     r"invalid[_ ]token|unauthenticated|unauthorized|permission[_ ]denied|not logged in|"
     r"\b401\b|\b403\b|oauth|refresh",
-    re.I,
+    re.IGNORECASE,
 )
 _LIMIT = re.compile(
     r"rate[_ ]limit|\b429\b|resource[_ ]exhausted|quota|exceeded|too many requests",
-    re.I,
+    re.IGNORECASE,
 )
 _OVERLOADED = re.compile(
     r"overloaded|\b503\b|\b504\b|\b529\b|unavailable|deadline[_ ]exceeded|timeout",
-    re.I,
+    re.IGNORECASE,
 )
 
 _RPC_KINDS = {

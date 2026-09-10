@@ -22,17 +22,20 @@ def _parse(data: bytes) -> Any:
     try:
         return ElementTree.fromstring(data, forbid_dtd=True, forbid_entities=True)
     except (DefusedXmlException, ElementTree.ParseError):
-        raise ConversionError("the epub metadata could not be parsed") from None
+        msg = "the epub metadata could not be parsed"
+        raise ConversionError(msg) from None
 
 
 def _spine(archive: zipfile.ZipFile) -> list[str]:
     container = _parse(read_member(archive, _CONTAINER, _MEMBER_CAP))
     rootfile = container.find(_ROOTFILE)
     if rootfile is None:
-        raise ConversionError("the epub names no package document")
+        msg = "the epub names no package document"
+        raise ConversionError(msg)
     package_path = rootfile.get("full-path")
     if package_path is None:
-        raise ConversionError("the epub names no package document")
+        msg = "the epub names no package document"
+        raise ConversionError(msg)
 
     package = _parse(read_member(archive, package_path, _MEMBER_CAP))
     base = PurePosixPath(package_path).parent
@@ -61,7 +64,8 @@ def convert(raw: bytes) -> Payload:
                 read_member(archive, name, _MEMBER_CAP) for name in documents[:_MAX_DOCUMENTS]
             ]
     except (OSError, zipfile.BadZipFile, KeyError) as error:
-        raise ConversionError("the epub could not be read") from error
+        msg = "the epub could not be read"
+        raise ConversionError(msg) from error
 
     sections: list[str] = []
     hidden = 0

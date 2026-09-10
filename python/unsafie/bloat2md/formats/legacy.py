@@ -19,7 +19,8 @@ def available() -> bool:
 def _run(source: Path, outdir: Path, profile: Path, timeout: float) -> None:
     binary = shutil.which(SOFFICE)
     if binary is None:
-        raise UnsupportedFile("libreoffice is not installed")
+        msg = "libreoffice is not installed"
+        raise UnsupportedFile(msg)
     completed = subprocess.run(
         [
             binary,
@@ -41,12 +42,14 @@ def _run(source: Path, outdir: Path, profile: Path, timeout: float) -> None:
         env={"HOME": str(profile), "PATH": "/usr/bin:/bin", "TMPDIR": str(profile)},
     )
     if completed.returncode != 0:
-        raise ConversionError("libreoffice refused the document")
+        msg = "libreoffice refused the document"
+        raise ConversionError(msg)
 
 
 def convert(raw: bytes) -> Payload:
     if not available():
-        raise UnsupportedFile("this format needs libreoffice")
+        msg = "this format needs libreoffice"
+        raise UnsupportedFile(msg)
 
     with tempfile.TemporaryDirectory(prefix="bloat2md-") as workdir:
         root = Path(workdir)
@@ -60,11 +63,14 @@ def convert(raw: bytes) -> Payload:
         try:
             _run(source, outdir, profile, settings().timeout)
         except subprocess.TimeoutExpired as error:
-            raise ConversionError("libreoffice ran out of time") from error
+            msg = "libreoffice ran out of time"
+            raise ConversionError(msg) from error
         except OSError as error:
-            raise ConversionError("libreoffice could not be started") from error
+            msg = "libreoffice could not be started"
+            raise ConversionError(msg) from error
 
         produced = sorted(outdir.glob("*.pdf"))
         if not produced:
-            raise ConversionError("libreoffice produced nothing")
+            msg = "libreoffice produced nothing"
+            raise ConversionError(msg)
         return pdf.convert(produced[0].read_bytes())

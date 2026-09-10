@@ -33,7 +33,8 @@ def convert(raw: bytes) -> Payload:
         document = Document(io.BytesIO(raw))
         blocks = _body(document)
     except (OSError, ValueError, KeyError, AttributeError) as error:
-        raise ConversionError("the document could not be read") from error
+        msg = "the document could not be read"
+        raise ConversionError(msg) from error
 
     cleaned = clean("\n\n".join(block for block in blocks if block))
     return Payload(markdown=cleaned.text, dropped=cleaned.dropped)

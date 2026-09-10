@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -10,7 +12,7 @@ router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 
 @router.get("", response_model=Page[SubscriptionRead])
-async def list_subscriptions(params: PageParams = Depends(paging)):
+async def list_subscriptions(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await SubscriptionRepository(session).page(params.offset, params.limit)
     items = [
@@ -30,7 +32,7 @@ async def list_subscriptions(params: PageParams = Depends(paging)):
 
 
 @router.delete("/{sub_id}", status_code=204)
-async def delete_subscription(sub_id: int):
+async def delete_subscription(sub_id: int) -> None:
     async with SessionLocal() as session:
         if not await SubscriptionRepository(session).delete(sub_id):
             raise HTTPException(404, "no such subscription")

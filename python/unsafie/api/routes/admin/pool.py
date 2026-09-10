@@ -200,7 +200,7 @@ async def list_users() -> dict:
                 "blocked": user.pool_blocked,
                 "minutes_today": round((today_usage.machine_seconds if today_usage else 0) / 60, 1),
                 "commands_today": today_usage.commands if today_usage else 0,
-            }
+            },
         )
     return {"users": out}
 

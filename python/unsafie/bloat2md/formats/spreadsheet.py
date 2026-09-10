@@ -15,7 +15,8 @@ def convert(raw: bytes) -> Payload:
     try:
         workbook = calamine.CalamineWorkbook.from_filelike(io.BytesIO(raw))
     except (calamine.CalamineError, OSError, ValueError) as error:
-        raise ConversionError("the workbook could not be opened") from error
+        msg = "the workbook could not be opened"
+        raise ConversionError(msg) from error
 
     sections: list[str] = []
     skipped = 0

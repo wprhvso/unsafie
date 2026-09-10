@@ -41,7 +41,7 @@ def _decode(body: bytes) -> list:
     try:
         messages = json.loads(gzip.decompress(body))
     except (OSError, ValueError):
-        logger.error("a history segment is unreadable, skipping it", exc_info=True)
+        logger.exception("a history segment is unreadable, skipping it")
         return []
     return messages if isinstance(messages, list) else []
 
@@ -76,7 +76,7 @@ async def save(turn: Turn, segment: list, system: str | None) -> int:
     raw = encode(kept)
     async with SessionLocal() as session:
         await SegmentRepository(session).save(
-            turn.id, body=gzip.compress(raw), count=len(kept), size=len(raw), system=system
+            turn.id, body=gzip.compress(raw), count=len(kept), size=len(raw), system=system,
         )
     logger.info(
         "turn=%s stored %s message(s), %s%s",

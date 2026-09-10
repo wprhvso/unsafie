@@ -53,13 +53,17 @@ def next_run(
     if every:
         seconds = duration(every)
         if seconds < settings.schedule_min_interval:
-            raise ScheduleError(
+            msg = (
                 f"the minimum interval is {settings.schedule_min_interval}s "
                 f"({humanize(settings.schedule_min_interval)})"
             )
+            raise ScheduleError(
+                msg,
+            )
         return now + timedelta(seconds=seconds), None, seconds
     if not when:
-        raise ScheduleError("when, cron or every is required")
+        msg = "when, cron or every is required"
+        raise ScheduleError(msg)
     text = when.strip()
     if text.lower().startswith(("in ", "через ", "+")):
         text = text.split(maxsplit=1)[1] if " " in text else text.lstrip("+")
@@ -84,7 +88,8 @@ async def add(
     origin_message_id: int | None,
 ) -> ScheduledTask:
     if not (text or "").strip():
-        raise ScheduleError("the task text is empty")
+        msg = "the task text is empty"
+        raise ScheduleError(msg)
     tz_name = await timezone_of(user_id)
     try:
         run_at, cron_expr, interval = next_run(tz_name=tz_name, when=when, cron=cron, every=every)
@@ -93,8 +98,9 @@ async def add(
     async with SessionLocal() as session:
         repo = ScheduleRepository(session)
         if await repo.count_for_chat(bot_id, chat_id) >= settings.schedule_max_per_chat:
+            msg = f"this chat already has {settings.schedule_max_per_chat} tasks; delete some first"
             raise ScheduleError(
-                f"this chat already has {settings.schedule_max_per_chat} tasks; delete some first"
+                msg,
             )
         return await repo.add(
             bot_id=bot_id,

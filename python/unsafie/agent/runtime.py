@@ -91,10 +91,10 @@ async def _punish(session_row, result: loop.Result) -> None:
         row = await creds.get(session_row.id)
         if row is None:
             return
-        cooldown = credentials.cooldown_for(row.failures + 1, result.failure)
-        disable = result.failure == credentials.Failure.AUTH
+        cooldown = credentials.cooldown_for(row.failures + 1, result.failure) if result.failure is not None else None
+        disable = result.failure == credentials.Failure.AUTH if result.failure is not None else False
         await creds.failed(
-            session_row.id, error=result.error or "", cooldown_until=cooldown, disable=disable
+            session_row.id, error=result.error or "", cooldown_until=cooldown, disable=disable,
         )
     events.publish(
         "credential.failed",
@@ -126,7 +126,7 @@ async def _execute(
 
     try:
         access_token = await opal.get_access_token(
-            session_row.id, session_row.refresh_token
+            session_row.id, session_row.refresh_token,
         )
     except opal.OpalRefreshFailed as e:
         logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
@@ -186,7 +186,7 @@ async def _execute(
         )
         if result.status != "ok":
             telemetry.fail(
-                query_span, RuntimeError(short(result.error or result.status, 300))
+                query_span, RuntimeError(short(result.error or result.status, 300)),
             )
 
     async with SessionLocal() as session:
@@ -222,7 +222,7 @@ async def _execute(
 
 
 async def notify(
-    bot: Bot, turn: Turn, text: str, reply_markup: InlineKeyboardMarkup | None = None
+    bot: Bot, turn: Turn, text: str, reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
     try:
         await sender.send(
@@ -234,9 +234,9 @@ async def notify(
             turn=turn,
             reply_markup=reply_markup,
         )
-    except TelegramAPIError as e:
-        logger.error(
-            "bot=%s chat=%s turn=%s notify failed error=%s", turn.bot_id, turn.chat_id, turn.id, e
+    except TelegramAPIError:
+        logger.exception(
+            "bot=%s chat=%s turn=%s notify failed", turn.bot_id, turn.chat_id, turn.id,
         )
 
 
@@ -484,7 +484,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
         finally:
             await cancel.clear(turn.id)
             await turns.seal(turn.id)
-            await segments.save(turn, messages, snapshot=system_prompt)
+            await segments.save(turn, messages, system=system_prompt)
             async with SessionLocal() as session:
                 repo = TurnRepository(session)
                 fresh = await repo.get(turn.id)
@@ -632,7 +632,7 @@ async def handle(message: Message, bot_id: int, update_db_id: int | None = None)
 
 
 async def handle_callback(
-    query: CallbackQuery, message: Message, bot_id: int, update_db_id: int | None
+    query: CallbackQuery, message: Message, bot_id: int, update_db_id: int | None,
 ) -> None:
     if query.bot is None or update_db_id is None:
         return
@@ -687,7 +687,7 @@ async def retry_turn(bot: Bot, origin: Turn, locale: str) -> None:
 
     if update_row is not None and "message" in update_row.payload:
         msg = Message.model_validate(
-            update_row.payload["message"], context={"bot": bot}
+            update_row.payload["message"], context={"bot": bot},
         ).as_(bot)
         reply_to = msg.reply_to_message.message_id if msg.reply_to_message else origin.reply_to
         await dispatch(

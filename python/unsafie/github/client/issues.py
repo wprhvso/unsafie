@@ -1,9 +1,11 @@
 from typing import Any
 
+from unsafie.github.client.base import GithubHTTP
 
-class IssuesMixin:
+
+class IssuesMixin(GithubHTTP):
     async def issues(
-        self, state: str = "open", labels: str | None = None, limit: int = 30
+        self, state: str = "open", labels: str | None = None, limit: int = 30,
     ) -> list[dict]:
         params: dict[str, Any] = {"state": state, "sort": "updated"}
         if labels:
@@ -15,7 +17,7 @@ class IssuesMixin:
         return await self.request("GET", f"{self.base}/issues/{number}")
 
     async def create_issue(
-        self, title: str, body: str | None, labels: list[str] | None, assignees: list[str] | None
+        self, title: str, body: str | None, labels: list[str] | None, assignees: list[str] | None,
     ) -> dict:
         payload: dict[str, Any] = {"title": title, "body": body or ""}
         if labels:
@@ -33,12 +35,12 @@ class IssuesMixin:
 
     async def comment(self, number: int, body: str) -> dict:
         return await self.request(
-            "POST", f"{self.base}/issues/{number}/comments", json_body={"body": body}
+            "POST", f"{self.base}/issues/{number}/comments", json_body={"body": body},
         )
 
     async def update_comment(self, comment_id: int, body: str) -> dict:
         return await self.request(
-            "PATCH", f"{self.base}/issues/comments/{comment_id}", json_body={"body": body}
+            "PATCH", f"{self.base}/issues/comments/{comment_id}", json_body={"body": body},
         )
 
     async def delete_comment(self, comment_id: int) -> None:
@@ -49,7 +51,7 @@ class IssuesMixin:
 
     async def add_labels(self, number: int, labels: list[str]) -> list[dict]:
         return await self.request(
-            "POST", f"{self.base}/issues/{number}/labels", json_body={"labels": labels}
+            "POST", f"{self.base}/issues/{number}/labels", json_body={"labels": labels},
         )
 
     async def remove_label(self, number: int, label: str) -> None:

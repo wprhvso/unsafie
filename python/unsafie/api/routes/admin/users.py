@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -30,7 +32,7 @@ async def read(session, user) -> UserRead:
 
 
 @router.get("", response_model=Page[UserRead])
-async def list_users(params: PageParams = Depends(paging)):
+async def list_users(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await UserRepository(session).page(params.offset, params.limit)
         items = [await read(session, u) for u in rows]

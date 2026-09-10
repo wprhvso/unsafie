@@ -24,11 +24,11 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_artifacts_chat ON artifacts (bot_id, chat_id, created_at)"
+        "CREATE INDEX IF NOT EXISTS ix_artifacts_chat ON artifacts (bot_id, chat_id, created_at)",
     )
     op.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_artifacts_turn "
-        "ON artifacts (turn_id) WHERE kind = 'turn'"
+        "ON artifacts (turn_id) WHERE kind = 'turn'",
     )
 
 

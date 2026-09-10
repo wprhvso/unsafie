@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import time
 
@@ -33,15 +34,11 @@ class Loop:
         if self._task is None:
             return
         self._task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
             await asyncio.wait_for(self._task, timeout=5.0)
-        except (asyncio.CancelledError, TimeoutError):
-            pass
         self._task = None
-        try:
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
             await asyncio.wait_for(self.on_stop(), timeout=5.0)
-        except (asyncio.CancelledError, TimeoutError):
-            pass
         logger.info("%s stopped", self.name)
 
     async def on_stop(self) -> None:
@@ -59,6 +56,6 @@ class Loop:
             except Exception:
                 logger.exception("%s tick failed", self.name)
             logger.debug(
-                "%s tick done in %.1fms", self.name, (time.perf_counter() - started) * 1000
+                "%s tick done in %.1fms", self.name, (time.perf_counter() - started) * 1000,
             )
             await asyncio.sleep(max(self.min_interval, self.interval))

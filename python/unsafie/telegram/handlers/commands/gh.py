@@ -33,7 +33,7 @@ async def _status(user_id: int, locale: str) -> str:
     for installation in installations:
         suffix = t("github-suspended", locale) if installation.suspended else ""
         lines.append(
-            f"· app: {installation.account_login} ({installation.repository_selection}){suffix}"
+            f"· app: {installation.account_login} ({installation.repository_selection}){suffix}",
         )
     bound = await workspace.repos_of(user_id)
     if bound:
@@ -61,7 +61,7 @@ async def _connect(message: Message, bot_id: int, user_id: int, locale: str, tok
             login=account.login,
             n=len(repos),
             apps=len(installations),
-        )
+        ),
     ]
     if missing := pat.missing_scopes(scopes):
         lines.append(t("github-token-scopes", locale, scopes=", ".join(missing)))
@@ -98,13 +98,13 @@ def build_gh_router() -> Router:
                     return
                 repo, alias = await pat.add(user_id, parts[1], parts[2] if len(parts) > 2 else None)
                 await answer(
-                    message, bot_id, t("github-added", locale, repo=repo.full, alias=alias)
+                    message, bot_id, t("github-added", locale, repo=repo.full, alias=alias),
                 )
                 return
             if action in ("app", "install", "repos"):
                 app = await auth.load_app()
                 await answer(
-                    message, bot_id, t("github-install", locale, url=manifest.install_url(app.slug))
+                    message, bot_id, t("github-install", locale, url=manifest.install_url(app.slug)),
                 )
                 return
             if action in ("rm", "remove", "logout"):

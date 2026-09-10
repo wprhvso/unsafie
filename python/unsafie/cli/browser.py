@@ -1,3 +1,4 @@
+import contextlib
 import time
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,8 @@ _open: dict[str, Any] = {}
 def _state() -> dict:
     state = engine.load()
     if state is None:
-        raise RuntimeError("chrome is not running: call unsafie browser start")
+        msg = "chrome is not running: call unsafie browser start"
+        raise RuntimeError(msg)
     return state
 
 
@@ -34,10 +36,8 @@ def detach() -> None:
     cdp = _open.pop("cdp", None)
     _open.pop("port", None)
     if cdp is not None:
-        try:
+        with contextlib.suppress(Exception):
             cdp.close()
-        except Exception:
-            pass
 
 
 def _act(work, *args, **kwargs) -> Any:
@@ -49,6 +49,7 @@ def _act(work, *args, **kwargs) -> Any:
             detach()
             if attempt == 2:
                 raise
+    return None
 
 
 def start(profile: str | None = None, *, size: str = "1920x1080", headless: bool = False) -> dict:

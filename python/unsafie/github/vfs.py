@@ -23,7 +23,8 @@ def normalize(path: str) -> str:
     path = (path or "").strip().replace("\\", "/").lstrip("/")
     path = posixpath.normpath(path)
     if path in (".", "") or path.startswith("../"):
-        raise GithubError(f"bad path: {path!r}")
+        msg = f"bad path: {path!r}"
+        raise GithubError(msg)
     return path
 
 
@@ -96,8 +97,9 @@ class Overlay:
 
     def write(self, path: str, data: bytes, mode: str = "100644") -> None:
         if len(data) > settings.github_max_file_bytes:
+            msg = f"{path} is {human_size(len(data))}, limit is {human_size(settings.github_max_file_bytes)}"
             raise TooLarge(
-                f"{path} is {human_size(len(data))}, limit is {human_size(settings.github_max_file_bytes)}"
+                msg,
             )
         self.changes[path] = {"content": encode(data), "mode": mode}
         self._check_size()
@@ -114,9 +116,12 @@ class Overlay:
 
     def _check_size(self) -> None:
         if len(self.changes) > settings.github_max_changes:
-            raise TooLarge(
+            msg = (
                 f"more than {settings.github_max_changes} changed files in one worktree; "
                 "commit what is done (git_commit) before continuing"
+            )
+            raise TooLarge(
+                msg,
             )
 
     def summary(self) -> list[str]:

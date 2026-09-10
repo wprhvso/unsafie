@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class UserRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get(self, user_id: int) -> User | None:
@@ -27,7 +27,7 @@ class UserRepository:
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[User], int]:
         total = await self.session.scalar(select(func.count()).select_from(User)) or 0
         rows = await self.session.scalars(
-            select(User).order_by(User.id).offset(offset).limit(limit)
+            select(User).order_by(User.id).offset(offset).limit(limit),
         )
         return list(rows), int(total)
 

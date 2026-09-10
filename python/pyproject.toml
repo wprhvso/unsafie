@@ -67,8 +67,32 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
+select = ["ALL"]
+ignore = [
+    "D",       # pydocstyle
+    "CPY",     # flake8-copyright
+    "COM812",  # missing-trailing-comma
+    "ISC001",  # implicit-str-concat
+    "E501",    # line-too-long
+    "ANN",     # flake8-annotations
+    "PLC0415", # import-outside-top-level
+    "PLR",     # pylint-refactor
+    "PLW",     # pylint-warnings
+    "C901",    # mccabe complexity
+    "BLE001",  # blind-except
+    "S",       # flake8-bandit
+    "FBT",     # flake8-boolean-trap
+    "INP001",  # implicit-namespace-package
+    "ASYNC",   # flake8-async
+    "ARG",     # flake8-unused-arguments
+    "N818",    # error-suffix-on-exception-name
+    "A",       # flake8-builtins
+    "PTH",     # flake8-use-pathlib
+    "RUF001",  # ambiguous-unicode-character-string
+    "TRY",     # tryceratops
+    "DTZ",     # flake8-datetimez
+    "PERF",    # perflint
+]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body", "fastapi.Path"]

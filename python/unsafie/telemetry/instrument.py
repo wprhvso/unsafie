@@ -30,7 +30,7 @@ def app(fastapi_app) -> None:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
         FastAPIInstrumentor.instrument_app(
-            fastapi_app, excluded_urls=EXCLUDED_URLS, exclude_spans=["receive", "send"]
+            fastapi_app, excluded_urls=EXCLUDED_URLS, exclude_spans=["receive", "send"],
         )
         _app_instrumented = True
     except Exception:

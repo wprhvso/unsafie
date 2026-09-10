@@ -51,7 +51,7 @@ def build_effort_router() -> Router:
                 await UserRepository(session).set_effort(user_id, None)
             logger.info("bot=%s user=%s effort -> default", bot_id, user_id)
             await answer(
-                message, bot_id, t("commands-effort-reset", locale, effort=DEFAULT_EFFORT)
+                message, bot_id, t("commands-effort-reset", locale, effort=DEFAULT_EFFORT),
             )
             return
         level = ALIASES.get(raw, raw)

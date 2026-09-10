@@ -190,7 +190,7 @@ class Sweeper(Loop):
         freed, total = await asyncio.to_thread(_sweep, root, settings.github_cache_disk_bytes)
         if freed:
             logger.info(
-                "github cache swept: %s freed of %s", human_size(freed), human_size(total)
+                "github cache swept: %s freed of %s", human_size(freed), human_size(total),
             )
 
 

@@ -30,9 +30,7 @@ class Event:
     def matches(self, kinds: list[str] | None, match: dict[str, Any] | None) -> bool:
         if kinds and not any(fnmatch.fnmatchcase(self.kind, k) for k in kinds):
             return False
-        if match and any(self.data.get(k) != v for k, v in match.items()):
-            return False
-        return True
+        return not (match and any(self.data.get(k) != v for k, v in match.items()))
 
 
 def position(entry_id: str) -> tuple[int, int]:
@@ -114,15 +112,21 @@ class Bus:
         client = cluster.client()
         first = await client.xrange(self.key, count=1)
         last = await client.xrevrange(self.key, count=1)
-        return (first[0][0] if first else None, last[0][0] if last else None)
+        f_id = first[0][0] if first else None
+        l_id = last[0][0] if last else None
+        return (f_id.decode() if isinstance(f_id, bytes) else f_id, l_id.decode() if isinstance(l_id, bytes) else l_id)
 
     async def recent(
-        self, kinds: list[str] | None = None, match: dict[str, Any] | None = None, limit: int = 100
+        self, kinds: list[str] | None = None, match: dict[str, Any] | None = None, limit: int = 100,
     ) -> list[Event]:
         entries = await cluster.client().xrevrange(self.key, count=self._maxlen)
-        out = []
-        for entry_id, fields in entries:
-            event = _parse(entry_id, fields)
+        out: list[Event] = []
+        if not entries:
+            return out
+        for item in entries:
+            entry_raw, fields = item[0], item[1]
+            entry_id = entry_raw.decode() if isinstance(entry_raw, bytes) else str(entry_raw)
+            event = _parse(entry_id, fields if isinstance(fields, dict) else {})
             if event is not None and event.matches(kinds, match):
                 out.append(event)
                 if len(out) >= limit:
@@ -153,8 +157,11 @@ class Bus:
             except RedisTimeout:
                 logger.debug("events: quiet read window")
                 continue
-            for _, items in entries or []:
-                for entry_id, fields in items:
+            for stream_pair in entries or []:
+                if not isinstance(stream_pair, tuple | list) or len(stream_pair) < 2:
+                    continue
+                for entry_raw, fields in stream_pair[1]:
+                    entry_id = entry_raw.decode() if isinstance(entry_raw, bytes) else str(entry_raw)
                     cursor = entry_id
                     event = _parse(entry_id, fields)
                     if event is not None and event.matches(kinds, match):

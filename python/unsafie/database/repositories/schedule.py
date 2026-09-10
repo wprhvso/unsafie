@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ScheduleRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def add(self, **fields) -> ScheduledTask:
@@ -42,7 +42,7 @@ class ScheduleRepository:
         rows = await self.session.scalars(
             select(ScheduledTask)
             .where(ScheduledTask.bot_id == bot_id, ScheduledTask.chat_id == chat_id)
-            .order_by(ScheduledTask.next_run_at)
+            .order_by(ScheduledTask.next_run_at),
         )
         return list(rows)
 
@@ -51,14 +51,14 @@ class ScheduleRepository:
             await self.session.scalar(
                 select(func.count())
                 .select_from(ScheduledTask)
-                .where(ScheduledTask.bot_id == bot_id, ScheduledTask.chat_id == chat_id)
+                .where(ScheduledTask.bot_id == bot_id, ScheduledTask.chat_id == chat_id),
             )
-            or 0
+            or 0,
         )
 
     async def bind_turn(self, task_id: int, turn_id: UUID | None) -> None:
         await self.session.execute(
-            update(ScheduledTask).where(ScheduledTask.id == task_id).values(active_turn_id=turn_id)
+            update(ScheduledTask).where(ScheduledTask.id == task_id).values(active_turn_id=turn_id),
         )
         await self.session.commit()
 
@@ -69,8 +69,8 @@ class ScheduleRepository:
                 .where(ScheduledTask.enabled.is_(True), ScheduledTask.next_run_at <= now)
                 .order_by(ScheduledTask.next_run_at)
                 .limit(limit)
-                .with_for_update(skip_locked=True)
-            )
+                .with_for_update(skip_locked=True),
+            ),
         )
         result: list[ScheduledTask] = []
         for row in rows:
@@ -119,15 +119,15 @@ class ScheduleRepository:
     async def remove_all(self, bot_id: int, chat_id: int) -> int:
         result = await self.session.execute(
             delete(ScheduledTask).where(
-                ScheduledTask.bot_id == bot_id, ScheduledTask.chat_id == chat_id
-            )
+                ScheduledTask.bot_id == bot_id, ScheduledTask.chat_id == chat_id,
+            ),
         )
         await self.session.commit()
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)
 
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[ScheduledTask], int]:
         total = await self.session.scalar(select(func.count()).select_from(ScheduledTask)) or 0
         rows = await self.session.scalars(
-            select(ScheduledTask).order_by(ScheduledTask.next_run_at).offset(offset).limit(limit)
+            select(ScheduledTask).order_by(ScheduledTask.next_run_at).offset(offset).limit(limit),
         )
         return list(rows), int(total)

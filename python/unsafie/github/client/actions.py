@@ -1,7 +1,9 @@
 from typing import Any
 
+from unsafie.github.client.base import GithubHTTP
 
-class ActionsMixin:
+
+class ActionsMixin(GithubHTTP):
     async def workflows(self) -> list[dict]:
         data = await self.request("GET", f"{self.base}/actions/workflows", params={"per_page": 100})
         return data.get("workflows", [])
@@ -33,7 +35,7 @@ class ActionsMixin:
 
     async def job_logs(self, job_id: int) -> bytes:
         data = await self.request(
-            "GET", f"{self.base}/actions/jobs/{job_id}/logs", raw=True, allow_404=True
+            "GET", f"{self.base}/actions/jobs/{job_id}/logs", raw=True, allow_404=True,
         )
         return data or b""
 
@@ -57,5 +59,5 @@ class ActionsMixin:
 
     async def artifact_zip(self, artifact_id: int) -> bytes:
         return await self.request(
-            "GET", f"{self.base}/actions/artifacts/{artifact_id}/zip", raw=True
+            "GET", f"{self.base}/actions/artifacts/{artifact_id}/zip", raw=True,
         )

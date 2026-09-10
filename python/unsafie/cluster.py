@@ -90,7 +90,8 @@ async def connect() -> Redis:
         await opened.aclose()
         await reading.aclose()
         await raw.aclose()
-        raise Unavailable(f"redis at {safe_url(settings.redis_url)} is not reachable: {e}") from e
+        msg = f"redis at {safe_url(settings.redis_url)} is not reachable: {e}"
+        raise Unavailable(msg) from e
     _client = opened
     _reader = reading
     _binary = raw
@@ -110,19 +111,22 @@ async def connect() -> Redis:
 
 def client() -> Redis:
     if _client is None:
-        raise Unavailable("redis is not connected")
+        msg = "redis is not connected"
+        raise Unavailable(msg)
     return _client
 
 
 def reader() -> Redis:
     if _reader is None:
-        raise Unavailable("redis is not connected")
+        msg = "redis is not connected"
+        raise Unavailable(msg)
     return _reader
 
 
 def binary() -> Redis:
     if _binary is None:
-        raise Unavailable("redis is not connected")
+        msg = "redis is not connected"
+        raise Unavailable(msg)
     return _binary
 
 
@@ -164,14 +168,19 @@ class Held:
 
     def check(self) -> None:
         if self.lost.is_set():
-            raise Busy(f"lock {self.name} was lost")
+            msg = f"lock {self.name} was lost"
+            raise Busy(msg)
 
     async def extend(self, ttl: float | None = None) -> bool:
         ms = int((ttl or self.ttl) * 1000)
-        return bool(await _extend(keys=[self.key], args=[self.token, ms]))
+        if _extend is not None:
+            return bool(await _extend(keys=[self.key], args=[self.token, ms]))
+        return False
 
     async def release(self) -> bool:
-        return bool(await _release(keys=[self.key], args=[self.token]))
+        if _release is not None:
+            return bool(await _release(keys=[self.key], args=[self.token]))
+        return False
 
 
 async def acquire(name: str, *, ttl: float | None = None, wait: float = 0.0) -> Held | None:
@@ -187,7 +196,9 @@ async def acquire(name: str, *, ttl: float | None = None, wait: float = 0.0) -> 
         await asyncio.sleep(settings.lock_retry)
 
 
-def holder(token: str | None) -> str | None:
+def holder(token: str | bytes | None) -> str | None:
+    if isinstance(token, bytes):
+        token = token.decode()
     return token.split(":", 1)[0] if token else None
 
 
@@ -204,7 +215,8 @@ async def mark(name: str, value: str, ttl: float) -> None:
 
 
 async def marked(name: str) -> str | None:
-    return await client().get(key("mark", name))
+    val = await client().get(key("mark", name))
+    return val.decode() if isinstance(val, bytes) else val
 
 
 async def marks(names: Iterable[str]) -> dict[str, str | None]:
@@ -212,7 +224,10 @@ async def marks(names: Iterable[str]) -> dict[str, str | None]:
     if not wanted:
         return {}
     values = await client().mget([key("mark", n) for n in wanted])
-    return dict(zip(wanted, values, strict=True))
+    result: dict[str, str | None] = {}
+    for k, v in zip(wanted, values, strict=True):
+        result[k] = v.decode() if isinstance(v, bytes) else v
+    return result
 
 
 async def _keep(held: Held) -> None:
@@ -256,20 +271,21 @@ def _note(name: str, waited: float, taken: bool) -> None:
 
 @contextlib.asynccontextmanager
 async def lock(
-    name: str, *, ttl: float | None = None, wait: float | None = None, renew: bool = False
+    name: str, *, ttl: float | None = None, wait: float | None = None, renew: bool = False,
 ) -> AsyncIterator[Held]:
     started = time.perf_counter()
     held = await acquire(name, ttl=ttl, wait=settings.lock_wait if wait is None else wait)
     _note(name, time.perf_counter() - started, held is not None)
     if held is None:
-        raise Busy(f"lock {name} is held by another instance")
+        msg = f"lock {name} is held by another instance"
+        raise Busy(msg)
     async with _holding(held, renew):
         yield held
 
 
 @contextlib.asynccontextmanager
 async def try_lock(
-    name: str, *, ttl: float | None = None, wait: float = 0.0, renew: bool = False
+    name: str, *, ttl: float | None = None, wait: float = 0.0, renew: bool = False,
 ) -> AsyncIterator[Held | None]:
     started = time.perf_counter()
     held = await acquire(name, ttl=ttl, wait=wait)

@@ -85,7 +85,8 @@ def convert(raw: bytes) -> Payload:
     try:
         document = pdfium.PdfDocument(stream)
     except pdfium.PdfiumError as error:
-        raise ConversionError("the pdf could not be opened") from error
+        msg = "the pdf could not be opened"
+        raise ConversionError(msg) from error
 
     sections: list[str] = []
     images: list[Image] = []

@@ -32,6 +32,6 @@ async def restart_bot(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204)
-async def delete_bot(bot_id: int):
+async def delete_bot(bot_id: int) -> None:
     async with SessionLocal() as session:
         await service.delete(session, bot_id)

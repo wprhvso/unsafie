@@ -60,19 +60,24 @@ async def resolve(user_id: int, ref: str | None) -> tuple[UserRepo, Repo]:
             if found is None:
                 known = [b.alias for b, _ in await repos.for_user(user_id)]
                 hint = ", ".join(known) if known else "none yet — the user must run /gh <token>"
-                raise NotFound(
+                msg = (
                     f"no repository '{ref}'. Available: {hint}. "
                     "A repository the token can see is added with /gh add owner/name."
+                )
+                raise NotFound(
+                    msg,
                 )
             return found
         bound = await repos.for_user(user_id)
         if not bound:
+            msg = "no repositories connected. The user must run /gh <token> with a personal access token."
             raise NotFound(
-                "no repositories connected. The user must run /gh <token> with a personal access token."
+                msg,
             )
         if len(bound) > 1:
             names = ", ".join(b.alias for b, _ in bound)
-            raise GithubError(f"specify the repository: {names}")
+            msg = f"specify the repository: {names}"
+            raise GithubError(msg)
         return bound[0]
 
 
@@ -98,11 +103,12 @@ async def ensure_worktree(state: Session) -> Worktree:
         return state.worktree
     sha = await state.client.ref_sha(state.branch)
     if sha is None:
-        raise NotFound(f"branch '{state.branch}' does not exist in {state.repo.full}")
+        msg = f"branch '{state.branch}' does not exist in {state.repo.full}"
+        raise NotFound(msg)
     commit = await state.client.commit(sha)
     async with SessionLocal() as session:
         state.worktree = await WorktreeRepository(session).create(
-            state.repo.id, state.branch, sha, commit["tree"]["sha"]
+            state.repo.id, state.branch, sha, commit["tree"]["sha"],
         )
     logger.info("worktree opened %s at %s", state.label, sha[:7])
     return state.worktree

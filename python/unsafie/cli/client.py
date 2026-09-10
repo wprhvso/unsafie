@@ -51,7 +51,7 @@ def setting(key: str, override: str | None = None) -> str | None:
 
 
 class Client:
-    def __init__(self, api: str | None = None, token: str | None = None, prefix: str = "/api/v1"):
+    def __init__(self, api: str | None = None, token: str | None = None, prefix: str = "/api/v1") -> None:
         self.api = (setting("api", api) or DEFAULT_API).rstrip("/")
         self._token = token
         self.prefix = prefix
@@ -60,7 +60,8 @@ class Client:
     def token(self) -> str:
         found = setting("token", self._token)
         if not found:
-            raise CliError("no token provided: set UNSAFIE_TOKEN")
+            msg = "no token provided: set UNSAFIE_TOKEN"
+            raise CliError(msg)
         return found
 
     def call(
@@ -92,7 +93,8 @@ class Client:
                 detail = parsed.get("detail", str(parsed))
             except Exception:
                 detail = err_body.decode(errors="replace") or str(refused)
-            raise CliError(f"{refused.code}: {detail}") from None
+            msg = f"{refused.code}: {detail}"
+            raise CliError(msg) from None
         except Exception as e:
             raise CliError(str(e)) from None
         if raw:
@@ -114,7 +116,8 @@ class Client:
             with urllib.request.urlopen(request, timeout=timeout) as answer:
                 body = answer.read()
         except urllib.error.HTTPError as refused:
-            raise CliError(f"{refused.code}: {refused.read().decode(errors='replace')}") from None
+            msg = f"{refused.code}: {refused.read().decode(errors='replace')}"
+            raise CliError(msg) from None
         except Exception as e:
             raise CliError(str(e)) from None
         return json.loads(body) if body else None

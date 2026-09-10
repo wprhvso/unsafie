@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import Chat, Update
+from aiogram.types import Chat, TelegramObject, Update
 
 from unsafie import events, telemetry
 from unsafie.database import SessionLocal
@@ -30,10 +30,12 @@ class UpdateMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Update, dict[str, Any]], Awaitable[Any]],
-        event: Update,
+        handler: Callable[[Any, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        if not isinstance(event, Update):
+            return await handler(event, data)
         started = time.perf_counter()
         with telemetry.span(
             "tg.update",
@@ -47,11 +49,11 @@ class UpdateMiddleware(BaseMiddleware):
             },
         ):
             logger.info(
-                "bot=%s update=%s type=%s received", self.bot_id, event.update_id, event.event_type
+                "bot=%s update=%s type=%s received", self.bot_id, event.update_id, event.event_type,
             )
             payload = dump(event)
             logger.debug(
-                "bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload)
+                "bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload),
             )
             stored, fresh = await self._store(event, payload)
             if not fresh:
@@ -105,13 +107,13 @@ class UpdateMiddleware(BaseMiddleware):
                 attrs.USER_ID: user_id,
                 attrs.MESSAGE_ID: message_id,
                 attrs.PROMPT: telemetry.content(payload),
-            }
+            },
         )
         try:
             async with SessionLocal() as session:
                 if chat is not None:
                     await ChatRepository(session).touch(
-                        self.bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username
+                        self.bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username,
                     )
                 stored, fresh = await UpdateRepository(session).save(
                     bot_id=self.bot_id,

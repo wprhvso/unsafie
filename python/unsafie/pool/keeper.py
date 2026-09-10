@@ -15,7 +15,7 @@ LIVE = ("in_progress", "queued", "waiting")
 
 
 def _age(run: dict) -> float:
-    created = datetime.fromisoformat(str(run["created_at"]).replace("Z", "+00:00"))
+    created = datetime.fromisoformat(str(run["created_at"]))
     return (datetime.now(UTC) - created).total_seconds()
 
 

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
+from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import StreamingResponse
@@ -50,7 +51,7 @@ async def recent(kinds: str | None = None, match: str | None = None, limit: int 
 
 
 async def _stream(
-    request: Request, kinds: list[str] | None, match: dict | None, after_id: str | None
+    request: Request, kinds: list[str] | None, match: dict | None, after_id: str | None,
 ) -> AsyncIterator[str]:
     queue: asyncio.Queue[str] = asyncio.Queue(maxsize=512)
 
@@ -58,7 +59,7 @@ async def _stream(
         async for item in bus.subscribe(kinds, match, after_id):
             if item == bus.GAP:
                 await queue.put("event: gap\ndata: {}\n\n")
-            else:
+            elif isinstance(item, bus.Event):
                 await queue.put(_frame(item))
 
     task = asyncio.create_task(pump(), name="sse-pump")
@@ -79,10 +80,10 @@ async def _stream(
 @router.get("")
 async def stream(
     request: Request,
-    kinds: str | None = Query(default=None),
-    match: str | None = Query(default=None),
-    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
-    after: str | None = Query(default=None),
+    kinds: Annotated[str | None, Query()] = None,
+    match: Annotated[str | None, Query()] = None,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    after: Annotated[str | None, Query()] = None,
 ):
     selected = [k.strip() for k in (kinds or "").split(",") if k.strip()] or None
     after_id = after or last_event_id or None

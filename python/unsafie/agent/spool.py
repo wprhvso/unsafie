@@ -23,10 +23,11 @@ def _get_spool_base() -> Path:
         if DEFAULT_SPOOL_ROOT.exists():
             return DEFAULT_SPOOL_ROOT
         DEFAULT_SPOOL_ROOT.mkdir(parents=True, exist_ok=True)
-        return DEFAULT_SPOOL_ROOT
     except OSError:
         FALLBACK_SPOOL_ROOT.mkdir(parents=True, exist_ok=True)
         return FALLBACK_SPOOL_ROOT
+    else:
+        return DEFAULT_SPOOL_ROOT
 
 
 class SpoolStatus(StrEnum):
@@ -62,10 +63,8 @@ class BashSpool:
 
     def prepare(self, code: str, cwd: str | Path | None = None) -> Path:
         self.dir.mkdir(parents=True, exist_ok=True)
-        try:
+        with contextlib.suppress(OSError):
             self.dir.chmod(0o700)
-        except OSError:
-            pass
 
         script_body = ["#!/usr/bin/env bash"]
         if cwd:
@@ -74,10 +73,8 @@ class BashSpool:
         script_body.append("")
 
         self.script_file.write_text("\n".join(script_body), encoding="utf-8")
-        try:
+        with contextlib.suppress(OSError):
             self.script_file.chmod(0o700)
-        except OSError:
-            pass
 
         self.stdout_file.unlink(missing_ok=True)
         self.exit_code_file.unlink(missing_ok=True)
@@ -113,10 +110,8 @@ class BashSpool:
 
         pid = proc.pid
         pgid = proc.pid
-        try:
+        with contextlib.suppress(OSError):
             pgid = os.getpgid(pid)
-        except OSError:
-            pass
 
         meta = {
             "pid": pid,
@@ -243,11 +238,12 @@ class BashSpool:
             if probe.status in (SpoolStatus.FINISHED, SpoolStatus.DEAD):
                 return probe.exit_code if probe.exit_code is not None else 0
             if deadline is not None and time.monotonic() >= deadline:
-                raise TimeoutError(f"spool process did not finish within {timeout}s")
+                msg = f"spool process did not finish within {timeout}s"
+                raise TimeoutError(msg)
             await asyncio.sleep(poll_interval)
 
     async def tail(
-        self, from_offset: int = 0, poll_interval: float = 0.1
+        self, from_offset: int = 0, poll_interval: float = 0.1,
     ) -> AsyncIterator[tuple[str, int]]:
         offset = from_offset
         while True:

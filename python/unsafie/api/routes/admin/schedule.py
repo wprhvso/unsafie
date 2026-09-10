@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -10,7 +12,7 @@ router = APIRouter(prefix="/schedule", tags=["schedule"])
 
 
 @router.get("", response_model=Page[ScheduleRead])
-async def list_schedule(params: PageParams = Depends(paging)):
+async def list_schedule(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await ScheduleRepository(session).page(params.offset, params.limit)
     return Page.of([ScheduleRead.model_validate(r) for r in rows], total, params)

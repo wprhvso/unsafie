@@ -21,7 +21,8 @@ def convert(raw: bytes) -> Payload:
             audit_archive(archive)
             members = archive.infolist()
     except (OSError, zipfile.BadZipFile) as error:
-        raise ConversionError("the archive could not be read") from error
+        msg = "the archive could not be read"
+        raise ConversionError(msg) from error
 
     rows: list[list[object]] = [["name", "bytes"]]
     unsafe = 0

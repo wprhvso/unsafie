@@ -12,7 +12,7 @@ TTL = 3600.0
 
 
 def key(turn_id: UUID) -> str:
-    return cluster.key("cancel", turn_id)
+    return cluster.key("cancel", str(turn_id))
 
 
 async def ask(turn_id: UUID) -> None:

@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -11,11 +13,25 @@ router = APIRouter(prefix="/ssh", tags=["ssh"])
 
 
 @router.get("/hosts", response_model=Page[SshHostRead])
-async def list_hosts(params: PageParams = Depends(paging)):
+async def list_hosts(params: Annotated[PageParams, Depends(paging)]):
     live = {(s["user_id"], s["host_id"]) for s in pool.stats() if s["alive"]}
     async with SessionLocal() as session:
         rows, total = await SshRepository(session).page(params.offset, params.limit)
-    items = [SshHostRead(**{**r.__dict__, "connected": (r.user_id, r.id) in live}) for r in rows]
+    items = [
+        SshHostRead(
+            id=r.id,
+            user_id=r.user_id,
+            alias=r.alias,
+            host=r.host,
+            port=r.port,
+            username=r.username,
+            fingerprint=r.fingerprint,
+            connected=(r.user_id, r.id) in live,
+            created_at=r.created_at,
+            last_used_at=r.last_used_at,
+        )
+        for r in rows
+    ]
     return Page.of(items, total, params)
 
 

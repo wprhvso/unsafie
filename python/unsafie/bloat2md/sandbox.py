@@ -76,7 +76,8 @@ async def run_isolated(raw: bytes, name: str) -> tuple[str, Payload]:
             out, err = await process.communicate(raw)
     except TimeoutError as error:
         await _terminate(process)
-        raise SandboxTimeout("the document took too long to convert") from error
+        msg = "the document took too long to convert"
+        raise SandboxTimeout(msg) from error
     finally:
         await _terminate(process)
 
@@ -86,15 +87,18 @@ async def run_isolated(raw: bytes, name: str) -> tuple[str, Payload]:
             process.returncode,
             err[-512:].decode("utf-8", "replace"),
         )
-        raise ConversionError("the document could not be converted")
+        msg = "the document could not be converted"
+        raise ConversionError(msg)
 
     try:
         body = json.loads(out)
     except ValueError as error:
-        raise ConversionError("the converter returned nothing usable") from error
+        msg = "the converter returned nothing usable"
+        raise ConversionError(msg) from error
 
     if not isinstance(body, dict):
-        raise ConversionError("the converter returned nothing usable")
+        msg = "the converter returned nothing usable"
+        raise ConversionError(msg)
     if body.get("error") == "unsupported":
         raise UnsupportedFile(str(body.get("detail", "unsupported file")))
     if "error" in body:

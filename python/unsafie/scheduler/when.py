@@ -67,7 +67,8 @@ def zone(name: str | None) -> ZoneInfo:
     try:
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError):
-        raise WhenError(f"unknown timezone '{name}', use an IANA name like Europe/Moscow") from None
+        msg = f"unknown timezone '{name}', use an IANA name like Europe/Moscow"
+        raise WhenError(msg) from None
 
 
 def duration(raw: str) -> int:
@@ -78,18 +79,23 @@ def duration(raw: str) -> int:
     pos = 0
     for m in DURATION_RE.finditer(raw):
         if raw[pos : m.start()].strip(" ,и"):
-            raise WhenError(f"cannot parse duration '{raw}'")
+            msg = f"cannot parse duration '{raw}'"
+            raise WhenError(msg)
         unit = m.group(2).lower()
         if unit not in UNITS:
-            raise WhenError(f"unknown unit '{unit}' in '{raw}'; use s/m/h/d/w")
+            msg = f"unknown unit '{unit}' in '{raw}'; use s/m/h/d/w"
+            raise WhenError(msg)
         total += float(m.group(1).replace(",", ".")) * UNITS[unit]
         pos = m.end()
     if pos == 0 or raw[pos:].strip():
-        raise WhenError(f"cannot parse duration '{raw}', e.g. 45m, 2h30m, 1d")
+        msg = f"cannot parse duration '{raw}', e.g. 45m, 2h30m, 1d"
+        raise WhenError(msg)
     if total <= 0:
-        raise WhenError("duration must be positive")
+        msg = "duration must be positive"
+        raise WhenError(msg)
     if total > MAX_DELAY:
-        raise WhenError("more than a year is too far")
+        msg = "more than a year is too far"
+        raise WhenError(msg)
     return int(total)
 
 
@@ -103,7 +109,8 @@ def absolute(raw: str, tz: ZoneInfo, now: datetime) -> datetime:
             day_shift = shift
             break
     if not s:
-        raise WhenError("time is required, e.g. 'tomorrow 09:00'")
+        msg = "time is required, e.g. 'tomorrow 09:00'"
+        raise WhenError(msg)
     parsed: datetime | None = None
     for fmt in DATE_FORMATS:
         try:
@@ -120,7 +127,7 @@ def absolute(raw: str, tz: ZoneInfo, now: datetime) -> datetime:
             except ValueError:
                 continue
             parsed = local_now.replace(
-                hour=t.hour, minute=t.minute, second=t.second, microsecond=0, tzinfo=None
+                hour=t.hour, minute=t.minute, second=t.second, microsecond=0, tzinfo=None,
             )
             if day_shift == 0 and parsed <= local_now.replace(tzinfo=None):
                 day_shift = 1
@@ -129,17 +136,20 @@ def absolute(raw: str, tz: ZoneInfo, now: datetime) -> datetime:
         try:
             parsed = datetime.fromisoformat(raw.strip())
         except ValueError:
+            msg = f"cannot parse '{raw}'; formats: 2026-09-03 18:00, 18:00, tomorrow 09:00"
             raise WhenError(
-                f"cannot parse '{raw}'; formats: 2026-09-03 18:00, 18:00, tomorrow 09:00"
+                msg,
             ) from None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=tz)
     parsed = parsed + timedelta(days=day_shift)
     result = parsed.astimezone(UTC)
     if result <= now:
-        raise WhenError(f"{fmt_local(result, tz)} is in the past (now {fmt_local(now, tz)})")
+        msg = f"{fmt_local(result, tz)} is in the past (now {fmt_local(now, tz)})"
+        raise WhenError(msg)
     if result - now > timedelta(seconds=MAX_DELAY):
-        raise WhenError("more than a year ahead is too far")
+        msg = "more than a year ahead is too far"
+        raise WhenError(msg)
     return result
 
 

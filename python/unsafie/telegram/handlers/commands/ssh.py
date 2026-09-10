@@ -45,10 +45,10 @@ def build_ssh_router() -> Router:
                     return
                 await keys.ensure(user_id)
                 host = await binding.add(
-                    user_id, parts[1], parts[2], parts[3] if len(parts) > 3 else None
+                    user_id, parts[1], parts[2], parts[3] if len(parts) > 3 else None,
                 )
                 await answer(
-                    message, bot_id, t("ssh-added", locale, alias=host.alias, target=host.label)
+                    message, bot_id, t("ssh-added", locale, alias=host.alias, target=host.label),
                 )
                 return
             if action in ("rm", "remove", "del"):

@@ -71,7 +71,7 @@ async def send(
                 turn_id=turn_id,
                 command=command[:8000],
                 background=background,
-            )
+            ),
         )
         await session.commit()
     logger.info("pool %s <- %s (%s)", machine, command_id, command[:120])
@@ -100,7 +100,7 @@ async def send_python(
                 user_id=user_id,
                 turn_id=turn_id,
                 command=code[:8000],
-            )
+            ),
         )
         await session.commit()
     logger.info("pool %s <- python %s (%s chars)", machine, block_id, len(code))
@@ -118,7 +118,7 @@ async def run_python(
 ) -> Result:
     limit = min(timeout or settings.pool_block_timeout, settings.pool_max_command_timeout)
     block_id = await send_python(
-        machine, code, user_id=user_id, turn_id=turn_id, timeout=limit, reset=reset
+        machine, code, user_id=user_id, turn_id=turn_id, timeout=limit, reset=reset,
     )
     return await collect(block_id, machine, limit + CHUNK_WAIT * 2)
 
@@ -130,7 +130,8 @@ async def pull(machine: str, wait: float) -> list[dict]:
     while True:
         raw = await redis.lpop(keys.inbox(machine), 32)
         if raw:
-            for line in raw if isinstance(raw, list) else [raw]:
+            for line_raw in raw if isinstance(raw, list) else [raw]:
+                line = line_raw.decode() if isinstance(line_raw, bytes) else str(line_raw)
                 decoded = wire.decode(line)
                 if decoded is not None:
                     frames.append({"kind": str(decoded.kind), "id": decoded.id, **decoded.body})
@@ -149,7 +150,7 @@ async def push(command_id: str, frames: list[dict]) -> None:
 
 
 async def collect(
-    command_id: str, machine: str, timeout: float, limit: int | None = None
+    command_id: str, machine: str, timeout: float, limit: int | None = None,
 ) -> Result:
     redis = cluster.client()
     cap = limit or settings.pool_max_output
@@ -202,7 +203,7 @@ _DRAINS: set[asyncio.Task] = set()
 def drain(command_id: str, machine: str, timeout: float | None = None) -> None:
     limit = min(timeout or settings.pool_max_command_timeout, settings.pool_max_command_timeout)
     task = asyncio.create_task(
-        collect(command_id, machine, limit + CHUNK_WAIT * 2), name=f"pool.drain:{command_id}"
+        collect(command_id, machine, limit + CHUNK_WAIT * 2), name=f"pool.drain:{command_id}",
     )
     _DRAINS.add(task)
     task.add_done_callback(_DRAINS.discard)
@@ -225,7 +226,7 @@ async def tail(command_id: str) -> str:
 async def _finish(command_id: str, code: int | None, size: int, status: CommandStatus) -> None:
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id))
+            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id)),
         )
         if row is None:
             return
@@ -239,7 +240,7 @@ async def _finish(command_id: str, code: int | None, size: int, status: CommandS
 async def started(command_id: str) -> None:
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id))
+            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id)),
         )
         if row is None:
             return
@@ -275,7 +276,7 @@ async def cancel(command_id: str, machine: str) -> None:
     await tell(machine, wire.cancel(command_id))
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id))
+            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id)),
         )
         if row is None:
             return

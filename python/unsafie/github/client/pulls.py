@@ -1,17 +1,19 @@
 from typing import Any
 
+from unsafie.github.client.base import GithubHTTP
 
-class PullsMixin:
+
+class PullsMixin(GithubHTTP):
     async def pulls(self, state: str = "open", limit: int = 30) -> list[dict]:
         return await self.paginate(
-            f"{self.base}/pulls", {"state": state, "sort": "updated", "direction": "desc"}
+            f"{self.base}/pulls", {"state": state, "sort": "updated", "direction": "desc"},
         ).all(limit)
 
     async def pull(self, number: int) -> dict:
         return await self.request("GET", f"{self.base}/pulls/{number}")
 
     async def create_pull(
-        self, title: str, head: str, base: str, body: str | None, draft: bool = False
+        self, title: str, head: str, base: str, body: str | None, draft: bool = False,
     ) -> dict:
         return await self.request(
             "POST",
@@ -51,7 +53,7 @@ class PullsMixin:
 
     async def pull_diff(self, number: int) -> str:
         data = await self.request(
-            "GET", f"{self.base}/pulls/{number}", accept="application/vnd.github.diff", raw=True
+            "GET", f"{self.base}/pulls/{number}", accept="application/vnd.github.diff", raw=True,
         )
         return data.decode(errors="replace") if isinstance(data, bytes) else str(data)
 
@@ -59,7 +61,7 @@ class PullsMixin:
         return await self.paginate(f"{self.base}/pulls/{number}/reviews").all(50)
 
     async def review(
-        self, number: int, event: str, body: str | None, comments: list[dict] | None
+        self, number: int, event: str, body: str | None, comments: list[dict] | None,
     ) -> dict:
         payload: dict[str, Any] = {"event": event}
         if body:

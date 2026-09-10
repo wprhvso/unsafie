@@ -72,12 +72,12 @@ class PoolMachine(Base):
     name: Mapped[str] = mapped_column(String(64), unique=True)
     alias: Mapped[str | None] = mapped_column(String(32), nullable=True)
     donor_id: Mapped[int | None] = mapped_column(
-        ForeignKey("pool_donors.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("pool_donors.id", ondelete="SET NULL"), nullable=True,
     )
     run_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     state: Mapped[str] = mapped_column(String(16), default=MachineState.IDLE)
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
     )
     chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     labels: Mapped[str] = mapped_column(String(255), default="", server_default="")
@@ -100,10 +100,10 @@ class PoolCommand(Base):
     id: Mapped[UUID] = mapped_column(SQL_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     machine: Mapped[str] = mapped_column(String(64))
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
     )
     turn_id: Mapped[UUID | None] = mapped_column(
-        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="SET NULL"), nullable=True
+        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="SET NULL"), nullable=True,
     )
     command: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default=CommandStatus.QUEUED)
@@ -135,7 +135,7 @@ class PoolLease(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     machine: Mapped[str] = mapped_column(String(64))
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
     )
     chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     turn_id: Mapped[UUID | None] = mapped_column(SQL_UUID(as_uuid=True), nullable=True)
