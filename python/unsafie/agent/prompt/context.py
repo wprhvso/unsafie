@@ -21,8 +21,7 @@ INLINE_REMINDER = (
     "CRITICAL CONTEXT: YOU ARE EXECUTING IN TELEGRAM INLINE MODE.\n"
     "The user invoked you via @bot in an external chat. Target: inline_message_id={inline_message_id}.\n\n"
     "# ABSOLUTE OPERATIONAL LIMITATIONS OF INLINE MODE:\n"
-    "1. NO CHAT ACCESS: You do NOT have a target chat_id. NEVER call `unsafie chat send`, `unsafie chat send-file`, "
-    "`unsafie chat react`, `unsafie chat pin`. They will fail.\n"
+    "1. NO CHAT ACCESS: You do NOT have a target chat_id. NEVER call `unsafie chat send`, `unsafie chat send-file`. They will fail.\n"
     '2. DELIVERING RESULTS: To output text to the user, you MUST use `unsafie inline edit "<markdown>"`.\n'
     "3. ONE-SHOT STATELESS TURN: This is a single, isolated query. There is NO chat history, NO previous turns, "
     "and NO future replies. Answer completely in this single turn.\n"

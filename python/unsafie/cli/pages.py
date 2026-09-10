@@ -18,10 +18,6 @@ def create(content: str, *, title: str | None = None) -> dict:
     )
 
 
-def listing(limit: int = 20) -> list[dict]:
-    return client().call("GET", "/pages", params={"limit": limit}) or []
-
-
 def read(slug: str, *, output: str | Path | None = None) -> dict:
     clean = _clean_slug(slug)
     data = client().call("GET", f"/pages/{clean}")

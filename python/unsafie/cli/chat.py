@@ -83,42 +83,11 @@ def send_file(
     return res
 
 
-def send_photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs) -> dict:
-    return send_file(path, caption=caption, kind="photo", **kwargs)
-
-
-def edit(message_id: int, text: str, *, buttons: Any = None) -> dict:
-    body = {
-        "text": text,
-        "buttons": json.dumps(buttons, ensure_ascii=False) if buttons is not None else None,
-    }
-    return client().call("POST", f"/chat/messages/{message_id}", body)
-
-
-def delete(*message_ids: int) -> dict:
-    last: dict = {}
-    for message_id in message_ids:
-        last = client().call("DELETE", f"/chat/messages/{message_id}")
-    return last or {"deleted": list(message_ids)}
-
-
-def react(message_id: int, emoji: str = "👍", *, big: bool = False) -> dict:
-    return client().call("POST", f"/chat/reactions/{message_id}", {"emoji": emoji, "big": big})
-
-
-def pin(message_id: int, *, unpin: bool = False, silent: bool = False) -> dict:
-    return client().call("POST", f"/chat/pins/{message_id}", {"silent": silent, "unpin": unpin})
-
-
 def history(query: str | None = None, *, limit: int = 20, since: str | None = None, **kwargs) -> dict:
     if query:
         params = {"query": query, "limit": limit, "since": since, **kwargs}
         return client().call("GET", "/chat/history/search", params=params)
     return client().call("GET", "/chat/history", params={"limit": limit, **kwargs})
-
-
-def info(chat: int | str | None = None) -> dict:
-    return client().call("GET", "/chat/info", params={"chat_id": _chat(chat)})
 
 
 def download(
