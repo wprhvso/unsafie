@@ -89,9 +89,9 @@ class ArtifactRepository:
         offset: int = 0,
         limit: int = 50,
     ) -> list[Artifact]:
-        query = select(Artifact).where(Artifact.kind == kind)
-        if chat_id is not None:
-            query = query.where(Artifact.chat_id == chat_id)
+        if chat_id is None:
+            return []
+        query = select(Artifact).where(Artifact.kind == kind, Artifact.chat_id == chat_id)
         rows = await self.session.scalars(
             query.order_by(Artifact.id.desc()).offset(offset).limit(limit),
         )

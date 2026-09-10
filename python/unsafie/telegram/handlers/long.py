@@ -1,6 +1,7 @@
 import contextlib
 
 from aiogram import Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
@@ -8,6 +9,7 @@ from unsafie.agent.runtime import handle
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.chat import ChatRepository
 from unsafie.fluent import t
+from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.long_input import (
     LongCallback,
@@ -15,6 +17,7 @@ from unsafie.telegram.long_input import (
     LongTarget,
     long_input_service,
 )
+from unsafie.telegram.sender import answer
 
 
 def _without_command(message: Message) -> Message:
@@ -25,7 +28,8 @@ def _without_command(message: Message) -> Message:
 
 
 def is_collecting(message: Message, bot_id: int) -> bool:
-    return long_input_service.collecting(bot_id, message.chat.id)
+    user_id = message.from_user.id if message.from_user else 0
+    return long_input_service.collecting(bot_id, message.chat.id, user_id)
 
 
 def build_long_router() -> Router:
@@ -40,7 +44,7 @@ def build_long_router() -> Router:
         cleaned = _without_command(message)
         initial = cleaned if cleaned.text else None
         await long_input_service.start(
-            message.bot, bot_id, message.chat.id, initial, LongTarget.CHAT, locale,
+            message.bot, bot_id, message.chat.id, user_id, initial, LongTarget.CHAT, locale,
         )
 
     @router.message(Command("system_long"))
@@ -49,10 +53,13 @@ def build_long_router() -> Router:
             return
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and not await is_admin(message.bot, message.chat.id, user_id):
+            await answer(message, bot_id, t("commands-group-admin-only", locale))
+            return
         cleaned = _without_command(message)
         initial = cleaned if cleaned.text else None
         await long_input_service.start(
-            message.bot, bot_id, message.chat.id, initial, LongTarget.SYSTEM, locale,
+            message.bot, bot_id, message.chat.id, user_id, initial, LongTarget.SYSTEM, locale,
         )
 
     @router.callback_query(LongCallback.filter())
@@ -65,8 +72,12 @@ def build_long_router() -> Router:
         chat_id = query.message.chat.id
         locale = await locale_for(user_id, query.from_user)
 
+        if callback_data.user_id != user_id:
+            await query.answer(t("commands-group-admin-only", locale), show_alert=True)
+            return
+
         if callback_data.choice == LongChoice.RESET.value:
-            await long_input_service.close(bot_id, chat_id)
+            await long_input_service.close(bot_id, chat_id, user_id)
             await query.answer(t("cmd-long-reset-ok", locale))
             with contextlib.suppress(Exception):
                 await query.bot.edit_message_text(
@@ -77,7 +88,7 @@ def build_long_router() -> Router:
                 )
             return
 
-        collected = await long_input_service.close(bot_id, chat_id)
+        collected = await long_input_service.close(bot_id, chat_id, user_id)
         if not collected or not collected.messages:
             await query.answer(t("cmd-long-empty", locale), show_alert=True)
             return
@@ -90,6 +101,9 @@ def build_long_router() -> Router:
             return
 
         if collected.target == LongTarget.SYSTEM:
+            if query.message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and not await is_admin(query.bot, chat_id, user_id):
+                await query.answer(t("commands-group-admin-only", locale), show_alert=True)
+                return
             async with SessionLocal() as session:
                 repo = ChatRepository(session)
                 await repo.set_system(bot_id, chat_id, full_text)
@@ -120,6 +134,7 @@ def build_long_router() -> Router:
     async def collected_message(message: Message, bot_id: int) -> None:
         if not message.bot:
             return
-        await long_input_service.append(message.bot, bot_id, message.chat.id, message)
+        user_id = message.from_user.id if message.from_user else 0
+        await long_input_service.append(message.bot, bot_id, message.chat.id, user_id, message)
 
     return router

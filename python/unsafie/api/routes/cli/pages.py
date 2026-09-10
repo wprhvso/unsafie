@@ -28,6 +28,8 @@ def _view(slug: str, title: str | None, created: object = None) -> dict:
 
 @router.post("")
 async def create(body: Page, who: Pages) -> dict:
+    if who.chat_id is None:
+        raise HTTPException(400, "no chat: this token is not bound to a chat")
     turn = await who.turn(body.turn)
     artifact = await artifacts.publish(
         content=body.content,
@@ -44,6 +46,8 @@ async def create(body: Page, who: Pages) -> dict:
 
 @router.get("")
 async def listing(who: Pages, limit: int = 20) -> list[dict]:
+    if who.chat_id is None:
+        raise HTTPException(400, "no chat: this token is not bound to a chat")
     async with SessionLocal() as session:
         rows = await ArtifactRepository(session).for_chat(
             who.chat_id, kind=ArtifactKind.MARKDOWN, limit=min(max(limit, 1), 100),
@@ -53,6 +57,8 @@ async def listing(who: Pages, limit: int = 20) -> list[dict]:
 
 @router.get("/{slug}")
 async def read(slug: str, who: Pages) -> dict:
+    if who.chat_id is None:
+        raise HTTPException(400, "no chat: this token is not bound to a chat")
     async with SessionLocal() as session:
         repo = ArtifactRepository(session)
         artifact = await repo.by_slug(slug)
@@ -69,6 +75,8 @@ async def read(slug: str, who: Pages) -> dict:
 
 @router.put("/{slug}")
 async def replace(slug: str, body: Page, who: Pages) -> dict:
+    if who.chat_id is None:
+        raise HTTPException(400, "no chat: this token is not bound to a chat")
     async with SessionLocal() as session:
         repo = ArtifactRepository(session)
         artifact = await repo.by_slug(slug)
@@ -83,6 +91,8 @@ async def replace(slug: str, body: Page, who: Pages) -> dict:
 
 @router.delete("/{slug}")
 async def drop(slug: str, who: Pages) -> dict:
+    if who.chat_id is None:
+        raise HTTPException(400, "no chat: this token is not bound to a chat")
     async with SessionLocal() as session:
         repo = ArtifactRepository(session)
         artifact = await repo.by_slug(slug)

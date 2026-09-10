@@ -146,7 +146,14 @@ class GithubHTTP:
         raw: bool = False,
         allow_404: bool = False,
     ) -> Any:
-        url = path if path.startswith("http") else f"{settings.github_api_url}{path}"
+        if path.startswith(("http://", "https://")):
+            parsed = urlsplit(path)
+            api_parsed = urlsplit(settings.github_api_url)
+            if parsed.netloc != api_parsed.netloc:
+                raise GithubError(f"refusing request to non-GitHub host: {parsed.netloc}")
+            url = path
+        else:
+            url = f"{settings.github_api_url}{path if path.startswith('/') else '/' + path}"
         headers = {"Accept": accept, "X-GitHub-Api-Version": API_VERSION, "User-Agent": "unsafie"}
         token, may_fall_back = await self._auth()
         if token:
@@ -211,7 +218,14 @@ class GithubHTTP:
             raise GithubError(msg)
 
     async def stream(self, path: str, dest: Path, *, limit: int) -> int | None:
-        url = path if path.startswith("http") else f"{settings.github_api_url}{path}"
+        if path.startswith(("http://", "https://")):
+            parsed = urlsplit(path)
+            api_parsed = urlsplit(settings.github_api_url)
+            if parsed.netloc != api_parsed.netloc:
+                raise GithubError(f"refusing request to non-GitHub host: {parsed.netloc}")
+            url = path
+        else:
+            url = f"{settings.github_api_url}{path if path.startswith('/') else '/' + path}"
         headers = {"Accept": ACCEPT, "X-GitHub-Api-Version": API_VERSION, "User-Agent": "unsafie"}
         token, _ = await self._auth()
         if token:
