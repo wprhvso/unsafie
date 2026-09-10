@@ -208,9 +208,7 @@ class Daemon:
                             self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
                     except Exception:
                         pass
-                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": f"
-[command timed out after {limit:.0f}s]
-"})
+                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": f"\n[command timed out after {limit:.0f}s]\n"})
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 124, "seconds": time.monotonic() - started})
             except Exception as e:
                 if proc is not None and proc.poll() is None:
