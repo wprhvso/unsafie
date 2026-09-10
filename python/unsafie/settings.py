@@ -14,7 +14,6 @@ SECRETS_DIR = Path("/run/secrets")
 
 ROLES = ("all", "web", "worker", "poller")
 CACHE_TTLS = ("5m", "1h")
-POLL_TTL_MARGIN = 10.0
 
 SafetyThreshold = Literal[
     "BLOCK_LOW_AND_ABOVE",
@@ -69,6 +68,9 @@ class Settings(BaseSettings):
     poll_lock_ttl: float = 45.0
     poll_claim_interval: float = 10.0
     poll_failure_cooldown: float = 60.0
+    telegram_webhook_secret: str = ""
+    telegram_webhook_base_url: str = ""
+    telegram_webhook_sync_interval: float = 60.0
 
     job_lease: float = 300.0
     chat_lock_ttl: float = 30.0
@@ -281,26 +283,7 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def _polling_handover(self):
-        if self.poll_lock_ttl <= self.poll_timeout + POLL_TTL_MARGIN:
-            msg = (
-                f"POLL_LOCK_TTL must exceed POLL_TIMEOUT by more than {POLL_TTL_MARGIN}s: a dead "
-                f"instance leaves a getUpdates call hanging for up to POLL_TIMEOUT seconds, and "
-                f"the next instance must not start polling before telegram has dropped it "
-                f"(got {self.poll_lock_ttl} vs {self.poll_timeout})"
-            )
-            raise ValueError(
-                msg,
-            )
-        if self.poll_claim_interval * 3 > self.poll_lock_ttl:
-            msg = (
-                "POLL_CLAIM_INTERVAL must be at most a third of POLL_LOCK_TTL, so that a lock "
-                f"survives two missed renewals (got {self.poll_claim_interval} "
-                f"vs {self.poll_lock_ttl})"
-            )
-            raise ValueError(
-                msg,
-            )
+    def _turn_stale(self):
         if self.turn_stale_after < self.turn_heartbeat * 3:
             msg = (
                 "TURN_STALE_AFTER must be at least three heartbeats, or a running turn is "
@@ -322,7 +305,7 @@ class Settings(BaseSettings):
 
     @property
     def runs_poller(self) -> bool:
-        return self.role in ("all", "poller")
+        return self.role in ("all", "poller", "web")
 
     @computed_field
     @property

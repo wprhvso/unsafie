@@ -19,7 +19,7 @@ from unsafie.database.repositories.github import GithubAppRepository
 from unsafie.database.repositories.segment import SegmentRepository
 from unsafie.database.repositories.stats import StatsRepository
 from unsafie.presence import instances
-from unsafie.telegram import poller
+from unsafie.telegram import webhook
 
 router = APIRouter(tags=["overview"])
 
@@ -35,7 +35,7 @@ async def overview():
         stats = StatsRepository(session)
         counts = await stats.counts()
         app = await GithubAppRepository(session).get()
-        polled = await poller.polled_by(await BotRepository(session).ids())
+        polled = await webhook.polled_by(await BotRepository(session).ids())
         alive = await instances()
         return OverviewRead(
             users=counts["users"],

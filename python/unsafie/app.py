@@ -29,7 +29,7 @@ from unsafie.settings import settings
 from unsafie.ssh.pool import pool
 from unsafie.ssh.watchdog import watchdog
 from unsafie.telegram import bots
-from unsafie.telegram.poller import supervisor
+from unsafie.telegram.webhook import supervisor
 from unsafie.telemetry import attrs
 
 setup()
