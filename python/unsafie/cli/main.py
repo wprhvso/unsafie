@@ -57,10 +57,37 @@ def main(argv: list[str] | None = None) -> int:
     p_csend_file.add_argument("--silent", action="store_true")
     p_csend_file.add_argument("--chat", default=None)
 
+    p_csend_photo = s_chat.add_parser("send-photo")
+    p_csend_photo.add_argument("path")
+    p_csend_photo.add_argument("--caption", default=None)
+    p_csend_photo.add_argument("--silent", action="store_true")
+    p_csend_photo.add_argument("--chat", default=None)
+
+    p_cedit = s_chat.add_parser("edit")
+    p_cedit.add_argument("message_id", type=int)
+    p_cedit.add_argument("text")
+    p_cedit.add_argument("--buttons", default=None)
+
+    p_cdel = s_chat.add_parser("delete")
+    p_cdel.add_argument("message_ids", nargs="+", type=int)
+
+    p_creact = s_chat.add_parser("react")
+    p_creact.add_argument("message_id", type=int)
+    p_creact.add_argument("emoji", nargs="?", default="👍")
+    p_creact.add_argument("--big", action="store_true")
+
+    p_cpin = s_chat.add_parser("pin")
+    p_cpin.add_argument("message_id", type=int)
+    p_cpin.add_argument("--unpin", action="store_true")
+    p_cpin.add_argument("--silent", action="store_true")
+
     p_chist = s_chat.add_parser("history")
     p_chist.add_argument("--query", default=None)
     p_chist.add_argument("--limit", type=int, default=20)
     p_chist.add_argument("--since", default=None)
+
+    p_cinfo = s_chat.add_parser("info")
+    p_cinfo.add_argument("--chat", default=None)
 
     p_cdownload = s_chat.add_parser("download")
     p_cdownload.add_argument("file_id")
@@ -134,9 +161,30 @@ def main(argv: list[str] | None = None) -> int:
     p_btype.add_argument("text")
     p_btype.add_argument("--clear", action="store_true")
 
+    p_bpress = s_br.add_parser("press")
+    p_bpress.add_argument("combination")
+
+    p_bwait = s_br.add_parser("wait")
+    p_bwait.add_argument("--selector", default=None)
+    p_bwait.add_argument("--url", default=None)
+    p_bwait.add_argument("--js", default=None)
+    p_bwait.add_argument("--timeout", type=float, default=30.0)
+
+    p_btext = s_br.add_parser("text")
+    p_btext.add_argument("selector", nargs="?", default="body")
+
+    p_bhtml = s_br.add_parser("html")
+    p_bhtml.add_argument("selector", nargs="?", default=None)
+
+    p_beval = s_br.add_parser("eval")
+    p_beval.add_argument("expression")
+
     p_bshot = s_br.add_parser("shot")
     p_bshot.add_argument("-o", "--output", default=None)
     p_bshot.add_argument("--full", action="store_true")
+
+    p_bcookies = s_br.add_parser("cookies")
+    p_bcookies.add_argument("--set", dest="cookie_json", default=None)
 
     p_vision = subs.add_parser("vision")
     p_vision.add_argument("paths", nargs="+")
@@ -220,8 +268,25 @@ def main(argv: list[str] | None = None) -> int:
                         chat=args.chat,
                     )
                 )
+            if args.subcmd == "send-photo":
+                return _out(
+                    chat.send_photo(
+                        args.path, caption=args.caption, silent=args.silent, chat=args.chat
+                    )
+                )
+            if args.subcmd == "edit":
+                btns = json.loads(args.buttons) if args.buttons else None
+                return _out(chat.edit(args.message_id, args.text, buttons=btns))
+            if args.subcmd == "delete":
+                return _out(chat.delete(*args.message_ids))
+            if args.subcmd == "react":
+                return _out(chat.react(args.message_id, args.emoji, big=args.big))
+            if args.subcmd == "pin":
+                return _out(chat.pin(args.message_id, unpin=args.unpin, silent=args.silent))
             if args.subcmd == "history":
                 return _out(chat.history(query=args.query, limit=args.limit, since=args.since))
+            if args.subcmd == "info":
+                return _out(chat.info(args.chat))
             if args.subcmd == "download":
                 return _out(chat.download(args.file_id, output=args.output, chat=args.chat))
 
@@ -270,8 +335,25 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(
                     browser.type_text(args.selector, args.text, clear=args.clear)
                 )
+            if args.subcmd == "press":
+                return _out(browser.press(args.combination))
+            if args.subcmd == "wait":
+                return _out(
+                    browser.wait(
+                        selector=args.selector, url=args.url, js=args.js, timeout=args.timeout
+                    )
+                )
+            if args.subcmd == "text":
+                return _out(browser.text(args.selector))
+            if args.subcmd == "html":
+                return _out(browser.html(args.selector))
+            if args.subcmd == "eval":
+                return _out(browser.evaluate(args.expression))
             if args.subcmd == "shot":
                 return _out(browser.shot(output=args.output, full=args.full))
+            if args.subcmd == "cookies":
+                c_data = json.loads(args.cookie_json) if args.cookie_json else None
+                return _out(browser.cookies(c_data))
 
         if args.cmd == "bloat2md":
             from unsafie.cli import bloat2md

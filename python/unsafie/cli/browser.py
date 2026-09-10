@@ -84,6 +84,42 @@ def type_text(selector: str, text: str, *, clear: bool = False) -> dict:
     return {"typed": selector}
 
 
+def press(combination: str) -> dict:
+    _act(actions.press, combination)
+    return {"pressed": combination}
+
+
+def wait(
+    selector: str | None = None,
+    *,
+    url: str | None = None,
+    js: str | None = None,
+    state: str = "visible",
+    timeout: float = 30.0,
+) -> dict:
+    if selector:
+        _act(actions.wait_for, selector, state, timeout)
+    elif url:
+        _act(actions.wait_for_url, url, timeout)
+    elif js:
+        _act(actions.wait_for_js, js, timeout)
+    else:
+        _act(actions.wait_for_load, timeout)
+    return {"waited": True}
+
+
+def text(selector: str = "body") -> dict:
+    return {"text": _act(actions.text_of, selector)}
+
+
+def html(selector: str | None = None) -> dict:
+    return {"html": _act(actions.html_of, selector)}
+
+
+def evaluate(expression: str) -> dict:
+    return {"result": _act(actions.evaluate, expression)}
+
+
 def shot(*, output: str | Path | None = None, full: bool = False) -> dict:
     data = _act(actions.screenshot, full)
     if output is not None:
@@ -93,3 +129,10 @@ def shot(*, output: str | Path | None = None, full: bool = False) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     return {"ok": True, "path": str(target), "bytes": len(data)}
+
+
+def cookies(items: list[dict] | None = None) -> dict:
+    if items is None:
+        return {"cookies": _act(actions.cookies)}
+    _act(actions.set_cookies, items)
+    return {"cookies": items}
