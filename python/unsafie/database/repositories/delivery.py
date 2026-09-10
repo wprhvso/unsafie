@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeliveryRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def store(
@@ -73,8 +73,8 @@ class DeliveryRepository:
                 )
                 .order_by(WebhookDelivery.received_at)
                 .limit(limit)
-                .with_for_update(skip_locked=True)
-            )
+                .with_for_update(skip_locked=True),
+            ),
         )
         for row in rows:
             row.claimed_at = now
@@ -96,13 +96,13 @@ class DeliveryRepository:
     async def purge(self, keep_days: int) -> int:
         cutoff = datetime.now(UTC) - timedelta(days=keep_days)
         res = await self.session.execute(
-            delete(WebhookDelivery).where(WebhookDelivery.received_at < cutoff)
+            delete(WebhookDelivery).where(WebhookDelivery.received_at < cutoff),
         )
         await self.session.commit()
-        return res.rowcount or 0
+        return int(getattr(res, "rowcount", 0) or 0)
 
     async def page(
-        self, offset: int = 0, limit: int = 50, event: str | None = None, errors_only: bool = False
+        self, offset: int = 0, limit: int = 50, event: str | None = None, errors_only: bool = False,
     ) -> tuple[list[WebhookDelivery], int]:
         cond = []
         if event:
@@ -111,7 +111,7 @@ class DeliveryRepository:
             cond.append(WebhookDelivery.error.is_not(None))
         total = (
             await self.session.scalar(
-                select(func.count()).select_from(WebhookDelivery).where(*cond)
+                select(func.count()).select_from(WebhookDelivery).where(*cond),
             )
             or 0
         )
@@ -120,6 +120,6 @@ class DeliveryRepository:
             .where(*cond)
             .order_by(WebhookDelivery.received_at.desc())
             .offset(offset)
-            .limit(limit)
+            .limit(limit),
         )
         return list(rows), int(total)

@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import platform
@@ -81,10 +82,8 @@ class Daemon:
         started = os.environ.get("UNSAFIE_BOOT_STARTED")
         boot = None
         if started:
-            try:
+            with contextlib.suppress(ValueError):
                 boot = max(0.0, time.time() - float(started))
-            except ValueError:
-                pass
         run_id = os.environ.get("GITHUB_RUN_ID")
         answer = self.link.call(
             "POST",
@@ -134,7 +133,7 @@ class Daemon:
         kind = str(raw.get("kind") or "")
         if kind in (wire.FrameKind.COMMAND, wire.FrameKind.PYTHON):
             if raw.get("tunnel"):
-                from unsafie.machine.tunnel import serve_tunnel, TunnelError
+                from unsafie.machine.tunnel import TunnelError, serve_tunnel
                 channel_id = str(raw["tunnel"].get("channel") or "")
                 port = int(raw["tunnel"].get("port") or 0)
                 kind_t = str(raw["tunnel"].get("kind") or "vnc")
@@ -145,10 +144,8 @@ class Daemon:
                     try:
                         serve_tunnel(url, kind_t, port)
                     except TunnelError as e:
-                        try:
+                        with contextlib.suppress(Exception):
                             self.link.call("POST", f"/machines/{self.name}/tunnel/{channel_id}/failed", body={"error": str(e)})
-                        except Exception:
-                            pass
 
                 threading.Thread(target=_tunnel_worker, daemon=True).start()
                 return
@@ -207,10 +204,8 @@ class Daemon:
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
             except subprocess.TimeoutExpired:
                 if proc is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                    except Exception:
-                        pass
                     try:
                         out, _ = proc.communicate(timeout=2.0)
                         text = out.decode(errors="replace") if out else ""
@@ -222,18 +217,14 @@ class Daemon:
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 124, "seconds": time.monotonic() - started})
             except Exception as e:
                 if proc is not None and proc.poll() is None:
-                    try:
+                    with contextlib.suppress(Exception):
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                    except Exception:
-                        pass
                 self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
                 self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
             finally:
                 if proc is not None and proc.poll() is None:
-                    try:
+                    with contextlib.suppress(Exception):
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                    except Exception:
-                        pass
 
     def _sender(self) -> None:
         while not self.stop.is_set():
@@ -256,10 +247,8 @@ class Daemon:
 
     def _heartbeat(self) -> None:
         while not self.stop.wait(self.beat):
-            try:
+            with contextlib.suppress(Exception):
                 self.link.call("POST", f"/machines/{self.name}/heartbeat", body={})
-            except Exception:
-                pass
 
 
 def serve(api: str, worker_token: str) -> int:

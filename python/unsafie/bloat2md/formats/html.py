@@ -52,7 +52,8 @@ def to_markdown(source: str) -> tuple[str, int]:
     try:
         root = html.fromstring(source, parser=_PARSER)
     except ParserError as error:
-        raise ConversionError("the document could not be parsed as html") from error
+        msg = "the document could not be parsed as html"
+        raise ConversionError(msg) from error
 
     dropped = _prune(root)
     _promote_headers(root)

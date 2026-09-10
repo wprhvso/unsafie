@@ -346,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
                         buttons=btns,
                         silent=args.silent,
                         chat=args.chat,
-                    )
+                    ),
                 )
             if args.subcmd == "send-file":
                 return _out(
@@ -357,13 +357,13 @@ def main(argv: list[str] | None = None) -> int:
                         kind=args.kind,
                         silent=args.silent,
                         chat=args.chat,
-                    )
+                    ),
                 )
             if args.subcmd == "send-photo":
                 return _out(
                     chat.send_photo(
-                        args.path, caption=args.caption, silent=args.silent, chat=args.chat
-                    )
+                        args.path, caption=args.caption, silent=args.silent, chat=args.chat,
+                    ),
                 )
             if args.subcmd == "edit":
                 btns = json.loads(args.buttons) if args.buttons else None
@@ -412,29 +412,29 @@ def main(argv: list[str] | None = None) -> int:
 
             if args.subcmd == "start":
                 return _out(
-                    browser.start(profile=args.profile, size=args.size, headless=args.headless)
+                    browser.start(profile=args.profile, size=args.size, headless=args.headless),
                 )
             if args.subcmd == "stop":
                 return _out(browser.stop())
             if args.subcmd == "goto":
                 return _out(
-                    browser.goto(args.url, wait=args.wait, timeout=args.timeout)
+                    browser.goto(args.url, wait=args.wait, timeout=args.timeout),
                 )
             if args.subcmd == "click":
                 return _out(
-                    browser.click(args.selector, button=args.button, clicks=args.clicks)
+                    browser.click(args.selector, button=args.button, clicks=args.clicks),
                 )
             if args.subcmd == "type":
                 return _out(
-                    browser.type_text(args.selector, args.text, clear=args.clear)
+                    browser.type_text(args.selector, args.text, clear=args.clear),
                 )
             if args.subcmd == "press":
                 return _out(browser.press(args.combination))
             if args.subcmd == "wait":
                 return _out(
                     browser.wait(
-                        selector=args.selector, url=args.url, js=args.js, timeout=args.timeout
-                    )
+                        selector=args.selector, url=args.url, js=args.js, timeout=args.timeout,
+                    ),
                 )
             if args.subcmd == "text":
                 return _out(browser.text(args.selector))
@@ -474,7 +474,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "edit":
                 btns = json.loads(args.buttons) if args.buttons else None
                 return _out(
-                    inline.edit(args.text, inline_message_id=args.inline_message_id, buttons=btns)
+                    inline.edit(args.text, inline_message_id=args.inline_message_id, buttons=btns),
                 )
 
         if args.cmd in ("subagent", "subagents"):

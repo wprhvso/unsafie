@@ -57,7 +57,7 @@ def _extract_parts(content: Any) -> list[dict[str, Any]]:
             # Сохраняем исходные части Gemini (рассуждения и сигнатуры) для сохранения контекста в истории
             if "thought" in item or "thoughtSignature" in item or "signature" in item:
                 part_dict: dict[str, Any] = {}
-                if "text" in item and item["text"]:
+                if item.get("text"):
                     part_dict["text"] = item["text"]
                 if item.get("thought") is True:
                     part_dict["thought"] = True
@@ -81,8 +81,8 @@ def _extract_parts(content: Any) -> list[dict[str, Any]]:
                             "inlineData": {
                                 "mimeType": source.get("media_type") or "image/png",
                                 "data": source.get("data"),
-                            }
-                        }
+                            },
+                        },
                     )
             elif "text" in item:
                 parts.append({"text": str(item["text"])})

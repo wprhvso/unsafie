@@ -58,10 +58,10 @@ async def _tree_entries(state: Session) -> Upload:
             continue
         size += len(data)
         if inlined_bytes + len(data) <= settings.github_inline_total_bytes and _inlineable(
-            entry, data
+            entry, data,
         ):
             entries.append(
-                {"path": path, "mode": entry.mode, "type": "blob", "content": data.decode()}
+                {"path": path, "mode": entry.mode, "type": "blob", "content": data.decode()},
             )
             inlined += 1
             inlined_bytes += len(data)
@@ -83,18 +83,18 @@ async def _remote_files(state: Session, base_tree: str, head_tree: str) -> tuple
 
 
 @telemetry.traced("github.rebase")
-async def _rebase(state: Session, remote_sha: str) -> merge.Result:
+async def rebase_branch(state: Session, remote_sha: str) -> merge.Result:
     telemetry.annotate(
         **{
             attrs.GH_REPO: state.repo.full,
             attrs.GH_BRANCH: state.branch,
             attrs.GH_SHA: remote_sha[:7],
-        }
+        },
     )
     worktree = await ensure_worktree(state)
     remote_commit = await state.client.commit(remote_sha)
     base_map, head_map = await _remote_files(
-        state, worktree.base_tree_sha, remote_commit["tree"]["sha"]
+        state, worktree.base_tree_sha, remote_commit["tree"]["sha"],
     )
     ours: dict[str, bytes | None] = {}
     for path in state.overlay.paths:
@@ -102,7 +102,7 @@ async def _rebase(state: Session, remote_sha: str) -> merge.Result:
         ours[path] = None if entry is None or entry.deleted else entry.data
     touched = set(ours)
     blobs = await state.client.blobs(
-        [sha for path in touched for sha in (base_map.get(path), head_map.get(path)) if sha]
+        [sha for path in touched for sha in (base_map.get(path), head_map.get(path)) if sha],
     )
     theirs: dict[str, bytes | None] = {}
     for path in touched:
@@ -139,16 +139,18 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
             attrs.GH_BRANCH: state.branch,
             attrs.USER_ID: user_id,
             attrs.GH_FILES: len(state.overlay),
-        }
+        },
     )
     if not state.dirty:
-        raise GithubError("nothing to commit: the worktree is clean")
+        msg = "nothing to commit: the worktree is clean"
+        raise GithubError(msg)
     async with lock_for(state.repo.id, state.branch):
         worktree, remote = await asyncio.gather(
-            ensure_worktree(state), state.client.ref_sha(state.branch)
+            ensure_worktree(state), state.client.ref_sha(state.branch),
         )
         if remote is None:
-            raise NotFound(f"branch '{state.branch}' has disappeared from the remote")
+            msg = f"branch '{state.branch}' has disappeared from the remote"
+            raise NotFound(msg)
         rebased: merge.Result | None = None
         if remote != worktree.base_commit_sha:
             async with SessionLocal() as session:
@@ -159,23 +161,24 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
                 worktree.base_commit_sha[:7],
                 remote[:7],
             )
-            rebased = await _rebase(state, remote)
+            rebased = await rebase_branch(state, remote)
             if rebased.conflicts and not known:
                 await save(state)
                 raise Conflict(
                     "conflicts with the remote branch in: "
                     + ", ".join(rebased.conflicts)
-                    + ". Conflict markers are in the worktree; fix the files and commit again."
+                    + ". Conflict markers are in the worktree; fix the files and commit again.",
                 )
         upload = await _tree_entries(state)
         if not upload.entries:
             state.overlay.clear()
             await save(state)
-            raise GithubError("nothing to commit: the worktree matches the branch")
+            msg = "nothing to commit: the worktree matches the branch"
+            raise GithubError(msg)
         tree_sha = await state.client.create_tree(upload.entries, worktree.base_tree_sha)
         author = await author_for(user_id, state.repo)
         created = await state.client.create_commit(
-            message, tree_sha, [worktree.base_commit_sha], author
+            message, tree_sha, [worktree.base_commit_sha], author,
         )
         await state.client.update_ref(state.branch, created["sha"])
         async with SessionLocal() as session:
@@ -188,7 +191,7 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
                 pending=None,
             )
             await repo.log(
-                worktree.id, user_id, "commit", created["sha"], worktree.base_commit_sha, message
+                worktree.id, user_id, "commit", created["sha"], worktree.base_commit_sha, message,
             )
         files = len(upload.entries)
         state.overlay.clear()
@@ -202,7 +205,7 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
                 attrs.GH_UNCHANGED: upload.unchanged,
                 attrs.GH_BYTES: upload.size,
                 "unsafie.github.rebased": bool(rebased),
-            }
+            },
         )
         logger.info(
             "%s committed %s (%s files, %s blobs uploaded, %s inlined, %s unchanged)",
@@ -224,17 +227,19 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
 @telemetry.traced("github.amend")
 async def amend(state: Session, message: str | None, user_id: int) -> dict:
     telemetry.annotate(
-        **{attrs.GH_REPO: state.repo.full, attrs.GH_BRANCH: state.branch, attrs.USER_ID: user_id}
+        **{attrs.GH_REPO: state.repo.full, attrs.GH_BRANCH: state.branch, attrs.USER_ID: user_id},
     )
     async with lock_for(state.repo.id, state.branch):
         worktree = await ensure_worktree(state)
         head = await state.client.commit(worktree.base_commit_sha)
         if not head.get("parents"):
-            raise GithubError("cannot amend the very first commit")
+            msg = "cannot amend the very first commit"
+            raise GithubError(msg)
         async with SessionLocal() as session:
             if not await WorktreeRepository(session).known_sha(worktree.id, head["sha"]):
+                msg = "the head commit was not made from here; amending someone else's commit is not allowed"
                 raise GithubError(
-                    "the head commit was not made from here; amending someone else's commit is not allowed"
+                    msg,
                 )
         parent = head["parents"][0]["sha"]
         if head["tree"]["sha"] != worktree.base_tree_sha:
@@ -248,13 +253,13 @@ async def amend(state: Session, message: str | None, user_id: int) -> dict:
         )
         author = await author_for(user_id, state.repo)
         created = await state.client.create_commit(
-            message or head["message"], tree_sha, [parent], author
+            message or head["message"], tree_sha, [parent], author,
         )
         await state.client.update_ref(state.branch, created["sha"], force=True)
         async with SessionLocal() as session:
             repo = WorktreeRepository(session)
             await repo.save(
-                worktree.id, changes={}, base_commit_sha=created["sha"], base_tree_sha=tree_sha
+                worktree.id, changes={}, base_commit_sha=created["sha"], base_tree_sha=tree_sha,
             )
             await repo.log(
                 worktree.id,
@@ -274,7 +279,7 @@ async def amend(state: Session, message: str | None, user_id: int) -> dict:
                 attrs.GH_INLINE: upload.inlined,
                 attrs.GH_UNCHANGED: upload.unchanged,
                 attrs.GH_BYTES: upload.size,
-            }
+            },
         )
         return {"sha": created["sha"], "replaced": head["sha"]}
 
@@ -293,10 +298,11 @@ async def stash(state: Session) -> int:
     worktree = await ensure_worktree(state)
     count = len(state.overlay)
     if not count:
-        raise GithubError("nothing to stash")
+        msg = "nothing to stash"
+        raise GithubError(msg)
     async with SessionLocal() as session:
         await WorktreeRepository(session).save(
-            worktree.id, stash=state.overlay.to_json(), changes={}
+            worktree.id, stash=state.overlay.to_json(), changes={},
         )
     state.overlay.clear()
     return count
@@ -305,13 +311,14 @@ async def stash(state: Session) -> int:
 async def unstash(state: Session) -> int:
     worktree = await ensure_worktree(state)
     if not worktree.stash:
-        raise GithubError("the stash is empty")
+        msg = "the stash is empty"
+        raise GithubError(msg)
     stashed = Overlay(worktree.stash)
     for path in stashed.paths:
         state.overlay.changes.setdefault(path, stashed.changes[path])
     async with SessionLocal() as session:
         await WorktreeRepository(session).save(
-            worktree.id, changes=state.overlay.to_json(), stash=None
+            worktree.id, changes=state.overlay.to_json(), stash=None,
         )
     return len(stashed)
 
@@ -319,5 +326,6 @@ async def unstash(state: Session) -> int:
 async def push_changes(state: Session, message: str, user_id: int) -> dict:
     _ = await load_tree(state)
     if len(state.overlay) > settings.github_max_changes:
-        raise GithubError("too many changed files for one commit")
+        msg = "too many changed files for one commit"
+        raise GithubError(msg)
     return await commit(state, message, user_id)

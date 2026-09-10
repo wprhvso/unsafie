@@ -60,7 +60,7 @@ IMAGE_URL_RE = re.compile(
 )
 ATTACHMENT_URL_RE = re.compile(
     r"\[[^\]]*\]\((https?://github\.com/user-attachments/files/[^\s)]+)\)"
-    r"|(https?://github\.com/user-attachments/files/[^\s)>\"']+)"
+    r"|(https?://github\.com/user-attachments/files/[^\s)>\"']+)",
 )
 
 
@@ -81,9 +81,10 @@ def sniff_mime(data: bytes, name: str | None = None) -> str:
         return "application/octet-stream"
     try:
         data.decode("utf-8")
-        return "text/plain"
     except UnicodeDecodeError:
         return "application/octet-stream"
+    else:
+        return "text/plain"
 
 
 def decode_text(data: bytes) -> tuple[str, str] | None:

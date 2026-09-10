@@ -150,7 +150,8 @@ class Bridge:
     async def pump(self, socket) -> None:
         subscriber = self._subscriber
         if subscriber is None:
-            raise RuntimeError("the bridge was never opened")
+            msg = "the bridge was never opened"
+            raise RuntimeError(msg)
         raw = cluster.binary()
         done = asyncio.Event()
 

@@ -15,7 +15,8 @@ def _button(item) -> InlineKeyboardButton:
     if isinstance(item, str):
         item = {"text": item, "data": item}
     if not isinstance(item, dict) or not str(item.get("text") or "").strip():
-        raise ButtonsError(f"a button is a string or an object with text: {item!r}")
+        msg = f"a button is a string or an object with text: {item!r}"
+        raise ButtonsError(msg)
     text = str(item["text"]).strip()
     url = item.get("url")
     if url:
@@ -23,7 +24,8 @@ def _button(item) -> InlineKeyboardButton:
     data = item.get("data", item.get("callback_data"))
     data = text if data is None else str(data)
     if len(data.encode()) > CALLBACK_LIMIT:
-        raise ButtonsError(f"button data for {text!r} exceeds {CALLBACK_LIMIT} bytes: {data!r}")
+        msg = f"button data for {text!r} exceeds {CALLBACK_LIMIT} bytes: {data!r}"
+        raise ButtonsError(msg)
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
@@ -33,21 +35,25 @@ def parse_buttons(raw: str | None) -> InlineKeyboardMarkup | None:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ButtonsError(f"buttons is not JSON: {e}") from e
+        msg = f"buttons is not JSON: {e}"
+        raise ButtonsError(msg) from e
     if isinstance(data, str | dict):
         data = [data]
     if not isinstance(data, list):
-        raise ButtonsError("buttons must be a JSON list of rows")
+        msg = "buttons must be a JSON list of rows"
+        raise ButtonsError(msg)
     rows: list[list[InlineKeyboardButton]] = []
     for row in data:
         items = row if isinstance(row, list) else [row]
         if not items:
             continue
         if len(items) > MAX_PER_ROW:
-            raise ButtonsError(f"more than {MAX_PER_ROW} buttons in a row")
+            msg = f"more than {MAX_PER_ROW} buttons in a row"
+            raise ButtonsError(msg)
         rows.append([_button(i) for i in items])
     if sum(len(r) for r in rows) > MAX_BUTTONS:
-        raise ButtonsError(f"more than {MAX_BUTTONS} buttons")
+        msg = f"more than {MAX_BUTTONS} buttons"
+        raise ButtonsError(msg)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

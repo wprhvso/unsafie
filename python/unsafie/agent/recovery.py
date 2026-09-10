@@ -51,7 +51,8 @@ class RecoverySupervisor(Loop):
         logger.info("recovering turn=%s attempts=%s", turn.id, turn.recovery_attempts)
         from unsafie.agent.runtime import resume_turn
 
-        asyncio.create_task(resume_turn(turn.id), name=f"resume:{turn.id}")
+        task = asyncio.create_task(resume_turn(turn.id), name=f"resume:{turn.id}")
+        _ = task
         return True
 
 

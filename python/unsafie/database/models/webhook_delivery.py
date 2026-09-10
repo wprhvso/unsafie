@@ -27,7 +27,7 @@ class WebhookDelivery(Base):
     payload: Mapped[dict] = mapped_column(JSONB)
     trace_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     received_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now(),
     )
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)

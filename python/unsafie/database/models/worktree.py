@@ -20,5 +20,5 @@ class Worktree(Base):
     pending: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     stash: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
     )

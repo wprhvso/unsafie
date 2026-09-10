@@ -24,11 +24,11 @@ def setup(*what: str, timeout: float = 1800.0) -> dict[str, str]:
 
 
 def missing(name: str) -> list[str]:
-    absent = []
-    for group in PROBES.get(name, ()):
-        if not any(shutil.which(binary) for binary in group):
-            absent.append(" | ".join(group))
-    return absent
+    return [
+        " | ".join(group)
+        for group in PROBES.get(name, ())
+        if not any(shutil.which(binary) for binary in group)
+    ]
 
 
 def _toolchain(name: str, timeout: float) -> str:
@@ -83,7 +83,7 @@ def _apt(packages: list[str], timeout: float) -> str:
     lines = (["apt-get", "update"], ["apt-get", "install", "-y", "--no-install-recommends", *packages])
     for line in lines:
         done = subprocess.run(
-            _sudo(line), env=environment, capture_output=True, text=True, check=False, timeout=timeout
+            _sudo(line), env=environment, capture_output=True, text=True, check=False, timeout=timeout,
         )
         if done.returncode != 0:
             return f"apt failed: {done.stderr.strip()[-300:]}"
@@ -95,13 +95,14 @@ def _kasmvnc(timeout: float) -> str:
         return "skipped (no apt-get)"
     codename = "noble"
     try:
-        for line in open("/etc/os-release", encoding="utf-8"):
-            if line.startswith("VERSION_CODENAME="):
-                codename = line.split("=", 1)[1].strip().strip('"')
+        with open("/etc/os-release", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("VERSION_CODENAME="):
+                    codename = line.split("=", 1)[1].strip().strip('"')
     except OSError:
         pass
     architecture = subprocess.run(
-        ["dpkg", "--print-architecture"], capture_output=True, text=True, check=False
+        ["dpkg", "--print-architecture"], capture_output=True, text=True, check=False,
     ).stdout.strip() or "amd64"
     package = f"kasmvncserver_{codename}_{KASMVNC}_{architecture}.deb"
     url = f"https://github.com/kasmtech/KasmVNC/releases/download/v{KASMVNC}/{package}"
@@ -117,6 +118,6 @@ def _kasmvnc(timeout: float) -> str:
 
 def _shell(command: str, timeout: float) -> str:
     done = subprocess.run(
-        ["/bin/bash", "-lc", command], capture_output=True, text=True, check=False, timeout=timeout
+        ["/bin/bash", "-lc", command], capture_output=True, text=True, check=False, timeout=timeout,
     )
     return "installed" if done.returncode == 0 else f"failed: {done.stderr.strip()[-300:]}"

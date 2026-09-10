@@ -48,7 +48,8 @@ async def verify(token: str) -> tuple[dict, list[str]]:
         data = await r.json(content_type=None)
         if r.status >= 400 or not isinstance(data, dict) or not data.get("login"):
             message = (data or {}).get("message") if isinstance(data, dict) else None
-            raise GithubError(f"github rejected the token ({r.status}): {message or 'no /user'}")
+            msg = f"github rejected the token ({r.status}): {message or 'no /user'}"
+            raise GithubError(msg)
         raw = r.headers.get("x-oauth-scopes") or ""
     return data, [s.strip() for s in raw.split(",") if s.strip()]
 
@@ -58,7 +59,7 @@ async def save(user_id: int, token: str) -> tuple[GithubAccount, list[str]]:
     async with SessionLocal() as db:
         await UserRepository(db).get_or_create(user_id)
         account = await GithubAccountRepository(db).upsert(
-            user_id, int(me["id"]), me["login"], token=token, scopes=", ".join(scopes) or None
+            user_id, int(me["id"]), me["login"], token=token, scopes=", ".join(scopes) or None,
         )
     logger.info(
         "user=%s token for %s saved (%s)",
@@ -135,7 +136,7 @@ async def token_for(user_id: int, repo: Repo) -> str:
         return account.token
     if repo.installation_id:
         return await auth.installation_token(repo.installation_id)
-    raise UserAuthRequired()
+    raise UserAuthRequired
 
 
 async def remember(user_id: int, items: list[dict]) -> list[Repo]:
@@ -171,7 +172,8 @@ async def add(user_id: int, ref: str, alias: str | None = None) -> tuple[Repo, s
     account = await require_account(user_id)
     owner, _, name = ref.strip().partition("/")
     if not owner or not name:
-        raise GithubError(f"expected owner/name, got '{ref}'")
+        msg = f"expected owner/name, got '{ref}'"
+        raise GithubError(msg)
     data = await client(account).repo(owner, name)
     async with SessionLocal() as db:
         row = await RepoRepository(db).upsert(

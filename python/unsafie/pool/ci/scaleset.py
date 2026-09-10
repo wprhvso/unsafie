@@ -74,11 +74,12 @@ class ScaleSet:
 
     async def registration_token(self) -> str:
         answer = await GithubHTTP(self.token).request(
-            "POST", f"/repos/{self.slug}/actions/runners/registration-token"
+            "POST", f"/repos/{self.slug}/actions/runners/registration-token",
         )
         value = str((answer or {}).get("token") or "")
         if not value:
-            raise ScaleSetError(f"{self.slug}: github gave no registration token")
+            msg = f"{self.slug}: github gave no registration token"
+            raise ScaleSetError(msg)
         return value
 
     async def _authenticate(self, force: bool = False) -> None:
@@ -91,7 +92,8 @@ class ScaleSet:
             body={"url": f"{SERVER}/{self.slug}", "runner_event": "register"},
         )
         if not isinstance(info, dict) or not info.get("token") or not info.get("url"):
-            raise ScaleSetError(f"{self.slug}: runner-registration answered without a token")
+            msg = f"{self.slug}: runner-registration answered without a token"
+            raise ScaleSetError(msg)
         self._jwt = str(info["token"])
         self._jwt_expiry = _expiry(self._jwt)
         self._pipeline = str(info["url"]).rstrip("/")
@@ -125,8 +127,9 @@ class ScaleSet:
             raw = await answer.read()
             if answer.status >= 400:
                 head = raw[:300].decode(errors="replace")
+                msg = f"{method} {url.split('?', maxsplit=1)[0]} -> {answer.status}: {head}"
                 raise ScaleSetError(
-                    f"{method} {url.split('?')[0]} -> {answer.status}: {head}", answer.status
+                    msg, answer.status,
                 )
             if not raw:
                 return None
@@ -153,14 +156,14 @@ class ScaleSet:
             return await self._raw(method, url, auth=auth, body=body, timeout=timeout, extra=extra)
         try:
             return await self._raw(
-                method, url, auth=f"Bearer {self._jwt}", body=body, timeout=timeout, extra=extra
+                method, url, auth=f"Bearer {self._jwt}", body=body, timeout=timeout, extra=extra,
             )
         except ScaleSetError as refused:
             if refused.status != 401:
                 raise
             await self._authenticate(force=True)
             return await self._raw(
-                method, url, auth=f"Bearer {self._jwt}", body=body, timeout=timeout, extra=extra
+                method, url, auth=f"Bearer {self._jwt}", body=body, timeout=timeout, extra=extra,
             )
 
     async def find(self, name: str) -> dict | None:
@@ -192,7 +195,8 @@ class ScaleSet:
             },
         )
         if not isinstance(created, dict) or "id" not in created:
-            raise ScaleSetError(f"{self.slug}: could not create the scale set '{name}'")
+            msg = f"{self.slug}: could not create the scale set '{name}'"
+            raise ScaleSetError(msg)
         logger.info("pool ci %s: scale set %s created id=%s", self.slug, name, created["id"])
         return created
 
@@ -218,7 +222,8 @@ class ScaleSet:
         payload = answer if isinstance(answer, dict) else {}
         config = str(payload.get("encodedJITConfig") or "")
         if not config:
-            raise ScaleSetError(f"{self.slug}: empty jit config")
+            msg = f"{self.slug}: empty jit config"
+            raise ScaleSetError(msg)
         runner = payload.get("runner")
         runner_id = int(runner.get("id") or 0) if isinstance(runner, dict) else 0
         return runner_id, name, config
@@ -237,7 +242,8 @@ class ScaleSet:
     def _session(raw: Any) -> Session:
         needed = ("sessionId", "messageQueueUrl", "messageQueueAccessToken")
         if not isinstance(raw, dict) or any(key not in raw for key in needed):
-            raise ScaleSetError("the answer carries no message session")
+            msg = "the answer carries no message session"
+            raise ScaleSetError(msg)
         token = str(raw["messageQueueAccessToken"])
         statistics = raw.get("statistics")
         return Session(
@@ -251,8 +257,8 @@ class ScaleSet:
     async def open(self, scale_set_id: int, owner: str) -> Session:
         opened = self._session(
             await self.call(
-                "POST", f"runnerscalesets/{scale_set_id}/sessions", body={"ownerName": owner}
-            )
+                "POST", f"runnerscalesets/{scale_set_id}/sessions", body={"ownerName": owner},
+            ),
         )
         logger.info("pool ci %s: message session %s open", self.slug, opened.session_id)
         return opened
@@ -260,12 +266,12 @@ class ScaleSet:
     async def refresh(self, scale_set_id: int, current: Session) -> Session:
         return self._session(
             await self.call(
-                "PATCH", f"runnerscalesets/{scale_set_id}/sessions/{current.session_id}"
-            )
+                "PATCH", f"runnerscalesets/{scale_set_id}/sessions/{current.session_id}",
+            ),
         )
 
     async def close(
-        self, scale_set_id: int, current: Session, timeout: float = 2.0
+        self, scale_set_id: int, current: Session, timeout: float = 2.0,
     ) -> None:
         try:
             await self.call(

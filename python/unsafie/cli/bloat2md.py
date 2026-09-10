@@ -78,10 +78,11 @@ def run(
             res["markdown_file"] = md_file
         if saved_images:
             res["images"] = saved_images
-        return res
     except UnsupportedFile as e:
         return {"ok": False, "error": "unsupported", "detail": str(e)}
     except SandboxTimeout as e:
         return {"ok": False, "error": "timeout", "detail": str(e)}
     except Exception as e:
         return {"ok": False, "error": "conversion_failed", "detail": str(e)}
+    else:
+        return res

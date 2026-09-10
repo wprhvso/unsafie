@@ -9,27 +9,27 @@ from unsafie.cli import read
 from unsafie.settings import settings
 
 
-def test_parser_extract_code_with_surrounding_text():
+def test_parser_extract_code_with_surrounding_text() -> None:
     text = "Some introductory thinking text\n```bash\necho hello\n```\nSome concluding words"
     assert extract_code(text) == "echo hello"
 
 
-def test_parser_extract_code_standard():
+def test_parser_extract_code_standard() -> None:
     text = "```bash\nunsafie chat send 'ok'\nunsafie stop\n```"
     assert extract_code(text) == "unsafie chat send 'ok'\nunsafie stop"
 
 
-def test_parser_extract_code_no_markdown_fence():
+def test_parser_extract_code_no_markdown_fence() -> None:
     text = "echo 'raw bash'"
     assert extract_code(text) == "echo 'raw bash'"
 
 
-def test_settings_limits():
+def test_settings_limits() -> None:
     assert settings.pool_max_output == 4_000_000
     assert getattr(settings, "pool_max_output_lines", None) == 4_000_000
 
 
-def test_cli_read_files():
+def test_cli_read_files() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         f1 = Path(tmpdir) / "file1.txt"
         f2 = Path(tmpdir) / "file2.txt"
@@ -45,7 +45,7 @@ def test_cli_read_files():
         assert "beta" in res["rendered"]
 
 
-def test_spool_step_isolation():
+def test_spool_step_isolation() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
         tid = uuid.uuid4()

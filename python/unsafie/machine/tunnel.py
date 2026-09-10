@@ -1,3 +1,4 @@
+import contextlib
 import os
 import pty
 import socket
@@ -33,11 +34,13 @@ def dial(port: int) -> socket.socket:
     if port == vnc.RFB_PORT:
         problem = vnc.ensure()
         if problem and not vnc.listening(vnc.RFB_PORT, 2.0):
-            raise TunnelError(f"no desktop on this machine: {problem}")
+            msg = f"no desktop on this machine: {problem}"
+            raise TunnelError(msg)
     try:
         local = socket.create_connection(("127.0.0.1", port), timeout=DIAL_WAIT)
     except OSError as broken:
-        raise TunnelError(f"nothing answers on 127.0.0.1:{port} ({broken})") from None
+        msg = f"nothing answers on 127.0.0.1:{port} ({broken})"
+        raise TunnelError(msg) from None
     local.settimeout(None)
     return local
 
@@ -108,14 +111,10 @@ def _terminal(link: WebSocket) -> None:
         return
     finally:
         stop.set()
-        try:
+        with contextlib.suppress(OSError):
             os.close(master)
-        except OSError:
-            pass
-        try:
+        with contextlib.suppress(OSError):
             os.kill(pid, 15)
-        except OSError:
-            pass
 
 
 def _resize(master: int, payload: bytes) -> None:

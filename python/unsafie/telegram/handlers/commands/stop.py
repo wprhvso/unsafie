@@ -49,7 +49,7 @@ def build_stop_router() -> Router:
             return
         for turn in targets:
             logger.info(
-                "bot=%s chat=%s user=%s stops turn=%s", bot_id, message.chat.id, user_id, turn.id
+                "bot=%s chat=%s user=%s stops turn=%s", bot_id, message.chat.id, user_id, turn.id,
             )
             await turns.stop(turn.id)
         key = "commands-stop-one" if len(targets) == 1 else "commands-stop-many"

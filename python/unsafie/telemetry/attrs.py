@@ -119,7 +119,7 @@ SECRETS = re.compile(
     r"|github_pat_[A-Za-z0-9_]{20,}"
     r"|1//[A-Za-z0-9_-]{20,}"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----"
-    r"|(?i:authorization|api[-_]?key|password|token)[\"'\s:=]+[A-Za-z0-9._\-]{8,})"
+    r"|(?i:authorization|api[-_]?key|password|token)[\"'\s:=]+[A-Za-z0-9._\-]{8,})",
 )
 
 

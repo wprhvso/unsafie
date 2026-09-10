@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -188,10 +188,10 @@ async def quota(who: Pool) -> dict:
         "priority": user.pool_priority if user else 0,
         "blocked": bool(user.pool_blocked) if user else False,
     }
-    today = date.today()
+    today = datetime.now(UTC).date()
     async with SessionLocal() as session:
         usage = await session.scalar(
-            select(PoolUsage).where(PoolUsage.user_id == who.user_id, PoolUsage.day == today)
+            select(PoolUsage).where(PoolUsage.user_id == who.user_id, PoolUsage.day == today),
         )
     return {
         "limits": limits,

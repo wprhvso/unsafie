@@ -40,7 +40,7 @@ class Turn(Base):
     reply_to: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default=TurnStatus.RUNNING)
     credential_id: Mapped[int | None] = mapped_column(
-        ForeignKey("opal_sessions.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("opal_sessions.id", ondelete="SET NULL"), nullable=True,
     )
     num_turns: Mapped[int] = mapped_column(default=0, server_default="0")
     result: Mapped[str | None] = mapped_column(Text, nullable=True)

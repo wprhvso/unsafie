@@ -17,7 +17,7 @@ return items
 
 
 def key(turn_id: UUID) -> str:
-    return cluster.key("inject", turn_id)
+    return cluster.key("inject", str(turn_id))
 
 
 async def enqueue(turn_id: UUID, prompt: str) -> int:

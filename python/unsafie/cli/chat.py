@@ -62,11 +62,13 @@ def send_file(
     else:
         target = Path(path)
         if not target.is_file():
-            raise ValueError(f"no file at {target}")
+            msg = f"no file at {target}"
+            raise ValueError(msg)
         data = target.read_bytes()
         filename = name or target.name
     if kind not in MEDIA:
-        raise ValueError(f"kind must be one of {', '.join(MEDIA)}")
+        msg = f"kind must be one of {', '.join(MEDIA)}"
+        raise ValueError(msg)
     body = {
         "name": filename,
         "data": base64.b64encode(data).decode(),

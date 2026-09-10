@@ -18,7 +18,7 @@ class UserAuthRequired(GithubError):
         who = f" for account {login}" if login else ""
         super().__init__(
             f"no GitHub token{who}. Ask the user to run /gh <token> with a personal access token "
-            "(classic: scope repo, plus workflow, gist, notifications, read:org)."
+            "(classic: scope repo, plus workflow, gist, notifications, read:org).",
         )
 
 
@@ -28,5 +28,5 @@ class AppNotInstalled(GithubError):
             message
             or "the GitHub App is not set up yet; an administrator must create it in the admin "
             "panel. It is only needed for event notifications and checks — everything else "
-            "works on the token."
+            "works on the token.",
         )

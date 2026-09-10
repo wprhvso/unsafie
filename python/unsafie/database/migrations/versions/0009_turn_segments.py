@@ -38,12 +38,12 @@ def downgrade() -> None:
     op.execute("ALTER TABLE turns DROP COLUMN IF EXISTS root_id")
     op.execute("ALTER TABLE turns ADD COLUMN IF NOT EXISTS session_id VARCHAR(36)")
     op.execute(
-        "ALTER TABLE turns ADD COLUMN IF NOT EXISTS forked BOOLEAN NOT NULL DEFAULT false"
+        "ALTER TABLE turns ADD COLUMN IF NOT EXISTS forked BOOLEAN NOT NULL DEFAULT false",
     )
     op.execute("ALTER TABLE turns ADD COLUMN IF NOT EXISTS transcript_lines INTEGER")
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_turns_session "
-        "ON turns (bot_id, chat_id, session_id, created_at)"
+        "ON turns (bot_id, chat_id, session_id, created_at)",
     )
     op.execute("""
         CREATE TABLE IF NOT EXISTS transcripts (

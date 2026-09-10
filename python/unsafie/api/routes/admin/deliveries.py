@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -12,11 +14,11 @@ router = APIRouter(prefix="/deliveries", tags=["deliveries"])
 
 @router.get("", response_model=Page[DeliveryRead])
 async def list_deliveries(
-    event: str | None = None, errors_only: bool = False, params: PageParams = Depends(paging)
+    params: Annotated[PageParams, Depends(paging)], event: str | None = None, errors_only: bool = False,
 ):
     async with SessionLocal() as session:
         rows, total = await DeliveryRepository(session).page(
-            params.offset, params.limit, event, errors_only
+            params.offset, params.limit, event, errors_only,
         )
     return Page.of([DeliveryRead.model_validate(r) for r in rows], total, params)
 

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import contextlib
 import hashlib
 import logging
 import time
@@ -63,7 +64,7 @@ class Pool:
                 attrs.SERVER_ADDRESS: host.host,
                 attrs.SERVER_PORT: host.port,
                 attrs.USER_ID: user_id,
-            }
+            },
         )
         key = (user_id, host.id)
         async with self._lock(key):
@@ -93,14 +94,21 @@ class Pool:
                     timeout=settings.ssh_connect_timeout + 5,
                 )
             except asyncssh.PermissionDenied as e:
-                raise SshError(
+                msg = (
                     f"{host.alias}: the server refused the key ({e}). The user must add the public "
                     "key from /ssh key to ~/.ssh/authorized_keys of "
                     f"{host.username}@{host.host}."
+                )
+                raise SshError(
+                    msg,
                 ) from None
             except (TimeoutError, asyncssh.Error, OSError) as e:
-                raise SshError(f"{host.alias}: cannot connect ({type(e).__name__}: {e})") from None
+                msg = f"{host.alias}: cannot connect ({type(e).__name__}: {e})"
+                raise SshError(msg) from None
             server_key = connection.get_server_host_key()
+            if server_key is None:
+                msg = f"{host.alias}: server did not provide host key"
+                raise SshError(msg)
             got = fingerprint(server_key)
             if host.fingerprint and host.fingerprint != got:
                 connection.abort()
@@ -108,7 +116,7 @@ class Pool:
             if not host.fingerprint:
                 async with SessionLocal() as session:
                     await SshRepository(session).set_host_key(
-                        host.id, server_key.export_public_key().decode().strip(), got
+                        host.id, server_key.export_public_key().decode().strip(), got,
                     )
                 host.fingerprint = got
                 logger.info("user=%s ssh %s host key pinned %s", user_id, host.alias, got)
@@ -121,10 +129,8 @@ class Pool:
         held = self._held.pop(key, None)
         if held is not None:
             held.connection.close()
-            try:
+            with contextlib.suppress(Exception):
                 await held.connection.wait_closed()
-            except Exception:
-                pass
 
     async def disconnect(self, user_id: int, host_id: int) -> bool:
         key = (user_id, host_id)
@@ -185,18 +191,20 @@ async def run(user_id: int, host: SshHost, command: str, timeout: float | None =
     ) as span:
         connection = await pool.connect(user_id, host)
         limit = min(
-            float(timeout or settings.ssh_command_timeout), settings.ssh_max_command_timeout
+            float(timeout or settings.ssh_command_timeout), settings.ssh_max_command_timeout,
         )
         started = time.perf_counter()
         try:
             completed = await asyncio.wait_for(connection.run(command, check=False), timeout=limit)
         except TimeoutError:
+            msg = f"{host.alias}: command timed out after {limit:.0f}s: {command[:200]}"
             raise SshError(
-                f"{host.alias}: command timed out after {limit:.0f}s: {command[:200]}"
+                msg,
             ) from None
         except asyncssh.Error as e:
             await pool.disconnect(user_id, host.id)
-            raise SshError(f"{host.alias}: {e}") from None
+            msg = f"{host.alias}: {e}"
+            raise SshError(msg) from None
         stdout, cut1 = _clip(str(completed.stdout or ""))
         stderr, cut2 = _clip(str(completed.stderr or ""))
         telemetry.set_attrs(
@@ -226,37 +234,44 @@ async def read_file(user_id: int, host: SshHost, path: str) -> bytes:
         async with connection.start_sftp_client() as sftp:
             info = await sftp.stat(path)
             if info.size and info.size > settings.ssh_max_file_bytes:
+                msg = f"{path} is {info.size} bytes, limit is {settings.ssh_max_file_bytes}"
                 raise SshError(
-                    f"{path} is {info.size} bytes, limit is {settings.ssh_max_file_bytes}"
+                    msg,
                 )
             async with sftp.open(path, "rb") as f:
                 return await f.read()
     except asyncssh.SFTPNoSuchFile:
-        raise SshError(f"{host.alias}: {path} does not exist") from None
+        msg = f"{host.alias}: {path} does not exist"
+        raise SshError(msg) from None
     except asyncssh.SFTPPermissionDenied:
-        raise SshError(f"{host.alias}: no permission to read {path}") from None
+        msg = f"{host.alias}: no permission to read {path}"
+        raise SshError(msg) from None
     except asyncssh.Error as e:
-        raise SshError(f"{host.alias}: sftp error: {e}") from None
+        msg = f"{host.alias}: sftp error: {e}"
+        raise SshError(msg) from None
 
 
 @telemetry.traced("ssh.write", kind=telemetry.CLIENT)
 async def write_file(user_id: int, host: SshHost, path: str, data: bytes) -> int:
     telemetry.annotate(
-        **{attrs.SSH_ALIAS: host.alias, attrs.SSH_PATH: path, attrs.SSH_BYTES: len(data)}
+        **{attrs.SSH_ALIAS: host.alias, attrs.SSH_PATH: path, attrs.SSH_BYTES: len(data)},
     )
     if len(data) > settings.ssh_max_file_bytes:
-        raise SshError(f"file is {len(data)} bytes, limit is {settings.ssh_max_file_bytes}")
+        msg = f"file is {len(data)} bytes, limit is {settings.ssh_max_file_bytes}"
+        raise SshError(msg)
     connection = await pool.connect(user_id, host)
     try:
-        async with connection.start_sftp_client() as sftp:
-            async with sftp.open(path, "wb") as f:
-                await f.write(data)
+        async with connection.start_sftp_client() as sftp, sftp.open(path, "wb") as f:
+            await f.write(data)
     except asyncssh.SFTPPermissionDenied:
-        raise SshError(f"{host.alias}: no permission to write {path}") from None
+        msg = f"{host.alias}: no permission to write {path}"
+        raise SshError(msg) from None
     except asyncssh.SFTPNoSuchFile:
-        raise SshError(f"{host.alias}: the directory for {path} does not exist") from None
+        msg = f"{host.alias}: the directory for {path} does not exist"
+        raise SshError(msg) from None
     except asyncssh.Error as e:
-        raise SshError(f"{host.alias}: sftp error: {e}") from None
+        msg = f"{host.alias}: sftp error: {e}"
+        raise SshError(msg) from None
     return len(data)
 
 
@@ -268,9 +283,11 @@ async def list_dir(user_id: int, host: SshHost, path: str) -> list[str]:
         async with connection.start_sftp_client() as sftp:
             names = await sftp.readdir(path)
     except asyncssh.SFTPNoSuchFile:
-        raise SshError(f"{host.alias}: {path} does not exist") from None
+        msg = f"{host.alias}: {path} does not exist"
+        raise SshError(msg) from None
     except asyncssh.Error as e:
-        raise SshError(f"{host.alias}: sftp error: {e}") from None
+        msg = f"{host.alias}: sftp error: {e}"
+        raise SshError(msg) from None
     out = []
     for entry in names:
         name = entry.filename

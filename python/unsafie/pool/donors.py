@@ -50,7 +50,7 @@ async def by_login(login: str) -> PoolDonor | None:
 async def by_worker_token(raw: str) -> PoolDonor | None:
     async with SessionLocal() as session:
         return await session.scalar(
-            select(PoolDonor).where(PoolDonor.worker_token_hash == digest(raw))
+            select(PoolDonor).where(PoolDonor.worker_token_hash == digest(raw)),
         )
 
 
@@ -59,10 +59,12 @@ async def add(token: str, jobs: int = 20, label: str | None = None) -> tuple[Poo
     try:
         me = await http.request("GET", "/user")
     except GithubError as refused:
-        raise DonorError(f"github rejected this token: {refused}") from None
+        msg = f"github rejected this token: {refused}"
+        raise DonorError(msg) from None
     login = str(me.get("login") or "")
     if not login:
-        raise DonorError("the token does not resolve to an account")
+        msg = "the token does not resolve to an account"
+        raise DonorError(msg)
     worker_token = secrets.token_urlsafe(32)
     async with SessionLocal() as session:
         donor = await session.scalar(select(PoolDonor).where(PoolDonor.login == login))
@@ -88,7 +90,8 @@ async def rotate(login: str) -> str:
     async with SessionLocal() as session:
         donor = await session.scalar(select(PoolDonor).where(PoolDonor.login == login))
         if donor is None:
-            raise DonorError(f"no donor '{login}'")
+            msg = f"no donor '{login}'"
+            raise DonorError(msg)
         donor.worker_token_hash = digest(worker_token)
         await session.commit()
     return worker_token
@@ -128,7 +131,8 @@ async def note(donor_id: int, state: str, error: str | None = None) -> None:
 async def bootstrap(login: str, worker_token: str | None = None) -> dict:
     donor = await by_login(login)
     if donor is None:
-        raise DonorError(f"no donor '{login}'")
+        msg = f"no donor '{login}'"
+        raise DonorError(msg)
     if worker_token is None:
         worker_token = await rotate(login)
     http = GithubHTTP(donor.token)
@@ -159,7 +163,8 @@ async def bootstrap(login: str, worker_token: str | None = None) -> dict:
 
 async def _put_workflow(http: GithubHTTP, repo: str, branch: str, workflow: str) -> None:
     if not WORKFLOW.is_file():
-        raise DonorError(f"the machine workflow is missing at {WORKFLOW}")
+        msg = f"the machine workflow is missing at {WORKFLOW}"
+        raise DonorError(msg)
     content = base64.b64encode(WORKFLOW.read_bytes()).decode()
     path = f"/repos/{repo}/contents/.github/workflows/{workflow}"
     body: dict = {"message": "unsafie: machine workflow", "content": content, "branch": branch}

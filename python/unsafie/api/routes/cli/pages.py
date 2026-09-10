@@ -46,7 +46,7 @@ async def create(body: Page, who: Pages) -> dict:
 async def listing(who: Pages, limit: int = 20) -> list[dict]:
     async with SessionLocal() as session:
         rows = await ArtifactRepository(session).for_chat(
-            who.chat_id, kind=ArtifactKind.MARKDOWN, limit=min(max(limit, 1), 100)
+            who.chat_id, kind=ArtifactKind.MARKDOWN, limit=min(max(limit, 1), 100),
         )
     return [_view(row.slug, row.title, row.created_at) for row in rows]
 

@@ -23,7 +23,7 @@ def build_runs_router() -> Router:
         for turn in running:
             slug = await artifacts.of_turn(turn.id)
             links.append(
-                artifacts.url(slug) if slug else f"{settings.artifact_origin}/turn/{turn.id}"
+                artifacts.url(slug) if slug else f"{settings.artifact_origin}/turn/{turn.id}",
             )
         await answer(message, bot_id, "\n".join(links))
 

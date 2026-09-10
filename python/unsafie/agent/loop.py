@@ -184,7 +184,7 @@ async def run(
         if not code:
             recorder.note("unsafie.no_code_block", reply.dump())
             logger.warning(
-                "%s step=%s model returned zero executable blocks", ctx.prefix, result.steps
+                "%s step=%s model returned zero executable blocks", ctx.prefix, result.steps,
             )
             if messages and messages[-1].get("role") == "assistant" and not (reply.text or "").strip():
                 messages.pop()
@@ -228,7 +228,7 @@ async def run(
                     else {"messages": injected_data}
                 )
                 recorder.note(
-                    "unsafie.stop_blocked", {"reason": "pending messages", "injected": payload}
+                    "unsafie.stop_blocked", {"reason": "pending messages", "injected": payload},
                 )
                 logger.info(
                     "%s turn stopped via stop(), but injecting pending messages into next step",

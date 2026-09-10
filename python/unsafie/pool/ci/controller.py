@@ -178,7 +178,7 @@ class Controller:
                     str(self.repo.idle),
                     "--lifetime",
                     str(self.repo.lifetime),
-                ]
+                ],
             )
             command_id = await channel.send(
                 machine,
@@ -195,9 +195,8 @@ class Controller:
             self.watchers.add(watcher)
             watcher.add_done_callback(self.watchers.discard)
             logger.info(
-                "pool ci %s: runner %s dispatched to %s", self.repo.slug, runner_name, machine
+                "pool ci %s: runner %s dispatched to %s", self.repo.slug, runner_name, machine,
             )
-            return True
         except Exception as e:
             if runner_id is not None:
                 with contextlib.suppress(Exception):
@@ -205,6 +204,8 @@ class Controller:
             await registry.mark(machine, MachineState.IDLE)
             logger.warning("pool ci %s: failed to launch runner on %s: %s", self.repo.slug, machine, e)
             raise
+        else:
+            return True
 
     async def _occupy(self, machine: str) -> None:
         await registry.mark(machine, MachineState.CI)
@@ -216,7 +217,7 @@ class Controller:
                     state=MachineState.CI,
                     user_id=self.repo.user_id,
                     leased_at=datetime.now(UTC),
-                )
+                ),
             )
             await session.commit()
 

@@ -1,4 +1,5 @@
 import logging
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,15 +20,15 @@ router = APIRouter(prefix="/turns", tags=["turns"])
 
 @router.get("", response_model=Page[TurnRead])
 async def list_turns(
+    params: Annotated[PageParams, Depends(paging)],
     bot_id: int | None = None,
     chat_id: int | None = None,
     user_id: int | None = None,
     status: str | None = None,
-    params: PageParams = Depends(paging),
 ):
     async with SessionLocal() as session:
         rows, total = await TurnRepository(session).page(
-            params.offset, params.limit, bot_id, chat_id, user_id, status
+            params.offset, params.limit, bot_id, chat_id, user_id, status,
         )
     return Page.of([TurnRead.model_validate(r) for r in rows], total, params)
 

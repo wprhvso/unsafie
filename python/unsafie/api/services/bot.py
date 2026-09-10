@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 async def read(
-    session: AsyncSession, bot: Bot, polled: dict[int, str | None] | None = None
+    session: AsyncSession, bot: Bot, polled: dict[int, str | None] | None = None,
 ) -> BotRead:
     _, total = await ChatRepository(session).page(limit=1, bot_id=bot.id)
     if polled is None:

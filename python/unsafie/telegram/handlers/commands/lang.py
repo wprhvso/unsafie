@@ -71,7 +71,7 @@ def lang_keyboard(current_code: str | None) -> InlineKeyboardMarkup:
         name = LANGUAGE_NAMES.get(code, code)
         marker = "🔘" if code == current_code else "⚪"
         btn = InlineKeyboardButton(
-            text=f"{marker} {name}", callback_data=LangCallback(code=code).pack()
+            text=f"{marker} {name}", callback_data=LangCallback(code=code).pack(),
         )
         pair.append(btn)
         if len(pair) == 2:
@@ -86,8 +86,8 @@ def lang_keyboard(current_code: str | None) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"{auto_marker} 🌐 Auto (Telegram)",
                 callback_data=LangCallback(code="default").pack(),
-            )
-        ]
+            ),
+        ],
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

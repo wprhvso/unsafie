@@ -56,7 +56,8 @@ def _install() -> str:
                         CACHED_BIN.write_bytes(f.read())
                         CACHED_BIN.chmod(0o755)
                         return str(CACHED_BIN)
-    raise RuntimeError("could not extract gh binary")
+    msg = "could not extract gh binary"
+    raise RuntimeError(msg)
 
 
 async def ensure_gh() -> str:

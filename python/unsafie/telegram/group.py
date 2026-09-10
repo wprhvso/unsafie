@@ -38,15 +38,16 @@ def clean_mention(text: str | None, username: str | None) -> str | None:
         return text
     pattern = re.compile(rf"@{re.escape(username)}\b", re.IGNORECASE)
     cleaned = pattern.sub("", text).strip()
-    return cleaned if cleaned else text
+    return cleaned or text
 
 
 async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id, user_id)
+    except Exception:
+        return False
+    else:
         return member.status in (
             ChatMemberStatus.CREATOR,
             ChatMemberStatus.ADMINISTRATOR,
         )
-    except Exception:
-        return False

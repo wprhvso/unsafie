@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class ResponseRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def add(
@@ -49,11 +49,11 @@ class ResponseRepository:
                 Response.message_ids.op("@>")(func.jsonb_build_array(message_id)),
             )
             .order_by(Response.created_at.desc())
-            .limit(1)
+            .limit(1),
         )
 
     async def set_content(
-        self, bot_id: int, chat_id: int, message_id: int, content: str
+        self, bot_id: int, chat_id: int, message_id: int, content: str,
     ) -> Response | None:
         response = await self.by_message(bot_id, chat_id, message_id)
         if response is None or len(response.message_ids) != 1:

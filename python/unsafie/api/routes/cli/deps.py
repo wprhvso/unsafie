@@ -69,7 +69,8 @@ class Caller:
         try:
             member = await bot.get_chat_member(target, self.user_id)
             if member.status in ("left", "kicked"):
-                raise HTTPException(403, "user is not a member of the target chat")
+                msg = "user is not a member of the target chat"
+                raise HTTPException(403, msg)
         except HTTPException:
             raise
         except Exception as e:

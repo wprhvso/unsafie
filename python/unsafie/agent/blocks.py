@@ -206,7 +206,7 @@ class Runner:
 
         if probe.status == SpoolStatus.RUNNING:
             watch = asyncio.create_task(
-                self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
+                self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}",
             )
             try:
                 await spool.wait(timeout=settings.agent_block_timeout)
@@ -326,7 +326,7 @@ class Runner:
         spool.prepare(block.code)
 
         watch = asyncio.create_task(
-            self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}"
+            self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}",
         )
         started = time.monotonic()
         try:

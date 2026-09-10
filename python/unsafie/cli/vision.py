@@ -55,7 +55,7 @@ def attach(
                 "bytes": len(data),
                 "mime": mime,
                 "key": key,
-            }
+            },
         )
 
     return {

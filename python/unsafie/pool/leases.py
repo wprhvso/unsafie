@@ -52,20 +52,26 @@ async def take(
     bot_id: int | None = None,
 ) -> list[PoolMachine]:
     if not settings.pool_enabled:
-        raise PoolError("the pool is switched off on this server")
+        msg = "the pool is switched off on this server"
+        raise PoolError(msg)
     user = await _limits(user_id)
     if user.pool_blocked:
-        raise PoolError("your access to the pool is blocked")
+        msg = "your access to the pool is blocked"
+        raise PoolError(msg)
     mine = await registry.of_user(user_id)
     room = user.pool_max_machines - len(mine)
     if room <= 0:
-        raise PoolError(
+        msg = (
             f"you already hold {len(mine)} machine(s), the limit is {user.pool_max_machines}. "
             "Release one: unsafie release box-N"
         )
-    if await spent_today(user_id) >= user.pool_max_machines_day:
         raise PoolError(
-            f"you have used {user.pool_max_machines_day} machines today, which is the daily limit"
+            msg,
+        )
+    if await spent_today(user_id) >= user.pool_max_machines_day:
+        msg = f"you have used {user.pool_max_machines_day} machines today, which is the daily limit"
+        raise PoolError(
+            msg,
         )
     wanted = min(count, room)
     deadline = time.monotonic() + (settings.pool_take_wait if wait is None else wait)
@@ -91,7 +97,7 @@ async def take(
         raise PoolError(
             "no free machine right now"
             + (f", {ahead} user(s) are waiting before you" if ahead else "")
-            + ". The keeper is bringing more up; try again in a few seconds."
+            + ". The keeper is bringing more up; try again in a few seconds.",
         )
     return taken
 
@@ -110,8 +116,9 @@ async def _waiting() -> list[int]:
     rows = await redis.zrange(keys.pending(), 0, -1)
     out: list[int] = []
     for row in rows:
+        val = row[0] if isinstance(row, tuple | list) else row
         try:
-            out.append(int(row))
+            out.append(int(val.decode() if isinstance(val, bytes) else str(val)))
         except ValueError:
             continue
     return out
@@ -122,7 +129,7 @@ async def _holdings() -> dict[int, int]:
         rows = await session.execute(
             select(PoolMachine.user_id, func.count())
             .where(PoolMachine.state == MachineState.LEASED, PoolMachine.gone_at.is_(None))
-            .group_by(PoolMachine.user_id)
+            .group_by(PoolMachine.user_id),
         )
         return {int(user_id): int(count) for user_id, count in rows if user_id is not None}
 
@@ -150,7 +157,7 @@ async def spent_today(user_id: int) -> int:
         used = await session.scalar(
             select(func.count())
             .select_from(PoolLease)
-            .where(PoolLease.user_id == user_id, PoolLease.taken_at >= _midnight())
+            .where(PoolLease.user_id == user_id, PoolLease.taken_at >= _midnight()),
         )
     return int(used or 0)
 
@@ -178,7 +185,7 @@ async def _bind(
         machine.alias = alias
         machine.leased_at = datetime.now(UTC)
         session.add(
-            PoolLease(machine=name, user_id=user_id, chat_id=chat_id, turn_id=turn_id)
+            PoolLease(machine=name, user_id=user_id, chat_id=chat_id, turn_id=turn_id),
         )
         await session.commit()
         await session.refresh(machine)
@@ -215,7 +222,8 @@ async def release(user_id: int, ref: str | None, reason: str = "released") -> li
         found = [m for m in mine if ref in (m.alias, m.name)]
         if not found:
             known = ", ".join(m.alias or m.name for m in mine)
-            raise PoolError(f"no machine '{ref}'. Yours: {known}")
+            msg = f"no machine '{ref}'. Yours: {known}"
+            raise PoolError(msg)
         targets = found
     gone: list[str] = []
     for machine in targets:
@@ -236,7 +244,7 @@ async def _close_lease(name: str, reason: str) -> None:
         lease = await session.scalar(
             select(PoolLease)
             .where(PoolLease.machine == name, PoolLease.released_at.is_(None))
-            .order_by(PoolLease.id.desc())
+            .order_by(PoolLease.id.desc()),
         )
         if lease is None:
             return
@@ -270,9 +278,11 @@ async def resolve(user_id: int, ref: str | None) -> PoolMachine:
             if ref in (machine.alias, machine.name):
                 return machine
         known = ", ".join(m.alias or m.name for m in mine) or "none"
-        raise PoolError(f"no machine '{ref}'. Yours: {known}")
+        msg = f"no machine '{ref}'. Yours: {known}"
+        raise PoolError(msg)
     if not mine:
-        raise PoolError("you have no machine; take one with `unsafie take`")
+        msg = "you have no machine; take one with `unsafie take`"
+        raise PoolError(msg)
     return mine[0]
 
 
@@ -307,8 +317,8 @@ async def reap() -> int:
     async with SessionLocal() as session:
         rows = await session.scalars(
             select(PoolMachine).where(
-                PoolMachine.state == MachineState.LEASED, PoolMachine.gone_at.is_(None)
-            )
+                PoolMachine.state == MachineState.LEASED, PoolMachine.gone_at.is_(None),
+            ),
         )
         machines = list(rows)
     now = datetime.now(UTC)
@@ -332,7 +342,7 @@ async def _close_stray_leases() -> int:
         rows = await session.execute(
             select(PoolLease, PoolMachine.gone_reason)
             .join(PoolMachine, PoolMachine.name == PoolLease.machine)
-            .where(PoolLease.released_at.is_(None), PoolMachine.gone_at.is_not(None))
+            .where(PoolLease.released_at.is_(None), PoolMachine.gone_at.is_not(None)),
         )
         closed = 0
         now = datetime.now(UTC)
@@ -355,7 +365,7 @@ async def _last_seen(machine: PoolMachine) -> datetime:
             select(PoolCommand.created_at)
             .where(PoolCommand.machine == machine.name)
             .order_by(PoolCommand.created_at.desc())
-            .limit(1)
+            .limit(1),
         )
     return latest or machine.leased_at or machine.started_at
 
@@ -370,6 +380,6 @@ async def _busy(name: str) -> bool:
                 PoolCommand.machine == name,
                 PoolCommand.status.in_([CommandStatus.QUEUED, CommandStatus.RUNNING]),
             )
-            .limit(1)
+            .limit(1),
         )
     return found is not None

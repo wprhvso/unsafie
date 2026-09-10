@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class GithubAppRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get(self) -> GithubApp | None:
@@ -43,7 +43,7 @@ class GithubAppRepository:
 
 
 class GithubAccountRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def for_user(self, user_id: int) -> list[GithubAccount]:
@@ -51,8 +51,8 @@ class GithubAccountRepository:
             await self.session.scalars(
                 select(GithubAccount)
                 .where(GithubAccount.user_id == user_id)
-                .order_by(GithubAccount.last_used_at.desc().nulls_last(), GithubAccount.id)
-            )
+                .order_by(GithubAccount.last_used_at.desc().nulls_last(), GithubAccount.id),
+            ),
         )
 
     async def get(self, account_id: int) -> GithubAccount | None:
@@ -61,20 +61,20 @@ class GithubAccountRepository:
     async def by_github_id(self, user_id: int, github_id: int) -> GithubAccount | None:
         return await self.session.scalar(
             select(GithubAccount).where(
-                GithubAccount.user_id == user_id, GithubAccount.github_id == github_id
-            )
+                GithubAccount.user_id == user_id, GithubAccount.github_id == github_id,
+            ),
         )
 
     async def by_login(self, user_id: int, login: str) -> GithubAccount | None:
         return await self.session.scalar(
             select(GithubAccount).where(
-                GithubAccount.user_id == user_id, func.lower(GithubAccount.login) == login.lower()
-            )
+                GithubAccount.user_id == user_id, func.lower(GithubAccount.login) == login.lower(),
+            ),
         )
 
     async def logins(self, user_id: int) -> set[str]:
         rows = await self.session.scalars(
-            select(GithubAccount.login).where(GithubAccount.user_id == user_id)
+            select(GithubAccount.login).where(GithubAccount.user_id == user_id),
         )
         return {r.lower() for r in rows}
 
@@ -117,13 +117,13 @@ class GithubAccountRepository:
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[GithubAccount], int]:
         total = await self.session.scalar(select(func.count()).select_from(GithubAccount)) or 0
         rows = await self.session.scalars(
-            select(GithubAccount).order_by(GithubAccount.id).offset(offset).limit(limit)
+            select(GithubAccount).order_by(GithubAccount.id).offset(offset).limit(limit),
         )
         return list(rows), int(total)
 
 
 class InstallationRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get(self, installation_id: int) -> Installation | None:
@@ -176,8 +176,8 @@ class InstallationRepository:
         if exists is None:
             self.session.add(
                 InstallationAccount(
-                    installation_id=installation_id, github_account_id=github_account_id
-                )
+                    installation_id=installation_id, github_account_id=github_account_id,
+                ),
             )
             await self.session.commit()
 
@@ -186,7 +186,7 @@ class InstallationRepository:
             select(Installation)
             .join(InstallationAccount, InstallationAccount.installation_id == Installation.id)
             .where(InstallationAccount.github_account_id == github_account_id)
-            .order_by(Installation.id)
+            .order_by(Installation.id),
         )
         return list(rows)
 
@@ -197,7 +197,7 @@ class InstallationRepository:
             .join(GithubAccount, GithubAccount.id == InstallationAccount.github_account_id)
             .where(GithubAccount.user_id == user_id)
             .order_by(Installation.id)
-            .distinct()
+            .distinct(),
         )
         return list(rows)
 
@@ -211,7 +211,7 @@ class InstallationRepository:
 
 
 class RepoRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get(self, repo_id: int) -> Repo | None:
@@ -223,8 +223,8 @@ class RepoRepository:
     async def by_full_name(self, owner: str, name: str) -> Repo | None:
         return await self.session.scalar(
             select(Repo).where(
-                func.lower(Repo.owner) == owner.lower(), func.lower(Repo.name) == name.lower()
-            )
+                func.lower(Repo.owner) == owner.lower(), func.lower(Repo.name) == name.lower(),
+            ),
         )
 
     async def for_installation(self, installation_id: int) -> list[Repo]:
@@ -232,8 +232,8 @@ class RepoRepository:
             await self.session.scalars(
                 select(Repo)
                 .where(Repo.installation_id == installation_id)
-                .order_by(Repo.owner, Repo.name)
-            )
+                .order_by(Repo.owner, Repo.name),
+            ),
         )
 
     async def upsert(
@@ -277,13 +277,13 @@ class RepoRepository:
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[Repo], int]:
         total = await self.session.scalar(select(func.count()).select_from(Repo)) or 0
         rows = await self.session.scalars(
-            select(Repo).order_by(Repo.owner, Repo.name).offset(offset).limit(limit)
+            select(Repo).order_by(Repo.owner, Repo.name).offset(offset).limit(limit),
         )
         return list(rows), int(total)
 
 
 class UserRepoRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def for_user(self, user_id: int) -> list[tuple[UserRepo, Repo]]:
@@ -291,7 +291,7 @@ class UserRepoRepository:
             select(UserRepo, Repo)
             .join(Repo, Repo.id == UserRepo.repo_id)
             .where(UserRepo.user_id == user_id)
-            .order_by(UserRepo.alias)
+            .order_by(UserRepo.alias),
         )
         return [(u, r) for u, r in rows]
 
@@ -308,21 +308,21 @@ class UserRepoRepository:
                 select(UserRepo, Repo)
                 .join(Repo, Repo.id == UserRepo.repo_id)
                 .where(UserRepo.user_id == user_id, cond)
-                .limit(1)
+                .limit(1),
             )
         ).first()
         return (row[0], row[1]) if row else None
 
     async def bind(self, user_id: int, repo: Repo, alias: str | None = None) -> UserRepo:
         existing = await self.session.scalar(
-            select(UserRepo).where(UserRepo.user_id == user_id, UserRepo.repo_id == repo.id)
+            select(UserRepo).where(UserRepo.user_id == user_id, UserRepo.repo_id == repo.id),
         )
         if existing is not None:
             return existing
         taken = {
             a.lower()
             for a in await self.session.scalars(
-                select(UserRepo.alias).where(UserRepo.user_id == user_id)
+                select(UserRepo.alias).where(UserRepo.user_id == user_id),
             )
         }
         candidates = [alias] if alias else [repo.name, f"{repo.owner}-{repo.name}"]
@@ -360,19 +360,19 @@ class UserRepoRepository:
 
 
 class WorktreeRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get(self, repo_id: int, branch: str) -> Worktree | None:
         return await self.session.scalar(
-            select(Worktree).where(Worktree.repo_id == repo_id, Worktree.branch == branch)
+            select(Worktree).where(Worktree.repo_id == repo_id, Worktree.branch == branch),
         )
 
     async def for_repo(self, repo_id: int) -> list[Worktree]:
         return list(
             await self.session.scalars(
-                select(Worktree).where(Worktree.repo_id == repo_id).order_by(Worktree.branch)
-            )
+                select(Worktree).where(Worktree.repo_id == repo_id).order_by(Worktree.branch),
+            ),
         )
 
     async def for_user(self, user_id: int) -> list[tuple[UserRepo, Repo, Worktree]]:
@@ -381,13 +381,13 @@ class WorktreeRepository:
             .join(Repo, Repo.id == UserRepo.repo_id)
             .join(Worktree, Worktree.repo_id == Repo.id)
             .where(UserRepo.user_id == user_id)
-            .order_by(UserRepo.alias, Worktree.branch)
+            .order_by(UserRepo.alias, Worktree.branch),
         )
         return [(u, r, w) for u, r, w in rows]
 
     async def create(self, repo_id: int, branch: str, commit: str, tree: str) -> Worktree:
         wt = Worktree(
-            repo_id=repo_id, branch=branch, base_commit_sha=commit, base_tree_sha=tree, changes={}
+            repo_id=repo_id, branch=branch, base_commit_sha=commit, base_tree_sha=tree, changes={},
         )
         self.session.add(wt)
         await self.session.commit()
@@ -404,12 +404,12 @@ class WorktreeRepository:
 
     async def delete(self, repo_id: int, branch: str) -> None:
         await self.session.execute(
-            delete(Worktree).where(Worktree.repo_id == repo_id, Worktree.branch == branch)
+            delete(Worktree).where(Worktree.repo_id == repo_id, Worktree.branch == branch),
         )
         await self.session.commit()
 
     async def page(
-        self, offset: int = 0, limit: int = 50
+        self, offset: int = 0, limit: int = 50,
     ) -> tuple[list[tuple[Worktree, Repo]], int]:
         total = await self.session.scalar(select(func.count()).select_from(Worktree)) or 0
         rows = await self.session.execute(
@@ -417,7 +417,7 @@ class WorktreeRepository:
             .join(Repo, Repo.id == Worktree.repo_id)
             .order_by(Worktree.updated_at.desc())
             .offset(offset)
-            .limit(limit)
+            .limit(limit),
         )
         return [(w, r) for w, r in rows], int(total)
 
@@ -438,7 +438,7 @@ class WorktreeRepository:
                 sha=sha,
                 previous_sha=previous,
                 message=message[:2000],
-            )
+            ),
         )
         await self.session.commit()
 
@@ -448,8 +448,8 @@ class WorktreeRepository:
                 select(CommitLog)
                 .where(CommitLog.worktree_id == worktree_id)
                 .order_by(CommitLog.id.desc())
-                .limit(n)
-            )
+                .limit(n),
+            ),
         )
 
     async def known_sha(self, worktree_id: int, sha: str) -> bool:
@@ -457,6 +457,6 @@ class WorktreeRepository:
             select(CommitLog.id).where(
                 CommitLog.worktree_id == worktree_id,
                 (CommitLog.sha == sha) | (CommitLog.previous_sha == sha),
-            )
+            ),
         )
         return row is not None

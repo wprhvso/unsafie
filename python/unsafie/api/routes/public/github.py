@@ -1,4 +1,6 @@
+import html
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -15,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/gh", tags=["github"])
 
-import html
-
 PAGE = """<!doctype html><meta charset="utf-8"><title>unsafie</title>
 <style>body{font:16px/1.5 system-ui;margin:15vh auto;max-width:34rem;padding:0 1rem;color:#111}
 a{color:#06c}code{background:#f2f2f2;padding:.1em .3em;border-radius:3px}</style>
@@ -32,9 +32,9 @@ def page(title: str, body: str, status: int = 200, escape_body: bool = False) ->
 @router.post("/webhook")
 async def webhook(
     request: Request,
-    x_github_event: str = Header(default=""),
-    x_github_delivery: str = Header(default=""),
-    x_hub_signature_256: str | None = Header(default=None),
+    x_github_event: Annotated[str, Header()] = "",
+    x_github_delivery: Annotated[str, Header()] = "",
+    x_hub_signature_256: Annotated[str | None, Header()] = None,
 ):
     body = await request.body()
     async with SessionLocal() as session:

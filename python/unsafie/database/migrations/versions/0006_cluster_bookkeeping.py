@@ -16,15 +16,15 @@ def upgrade() -> None:
     op.execute("ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ")
     op.execute("ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(64)")
     op.execute(
-        "ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0"
+        "ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0",
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_webhook_deliveries_pending "
-        "ON webhook_deliveries (received_at) WHERE processed_at IS NULL"
+        "ON webhook_deliveries (received_at) WHERE processed_at IS NULL",
     )
     op.execute(
         "UPDATE turns SET heartbeat_at = COALESCE(finished_at, created_at) "
-        "WHERE heartbeat_at IS NULL"
+        "WHERE heartbeat_at IS NULL",
     )
 
 

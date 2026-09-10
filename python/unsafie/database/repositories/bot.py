@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class BotRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def create(self, token: str, tg_id: int | None, username: str | None) -> Bot:

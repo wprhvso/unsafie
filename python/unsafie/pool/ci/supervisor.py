@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 
 from unsafie.errors import OpsError
@@ -40,16 +41,14 @@ class CiSupervisor(Loop):
                 continue
             controller = Controller(row, token)
             self.tasks[repo_id] = asyncio.create_task(
-                controller.serve(), name=f"pool.ci:{row.slug}"
+                controller.serve(), name=f"pool.ci:{row.slug}",
             )
             logger.info("pool ci %s: controller scheduled", row.slug)
 
     async def _drop(self, repo_id: int, task: asyncio.Task) -> None:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError, Exception):
             await asyncio.wait_for(task, timeout=2.0)
-        except (asyncio.CancelledError, TimeoutError, Exception):
-            pass
         self.tasks.pop(repo_id, None)
 
     async def on_stop(self) -> None:

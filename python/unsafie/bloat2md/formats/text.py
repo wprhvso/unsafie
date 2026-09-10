@@ -20,7 +20,8 @@ _DELIMITERS: Final = ",;\t|"
 def decode(raw: bytes) -> str:
     best = from_bytes(raw).best()
     if best is None:
-        raise ConversionError("the text could not be decoded")
+        msg = "the text could not be decoded"
+        raise ConversionError(msg)
     return str(best)
 
 
@@ -33,7 +34,8 @@ def rtf(raw: bytes) -> Payload:
     try:
         text = rtf_to_text(decode(raw), errors="ignore")
     except (ValueError, IndexError, KeyError) as error:
-        raise ConversionError("the rtf could not be read") from error
+        msg = "the rtf could not be read"
+        raise ConversionError(msg) from error
     cleaned = clean(text)
     return Payload(markdown=cleaned.text, dropped=cleaned.dropped)
 
@@ -54,7 +56,8 @@ def structured(raw: bytes) -> Payload:
     try:
         parsed = json.loads(text)
     except ValueError as error:
-        raise ConversionError("the json could not be parsed") from error
+        msg = "the json could not be parsed"
+        raise ConversionError(msg) from error
     body = json.dumps(parsed, indent=2, ensure_ascii=False, sort_keys=False)
     return Payload(markdown=clean(body).text)
 
@@ -63,7 +66,8 @@ def xml(raw: bytes) -> Payload:
     try:
         root = ElementTree.fromstring(raw, forbid_dtd=True, forbid_entities=True)
     except (DefusedXmlException, ElementTree.ParseError):
-        raise ConversionError("the xml could not be parsed") from None
+        msg = "the xml could not be parsed"
+        raise ConversionError(msg) from None
     body = ElementTree.tostring(root, encoding="unicode")
     return Payload(markdown=clean(body).text)
 
@@ -72,9 +76,11 @@ def notebook(raw: bytes) -> Payload:
     try:
         parsed = json.loads(decode(raw))
     except ValueError as error:
-        raise ConversionError("the notebook could not be parsed") from error
+        msg = "the notebook could not be parsed"
+        raise ConversionError(msg) from error
     if not isinstance(parsed, dict):
-        raise ConversionError("the notebook is not an object")
+        msg = "the notebook is not an object"
+        raise ConversionError(msg)
 
     blocks: list[str] = []
     cells = parsed.get("cells")

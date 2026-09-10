@@ -91,7 +91,7 @@ LINEAGE_QUERY = text("""
 
 
 class TurnRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def get(self, turn_id: UUID) -> Turn | None:
@@ -99,7 +99,7 @@ class TurnRepository:
 
     async def owner(self, bot_id: int, chat_id: int, message_id: int) -> Turn | None:
         turn_id = await self.session.scalar(
-            OWNER_QUERY, {"bot_id": bot_id, "chat_id": chat_id, "message_id": message_id}
+            OWNER_QUERY, {"bot_id": bot_id, "chat_id": chat_id, "message_id": message_id},
         )
         if turn_id is None:
             return None
@@ -209,13 +209,13 @@ class TurnRepository:
             select(Update.message_id)
             .where(Update.turn_id == turn.id, Update.message_id.is_not(None))
             .order_by(Update.ordinal.desc())
-            .limit(1)
+            .limit(1),
         )
         return int(last) if last is not None else turn.reply_to
 
     async def responses(self, turn_id: UUID) -> list[Response]:
         rows = await self.session.scalars(
-            select(Response).where(Response.turn_id == turn_id).order_by(Response.created_at)
+            select(Response).where(Response.turn_id == turn_id).order_by(Response.created_at),
         )
         return list(rows)
 
@@ -239,19 +239,19 @@ class TurnRepository:
             cond.append(Turn.status == status)
         total = await self.session.scalar(select(func.count()).select_from(Turn).where(*cond)) or 0
         rows = await self.session.scalars(
-            select(Turn).where(*cond).order_by(Turn.created_at.desc()).offset(offset).limit(limit)
+            select(Turn).where(*cond).order_by(Turn.created_at.desc()).offset(offset).limit(limit),
         )
         return list(rows), int(total)
 
     async def children(self, turn_id: UUID) -> list[Turn]:
         rows = await self.session.scalars(
-            select(Turn).where(Turn.parent_id == turn_id).order_by(Turn.created_at)
+            select(Turn).where(Turn.parent_id == turn_id).order_by(Turn.created_at),
         )
         return list(rows)
 
     async def conversation(self, root_id: UUID) -> list[Turn]:
         rows = await self.session.scalars(
-            select(Turn).where(Turn.root_id == root_id).order_by(Turn.created_at)
+            select(Turn).where(Turn.root_id == root_id).order_by(Turn.created_at),
         )
         return list(rows)
 
@@ -259,7 +259,7 @@ class TurnRepository:
         await self.session.execute(
             update(Turn)
             .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
-            .values(heartbeat_at=datetime.now(UTC))
+            .values(heartbeat_at=datetime.now(UTC)),
         )
         await self.session.commit()
 
@@ -267,7 +267,7 @@ class TurnRepository:
         await self.session.execute(
             update(Turn)
             .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
-            .values(heartbeat_at=None)
+            .values(heartbeat_at=None),
         )
         await self.session.commit()
 
@@ -280,17 +280,17 @@ class TurnRepository:
                 func.coalesce(Turn.heartbeat_at, Turn.created_at) < cutoff,
             )
             .order_by(Turn.created_at.asc())
-            .limit(limit)
+            .limit(limit),
         )
         return list(rows)
 
     async def claim_for_recovery(
-        self, turn_id: UUID, instance_id: str, max_recoveries: int = 3
+        self, turn_id: UUID, instance_id: str, max_recoveries: int = 3,
     ) -> Turn | None:
         turn = await self.session.scalar(
             select(Turn)
             .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
-            .with_for_update(skip_locked=True)
+            .with_for_update(skip_locked=True),
         )
         if turn is None:
             return None
@@ -324,8 +324,8 @@ class TurnRepository:
                         Turn.created_at < ancient_cutoff,
                     ),
                 )
-                .with_for_update(skip_locked=True)
-            )
+                .with_for_update(skip_locked=True),
+            ),
         )
         now = datetime.now(UTC)
         for turn in rows:
@@ -373,7 +373,7 @@ class TurnRepository:
         rows = await self.session.scalars(
             select(Turn)
             .where(Turn.parent_id == parent_id, Turn.is_subagent.is_(True))
-            .order_by(Turn.created_at)
+            .order_by(Turn.created_at),
         )
         return list(rows)
 

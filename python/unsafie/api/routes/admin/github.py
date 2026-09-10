@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -53,10 +55,22 @@ async def forget_app():
 
 
 @router.get("/accounts", response_model=Page[GithubAccountRead])
-async def list_accounts(params: PageParams = Depends(paging)):
+async def list_accounts(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await GithubAccountRepository(session).page(params.offset, params.limit)
-    items = [GithubAccountRead(**{**r.__dict__, "has_token": bool(r.token)}) for r in rows]
+    items = [
+        GithubAccountRead(
+            id=r.id,
+            user_id=r.user_id,
+            github_id=r.github_id,
+            login=r.login,
+            scopes=r.scopes,
+            has_token=bool(r.token),
+            created_at=r.created_at,
+            last_used_at=r.last_used_at,
+        )
+        for r in rows
+    ]
     return Page.of(items, total, params)
 
 
@@ -72,19 +86,19 @@ async def forget_installation(installation_id: int):
     async with SessionLocal() as session:
         if not await InstallationRepository(session).delete(installation_id):
             raise HTTPException(404, "no such installation")
-    auth.forget_installation(installation_id)
+    await auth.forget_installation(installation_id)
     return Ok(detail="installation forgotten; its repositories stay, they are served by tokens")
 
 
 @router.get("/repos", response_model=Page[RepoRead])
-async def list_repos(params: PageParams = Depends(paging)):
+async def list_repos(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await RepoRepository(session).page(params.offset, params.limit)
     return Page.of([RepoRead.model_validate(r) for r in rows], total, params)
 
 
 @router.get("/worktrees", response_model=Page[WorktreeRead])
-async def list_worktrees(params: PageParams = Depends(paging)):
+async def list_worktrees(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await WorktreeRepository(session).page(params.offset, params.limit)
     items = [

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class TokenRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def add(self, **fields) -> ApiToken:
@@ -29,7 +29,7 @@ class TokenRepository:
 
     async def by_hash(self, token_hash: str) -> ApiToken | None:
         return await self.session.scalar(
-            select(ApiToken).where(ApiToken.token_hash == token_hash, ApiToken.revoked_at.is_(None))
+            select(ApiToken).where(ApiToken.token_hash == token_hash, ApiToken.revoked_at.is_(None)),
         )
 
     async def for_user(self, user_id: int, alive_only: bool = True) -> list[ApiToken]:
@@ -45,12 +45,12 @@ class TokenRepository:
                 ApiToken.user_id == user_id,
                 ApiToken.name == name,
                 ApiToken.revoked_at.is_(None),
-            )
+            ),
         )
 
     async def touch(self, token_id: int) -> None:
         await self.session.execute(
-            update(ApiToken).where(ApiToken.id == token_id).values(last_used_at=datetime.now(UTC))
+            update(ApiToken).where(ApiToken.id == token_id).values(last_used_at=datetime.now(UTC)),
         )
         await self.session.commit()
 
@@ -67,7 +67,7 @@ class TokenRepository:
         result = await self.session.execute(
             update(ApiToken)
             .where(ApiToken.machine == machine, ApiToken.revoked_at.is_(None))
-            .values(revoked_at=datetime.now(UTC))
+            .values(revoked_at=datetime.now(UTC)),
         )
         await self.session.commit()
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)

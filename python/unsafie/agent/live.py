@@ -24,7 +24,7 @@ TRUNCATED = "live.truncated"
 
 
 def stream_key(turn_id: UUID | str) -> str:
-    return cluster.key(STREAM, turn_id)
+    return cluster.key(STREAM, str(turn_id))
 
 
 def token_key(token: str) -> str:
@@ -32,7 +32,7 @@ def token_key(token: str) -> str:
 
 
 def link_key(turn_id: UUID | str) -> str:
-    return cluster.key(STREAM, "link", turn_id)
+    return cluster.key(STREAM, "link", str(turn_id))
 
 
 def _now() -> str:
@@ -115,7 +115,7 @@ class Live:
                 self._buffer = [f for f in self._buffer if f.kind == "turn.end"]
                 out.append(self._encode(Frame("note", _now(), {"name": TRUNCATED})))
                 logger.warning(
-                    "live: turn=%s wrote %s bytes, stopping there", self.turn_id, self.bytes
+                    "live: turn=%s wrote %s bytes, stopping there", self.turn_id, self.bytes,
                 )
                 break
         return out
@@ -129,13 +129,13 @@ class Live:
                 pipe = cluster.client().pipeline(transaction=False)
                 for body in batch:
                     pipe.xadd(
-                        self.key, {BODY: body}, maxlen=settings.live_buffer, approximate=True
+                        self.key, {BODY: body}, maxlen=settings.live_buffer, approximate=True,
                     )
                 pipe.pexpire(self.key, int(settings.live_ttl * 1000))
                 await pipe.execute()
             except (cluster.Unavailable, RedisError, OSError):
                 logger.warning(
-                    "live: turn=%s lost %s frame(s)", self.turn_id, len(batch), exc_info=True
+                    "live: turn=%s lost %s frame(s)", self.turn_id, len(batch), exc_info=True,
                 )
 
     async def _pump(self) -> None:
@@ -211,7 +211,7 @@ async def seal(turn_id: UUID, **data: Any) -> None:
         if not await client.exists(stream_key(turn_id)):
             return
         await client.xadd(
-            stream_key(turn_id), {BODY: body}, maxlen=settings.live_buffer, approximate=True
+            stream_key(turn_id), {BODY: body}, maxlen=settings.live_buffer, approximate=True,
         )
         await client.pexpire(stream_key(turn_id), int(settings.live_ttl * 1000))
     except (cluster.Unavailable, RedisError, OSError):
@@ -233,16 +233,20 @@ async def turn_of(token: str) -> UUID | None:
     if not raw:
         return None
     try:
-        return UUID(raw)
+        raw_str = raw.decode() if isinstance(raw, bytes) else str(raw)
+        return UUID(raw_str)
     except ValueError:
         return None
 
 
 async def token_of(turn_id: UUID) -> str | None:
-    return await cluster.client().get(link_key(turn_id))
+    raw = await cluster.client().get(link_key(turn_id))
+    return raw.decode() if isinstance(raw, bytes) else raw
 
 
-def _decode(entry_id: str, fields: dict) -> dict | None:
+def _decode(entry_id: str, fields: dict | None) -> dict | None:
+    if fields is None:
+        return None
     try:
         frame = json.loads(fields[BODY])
     except (KeyError, ValueError, TypeError):
@@ -256,18 +260,24 @@ async def bounds(turn_id: UUID) -> tuple[str | None, str | None]:
     client = cluster.client()
     first = await client.xrange(stream_key(turn_id), count=1)
     last = await client.xrevrange(stream_key(turn_id), count=1)
-    return (first[0][0] if first else None, last[0][0] if last else None)
+    f_id = first[0][0] if first else None
+    l_id = last[0][0] if last else None
+    return (f_id.decode() if isinstance(f_id, bytes) else f_id, l_id.decode() if isinstance(l_id, bytes) else l_id)
 
 
 async def history(turn_id: UUID, after: str | None = None, limit: int | None = None) -> list[dict]:
-    entries = await cluster.client().xrange(
-        stream_key(turn_id), min=after or "-", count=limit or settings.live_buffer
+    raw_entries = await cluster.client().xrange(
+        stream_key(turn_id), min=after or "-", count=limit or settings.live_buffer,
     )
-    out = []
-    for entry_id, fields in entries:
+    out: list[dict] = []
+    if not raw_entries:
+        return out
+    for item in raw_entries:
+        entry_raw, fields = item[0], item[1]
+        entry_id = entry_raw.decode() if isinstance(entry_raw, bytes) else str(entry_raw)
         if entry_id == after:
             continue
-        frame = _decode(entry_id, fields)
+        frame = _decode(entry_id, fields if isinstance(fields, dict) else None)
         if frame is not None:
             out.append(frame)
     return out
@@ -291,8 +301,11 @@ async def follow(turn_id: UUID, after: str | None = None) -> AsyncIterator[dict 
         except RedisTimeout:
             logger.debug("live: turn=%s quiet read window", turn_id)
             continue
-        for _, items in entries or []:
-            for entry_id, fields in items:
+        for stream_pair in entries or []:
+            if not isinstance(stream_pair, tuple | list) or len(stream_pair) < 2:
+                continue
+            for entry_raw, fields in stream_pair[1]:
+                entry_id = entry_raw.decode() if isinstance(entry_raw, bytes) else str(entry_raw)
                 cursor = entry_id
                 frame = _decode(entry_id, fields)
                 if frame is not None:

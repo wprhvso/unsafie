@@ -114,7 +114,7 @@ def tsquery(query: str) -> str:
 
 
 class HistoryRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def search(
@@ -165,7 +165,7 @@ class HistoryRepository:
         ).all()
         hits = [
             Hit(
-                r.who, r.message_id, r.user_id, r.name, int(r.ts), r.body or "", reply_to=r.reply_to
+                r.who, r.message_id, r.user_id, r.name, int(r.ts), r.body or "", reply_to=r.reply_to,
             )
             for r in rows
         ]
@@ -175,16 +175,16 @@ class HistoryRepository:
         return hits[max(0, idx - radius) : idx + radius + 1]
 
     async def recent(
-        self, bot_id: int, chat_id: int, limit: int, before: int | None = None
+        self, bot_id: int, chat_id: int, limit: int, before: int | None = None,
     ) -> list[Hit]:
         rows = (
             await self.session.execute(
-                RECENT_SQL, {"bot_id": bot_id, "chat_id": chat_id, "limit": limit, "before": before}
+                RECENT_SQL, {"bot_id": bot_id, "chat_id": chat_id, "limit": limit, "before": before},
             )
         ).all()
         hits = [
             Hit(
-                r.who, r.message_id, r.user_id, r.name, int(r.ts), r.body or "", reply_to=r.reply_to
+                r.who, r.message_id, r.user_id, r.name, int(r.ts), r.body or "", reply_to=r.reply_to,
             )
             for r in rows
         ]

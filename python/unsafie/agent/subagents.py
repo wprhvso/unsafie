@@ -52,7 +52,7 @@ async def wait_subagents(turn_ids: list[UUID], timeout: float = 600.0) -> None:
                     break
             try:
                 await asyncio.wait_for(ev.wait(), timeout=min(3.0, max(0.5, remaining)))
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 pass
             except Exception:
                 break

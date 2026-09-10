@@ -25,7 +25,7 @@ class Worker(Loop):
     async def tick(self) -> None:
         async with SessionLocal() as session:
             claimed = await DeliveryRepository(session).claim(
-                settings.webhook_batch, settings.job_lease
+                settings.webhook_batch, settings.job_lease,
             )
         if not claimed:
             return

@@ -29,8 +29,8 @@ def _process_parts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "source": {
                         "type": "base64",
                         "media_type": mime,
-                        "data": b64
-                    }
+                        "data": b64,
+                    },
                 })
             elif "data" in part or "source" in part:
                 processed.append(part)
@@ -61,9 +61,10 @@ def run(
     sys.stderr.write(markers.llm_start(call_id, model_name) + "\n")
     sys.stderr.flush()
 
-    parts = payload.get("parts")
-    if parts and isinstance(parts, list):
-        payload["parts"] = _process_parts(parts)
+    if payload is not None:
+        parts = payload.get("parts")
+        if parts and isinstance(parts, list):
+            payload["parts"] = _process_parts(parts)
 
     cli = client()
     try:
@@ -76,9 +77,10 @@ def run(
     if not isinstance(res, dict):
         res = {"ok": True, "text": str(res)}
 
-    thoughts = res.get("thoughts") or ""
-    text = res.get("text") or ""
-    usage = res.get("usage") or {}
+    thoughts = str(res.get("thoughts") or "")
+    text = str(res.get("text") or "")
+    usage_val = res.get("usage")
+    usage = usage_val if isinstance(usage_val, dict) else {}
 
     if thoughts:
         sys.stderr.write(markers.llm_thought(call_id, thoughts) + "\n")

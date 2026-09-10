@@ -1,3 +1,4 @@
+import contextlib
 import logging
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -67,10 +68,8 @@ async def stream(websocket: WebSocket, slug: str) -> None:
         return
     except Exception:
         logger.exception("desktop %s: the tunnel broke", slug)
-        try:
+        with contextlib.suppress(RuntimeError):
             await _refuse(websocket, BROKEN, "the tunnel broke on the server")
-        except RuntimeError:
-            pass
     finally:
         if opened is not None:
             await opened.close()

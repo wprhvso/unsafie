@@ -38,12 +38,12 @@ def push(payload: dict) -> str | None:
         return None
     head = payload.get("head_commit") or {}
     lines = [
-        f"{icons.EVENT['push']} **{_repo(payload)}** `{ref}` — {len(commits)} commit(s) by {_who(payload)}"
+        f"{icons.EVENT['push']} **{_repo(payload)}** `{ref}` — {len(commits)} commit(s) by {_who(payload)}",
     ]
-    for c in commits[:5]:
-        lines.append(
-            f"· `{(c.get('id') or '')[:7]}` {_short(c.get('message', '').split(chr(10))[0], 120)}"
-        )
+    lines.extend(
+        f"· `{(c.get('id') or '')[:7]}` {_short(c.get('message', '').split(chr(10))[0], 120)}"
+        for c in commits[:5]
+    )
     if len(commits) > 5:
         lines.append(f"· …and {len(commits) - 5} more")
     if url := (head.get("url") or payload.get("compare")):
@@ -96,7 +96,7 @@ def issue_comment(payload: dict) -> str | None:
             f"{icons.EVENT['issue_comment']} **{_repo(payload)}** comment on {what} #{issue.get('number')} by {_who(payload)}",
             _link(comment.get("html_url"), issue.get("title") or ""),
             _short(comment.get("body")),
-        ]
+        ],
     )
 
 
@@ -106,7 +106,7 @@ def pull_request_review(payload: dict) -> str | None:
     review = payload.get("review") or {}
     pr = payload.get("pull_request") or {}
     state = {"approved": "✅", "changes_requested": "🛠", "commented": "💬"}.get(
-        (review.get("state") or "").lower(), "🔍"
+        (review.get("state") or "").lower(), "🔍",
     )
     return "\n".join(
         x

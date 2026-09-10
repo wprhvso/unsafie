@@ -69,7 +69,7 @@ async def spawn_subagent(body: SpawnIn, who: Who) -> dict:
                 parent = running[-1]
     if parent is None:
         raise HTTPException(
-            400, "active parent turn required: pass parent_turn_id or set UNSAFIE_TURN"
+            400, "active parent turn required: pass parent_turn_id or set UNSAFIE_TURN",
         )
 
     title = body.title or (body.prompt[:40] + "…" if len(body.prompt) > 40 else body.prompt)
@@ -131,7 +131,7 @@ async def wait_for_subagents(body: WaitIn, who: Who) -> list[dict]:
 
 @router.get("")
 async def list_subagents(
-    who: Who, parent_turn_id: str | None = None, limit: int = 50
+    who: Who, parent_turn_id: str | None = None, limit: int = 50,
 ) -> list[dict]:
     parent = await who.turn(parent_turn_id)
     if parent is None and who.chat_id and who.bot_id:

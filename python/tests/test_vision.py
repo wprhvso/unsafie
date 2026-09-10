@@ -8,7 +8,7 @@ from unsafie.cli import browser
 from unsafie.cli.vision import attach
 
 
-def test_vision_attach_valid_image():
+def test_vision_attach_valid_image() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         img = Pillow.new("RGB", (50, 50), color="blue")
         img_path = Path(tmpdir) / "test.png"
@@ -24,13 +24,13 @@ def test_vision_attach_valid_image():
             assert mock_stderr.called
 
 
-def test_vision_attach_nonexistent_file():
+def test_vision_attach_nonexistent_file() -> None:
     res = attach(["/tmp/does_not_exist_12345.png"])
     assert res["ok"] is False
     assert "file not found" in res["error"]
 
 
-def test_vision_attach_invalid_image_type():
+def test_vision_attach_invalid_image_type() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         txt_path = Path(tmpdir) / "not_an_image.txt"
         txt_path.write_text("just text", encoding="utf-8")
@@ -40,7 +40,7 @@ def test_vision_attach_invalid_image_type():
         assert "not an image" in res["error"] or "format" in res["error"]
 
 
-def test_vision_attach_multiple_images():
+def test_vision_attach_multiple_images() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         p1 = Path(tmpdir) / "img1.png"
         p2 = Path(tmpdir) / "img2.jpg"
@@ -55,7 +55,7 @@ def test_vision_attach_multiple_images():
             assert res["attached"][1]["mime"] == "image/jpeg"
 
 
-def test_browser_shot_signature():
+def test_browser_shot_signature() -> None:
     import inspect
 
     sig = inspect.signature(browser.shot)

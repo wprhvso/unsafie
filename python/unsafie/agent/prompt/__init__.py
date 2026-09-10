@@ -49,4 +49,4 @@ All `unsafie` commands output valid JSON to stdout.
 
 SUBAGENT_SYSTEM_PROMPT = SYSTEM_PROMPT
 
-__all__ = ["SYSTEM_PROMPT", "SUBAGENT_SYSTEM_PROMPT"]
+__all__ = ["SUBAGENT_SYSTEM_PROMPT", "SYSTEM_PROMPT"]

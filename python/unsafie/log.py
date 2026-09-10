@@ -32,7 +32,8 @@ _configured = False
 def level() -> str:
     value = settings.log_level.upper()
     if value not in logging.getLevelNamesMapping():
-        raise ValueError(f"LOG_LEVEL={settings.log_level!r}: unknown level")
+        msg = f"LOG_LEVEL={settings.log_level!r}: unknown level"
+        raise ValueError(msg)
     return value
 
 
@@ -56,7 +57,7 @@ def config() -> dict[str, Any]:
                 "formatter": "default",
                 "filters": ["trace"],
                 "stream": sys.stderr,
-            }
+            },
         },
         "root": {"level": level(), "handlers": ["stderr"]},
         "loggers": loggers,

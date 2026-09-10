@@ -7,8 +7,8 @@ from fastapi.staticfiles import StaticFiles
 
 from unsafie import cluster, events, telemetry
 from unsafie.agent import turns
-from unsafie.agent.recovery import recovery_supervisor
 from unsafie.agent.client import close_session as close_gemini
+from unsafie.agent.recovery import recovery_supervisor
 from unsafie.api import static
 from unsafie.api.routes.admin import admin_router
 from unsafie.api.routes.cli import cli_router
