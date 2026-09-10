@@ -10,7 +10,7 @@ from unsafie.agent import turns
 from unsafie.loop import Loop
 from unsafie.settings import settings
 from unsafie.ssh.pool import pool
-from unsafie.telegram.poller import supervisor
+from unsafie.telegram.webhook import supervisor
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ def snapshot() -> dict:
         "started_at": STARTED_AT.isoformat(),
         "uptime_sec": round(time.time() - STARTED_AT.timestamp()),
         "polling": supervisor.ids(),
+        "webhooks": supervisor.ids(),
         "turns": [str(t) for t in turns.busy()],
         "ssh_connections": len([s for s in pool.stats() if s["alive"]]),
     }

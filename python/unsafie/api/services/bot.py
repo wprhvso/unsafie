@@ -7,7 +7,7 @@ from unsafie.api.schemas.models import BotRead
 from unsafie.database.models.bot import Bot
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.chat import ChatRepository
-from unsafie.telegram import poller, service
+from unsafie.telegram import service, webhook
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ async def read(
 ) -> BotRead:
     _, total = await ChatRepository(session).page(limit=1, bot_id=bot.id)
     if polled is None:
-        polled = await poller.polled_by([bot.id])
+        polled = await webhook.polled_by([bot.id])
     owner = polled.get(bot.id)
     return BotRead(
         id=bot.id,
@@ -31,7 +31,7 @@ async def read(
 
 async def listing(session: AsyncSession) -> list[BotRead]:
     rows = await BotRepository(session).all()
-    polled = await poller.polled_by([row.id for row in rows])
+    polled = await webhook.polled_by([row.id for row in rows])
     return [await read(session, row, polled) for row in rows]
 
 

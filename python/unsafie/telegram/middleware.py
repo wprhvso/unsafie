@@ -25,7 +25,7 @@ def _preview(text: str | None, limit: int = 120) -> str:
 
 
 class UpdateMiddleware(BaseMiddleware):
-    def __init__(self, bot_id: int) -> None:
+    def __init__(self, bot_id: int | None = None) -> None:
         self.bot_id = bot_id
 
     async def __call__(
@@ -36,6 +36,8 @@ class UpdateMiddleware(BaseMiddleware):
     ) -> Any:
         if not isinstance(event, Update):
             return await handler(event, data)
+        bot_id = self.bot_id if self.bot_id is not None else data.get("bot_id", 0)
+        data["bot_id"] = bot_id
         started = time.perf_counter()
         with telemetry.span(
             "tg.update",
@@ -43,24 +45,24 @@ class UpdateMiddleware(BaseMiddleware):
             attributes={
                 "messaging.system": "telegram",
                 "messaging.operation.name": "process",
-                attrs.BOT_ID: self.bot_id,
+                attrs.BOT_ID: bot_id,
                 attrs.UPDATE_ID: event.update_id,
                 attrs.TG_UPDATE_TYPE: event.event_type,
             },
         ):
             logger.info(
-                "bot=%s update=%s type=%s received", self.bot_id, event.update_id, event.event_type,
+                "bot=%s update=%s type=%s received", bot_id, event.update_id, event.event_type,
             )
             payload = dump(event)
             logger.debug(
-                "bot=%s update=%s payload=%s", self.bot_id, event.update_id, short(payload),
+                "bot=%s update=%s payload=%s", bot_id, event.update_id, short(payload),
             )
-            stored, fresh = await self._store(event, payload)
+            stored, fresh = await self._store(event, payload, bot_id)
             if not fresh:
                 telemetry.annotate(**{attrs.DUPLICATE: True})
                 logger.warning(
                     "bot=%s update=%s was already processed, skipped",
-                    self.bot_id,
+                    bot_id,
                     event.update_id,
                 )
                 return None
@@ -70,7 +72,7 @@ class UpdateMiddleware(BaseMiddleware):
             except Exception:
                 logger.exception(
                     "bot=%s update=%s failed after %.1fms",
-                    self.bot_id,
+                    bot_id,
                     event.update_id,
                     (time.perf_counter() - started) * 1000,
                 )
@@ -78,12 +80,12 @@ class UpdateMiddleware(BaseMiddleware):
             finally:
                 logger.info(
                     "bot=%s update=%s handled in %.1fms",
-                    self.bot_id,
+                    bot_id,
                     event.update_id,
                     (time.perf_counter() - started) * 1000,
                 )
 
-    async def _store(self, event: Update, payload: Any) -> tuple[int | None, bool]:
+    async def _store(self, event: Update, payload: Any, bot_id: int) -> tuple[int | None, bool]:
         chat: Chat | None = None
         message_id: int | None = None
         user_id: int | None = None
@@ -113,10 +115,10 @@ class UpdateMiddleware(BaseMiddleware):
             async with SessionLocal() as session:
                 if chat is not None:
                     await ChatRepository(session).touch(
-                        self.bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username,
+                        bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username,
                     )
                 stored, fresh = await UpdateRepository(session).save(
-                    bot_id=self.bot_id,
+                    bot_id=bot_id,
                     update_id=event.update_id,
                     chat_id=chat.id if chat else None,
                     message_id=message_id,
@@ -124,14 +126,14 @@ class UpdateMiddleware(BaseMiddleware):
                     payload=payload,
                 )
         except Exception:
-            logger.exception("bot=%s update=%s not persisted", self.bot_id, event.update_id)
+            logger.exception("bot=%s update=%s not persisted", bot_id, event.update_id)
             return None, True
         if not fresh:
             return stored, False
         if event.message is not None and chat is not None:
             events.publish(
                 "message.in",
-                bot_id=self.bot_id,
+                bot_id=bot_id,
                 chat_id=chat.id,
                 message_id=message_id,
                 user_id=user_id,
