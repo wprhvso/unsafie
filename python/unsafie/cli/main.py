@@ -224,6 +224,24 @@ def main(argv: list[str] | None = None) -> int:
     p_iedit.add_argument("--inline-message-id", default=None)
     p_iedit.add_argument("--buttons", default=None)
 
+    p_subagent = subs.add_parser("subagent", aliases=["subagents"])
+    s_subagent = p_subagent.add_subparsers(dest="subcmd")
+    p_sspawn = s_subagent.add_parser("spawn")
+    p_sspawn.add_argument("prompt")
+    p_sspawn.add_argument("--title", default=None)
+    p_sspawn.add_argument("--timeout", type=float, default=600.0)
+    p_swait = s_subagent.add_parser("wait")
+    p_swait.add_argument("ids", nargs="+")
+    p_swait.add_argument("--timeout", type=float, default=600.0)
+    p_sstatus = s_subagent.add_parser("status")
+    p_sstatus.add_argument("turn_id")
+    p_slist = s_subagent.add_parser("list")
+    p_slist.add_argument("--limit", type=int, default=50)
+    p_scancel = s_subagent.add_parser("cancel")
+    p_scancel.add_argument("ids", nargs="+")
+    p_sfinish = s_subagent.add_parser("finish")
+    p_sfinish.add_argument("result")
+
     p_bcookies = s_br.add_parser("cookies")
     p_bcookies.add_argument("--set", dest="cookie_json", default=None)
 
@@ -458,6 +476,22 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(
                     inline.edit(args.text, inline_message_id=args.inline_message_id, buttons=btns)
                 )
+
+        if args.cmd in ("subagent", "subagents"):
+            from unsafie.cli import subagent
+
+            if args.subcmd == "spawn":
+                return _out(subagent.spawn(args.prompt, title=args.title, timeout=args.timeout))
+            if args.subcmd == "wait":
+                return _out(subagent.wait(*args.ids, timeout=args.timeout))
+            if args.subcmd == "status":
+                return _out(subagent.status(args.turn_id))
+            if args.subcmd == "list":
+                return _out(subagent.listing(limit=args.limit))
+            if args.subcmd == "cancel":
+                return _out(subagent.cancel(*args.ids))
+            if args.subcmd == "finish":
+                return _out(subagent.finish(args.result))
 
         return _out({"error": f"unknown command {args.cmd}"}, ok=False)
     except Exception as exc:

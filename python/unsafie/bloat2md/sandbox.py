@@ -82,9 +82,9 @@ async def run_isolated(raw: bytes, name: str) -> tuple[str, Payload]:
 
     if process.returncode != 0 or not out:
         logger.info(
-            "conversion_worker_failed",
-            code=process.returncode,
-            stderr=err[-512:].decode("utf-8", "replace"),
+            "conversion_worker_failed code=%s stderr=%s",
+            process.returncode,
+            err[-512:].decode("utf-8", "replace"),
         )
         raise ConversionError("the document could not be converted")
 
