@@ -7,8 +7,11 @@ from pydantic import BaseModel
 from unsafie.api.routes.cli.deps import Accounts, Github
 from unsafie.database import SessionLocal
 from unsafie.database.models.repo import Repo
-from unsafie.database.repositories.github import RepoRepository, UserRepoRepository
-from unsafie.database.repositories.user import UserRepository
+from unsafie.database.repositories.github import (
+    GithubAccountRepository,
+    RepoRepository,
+    UserRepoRepository,
+)
 from unsafie.github import pat
 from unsafie.github.app import auth
 from unsafie.github.client.base import GithubHTTP
