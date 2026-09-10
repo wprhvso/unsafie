@@ -1,6 +1,7 @@
 import gzip
 import json
 import logging
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
@@ -52,12 +53,12 @@ class CheckpointRepository:
         checkpoint = await self.session.scalar(stmt)
         assert checkpoint is not None
 
-        turn_update = {"last_checkpoint_step": step}
+        turn_update: dict[str, Any] = {"last_checkpoint_step": step}
         if active_block and active_block.get("spool_dir"):
             turn_update["active_spool_dir"] = str(active_block["spool_dir"])
 
         await self.session.execute(
-            update(Turn).where(Turn.id == turn_id).values(**turn_update)
+            update(Turn).where(Turn.id == turn_id).values(**turn_update),
         )
         await self.session.commit()
         return checkpoint
@@ -67,7 +68,7 @@ class CheckpointRepository:
             select(TurnCheckpoint)
             .where(TurnCheckpoint.turn_id == turn_id)
             .order_by(TurnCheckpoint.step.desc(), TurnCheckpoint.created_at.desc())
-            .limit(1)
+            .limit(1),
         )
 
     def unpack(self, checkpoint: TurnCheckpoint) -> list[dict]:
@@ -83,7 +84,7 @@ class CheckpointRepository:
         rows = await self.session.scalars(
             select(TurnCheckpoint)
             .where(TurnCheckpoint.turn_id == turn_id, TurnCheckpoint.step == step)
-            .order_by(TurnCheckpoint.created_at.desc())
+            .order_by(TurnCheckpoint.created_at.desc()),
         )
         return list(rows)
 
@@ -101,14 +102,14 @@ class CheckpointRepository:
             delete(TurnCheckpoint).where(
                 TurnCheckpoint.turn_id == turn_id,
                 TurnCheckpoint.id.not_in(keep_ids),
-            )
+            ),
         )
         await self.session.commit()
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)
 
     async def delete_all(self, turn_id: UUID) -> int:
         result = await self.session.execute(
-            delete(TurnCheckpoint).where(TurnCheckpoint.turn_id == turn_id)
+            delete(TurnCheckpoint).where(TurnCheckpoint.turn_id == turn_id),
         )
         await self.session.commit()
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)

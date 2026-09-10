@@ -27,14 +27,16 @@ def check_slug(raw: str) -> str:
     if slug.startswith("https://github.com/"):
         slug = slug.removeprefix("https://github.com/")
     if not SLUG.match(slug):
-        raise CiError(f"expected owner/name, got '{raw}'")
+        msg = f"expected owner/name, got '{raw}'"
+        raise CiError(msg)
     return slug
 
 
 def check_label(raw: str | None) -> str:
     label = (raw or "pool").strip()
     if not LABEL.match(label):
-        raise CiError("a label is 1-32 chars: letters, digits, dot, dash, underscore")
+        msg = "a label is 1-32 chars: letters, digits, dot, dash, underscore"
+        raise CiError(msg)
     return label
 
 
@@ -42,12 +44,16 @@ async def token_for(user_id: int) -> str:
     try:
         account = await pat.require_account(user_id)
     except UserAuthRequired:
-        raise CiError(
+        msg = (
             "no github token. Give the bot one with /gh <token>; it needs "
             "Administration: read and write on the repository"
+        )
+        raise CiError(
+            msg,
         ) from None
     if not account.token:
-        raise CiError(f"the account {account.login} has no token stored")
+        msg = f"the account {account.login} has no token stored"
+        raise CiError(msg)
     return account.token
 
 
@@ -56,15 +62,20 @@ async def preflight(slug: str, token: str) -> dict:
     try:
         repo = await http.request("GET", f"/repos/{slug}")
     except NotFound:
-        raise CiError(f"{slug} is not visible to this token: no repository or no access") from None
+        msg = f"{slug} is not visible to this token: no repository or no access"
+        raise CiError(msg) from None
     except GithubError as refused:
-        raise CiError(f"{slug}: {refused}") from None
+        msg = f"{slug}: {refused}"
+        raise CiError(msg) from None
     try:
         await http.request("GET", f"/repos/{slug}/actions/runners", params={"per_page": 1})
     except GithubError:
-        raise CiError(
+        msg = (
             f"{slug}: the token cannot administer this repository. A fine-grained token needs "
             "Administration: read and write, a classic one needs the repo scope"
+        )
+        raise CiError(
+            msg,
         ) from None
     return repo
 
@@ -83,7 +94,7 @@ async def add(
     await preflight(slug, token)
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id, PoolCiRepo.slug == slug)
+            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id, PoolCiRepo.slug == slug),
         )
         if row is None:
             row = PoolCiRepo(user_id=user_id, slug=slug)
@@ -105,7 +116,7 @@ async def remove(user_id: int, raw_slug: str) -> PoolCiRepo | None:
     slug = check_slug(raw_slug)
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id, PoolCiRepo.slug == slug)
+            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id, PoolCiRepo.slug == slug),
         )
         if row is None:
             return None
@@ -118,7 +129,7 @@ async def remove(user_id: int, raw_slug: str) -> PoolCiRepo | None:
 async def of_user(user_id: int) -> list[PoolCiRepo]:
     async with SessionLocal() as session:
         rows = await session.scalars(
-            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id).order_by(PoolCiRepo.id)
+            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id).order_by(PoolCiRepo.id),
         )
         return list(rows)
 
@@ -127,14 +138,14 @@ async def get(user_id: int, raw_slug: str) -> PoolCiRepo | None:
     slug = check_slug(raw_slug)
     async with SessionLocal() as session:
         return await session.scalar(
-            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id, PoolCiRepo.slug == slug)
+            select(PoolCiRepo).where(PoolCiRepo.user_id == user_id, PoolCiRepo.slug == slug),
         )
 
 
 async def enabled_repos() -> list[PoolCiRepo]:
     async with SessionLocal() as session:
         rows = await session.scalars(
-            select(PoolCiRepo).where(PoolCiRepo.enabled.is_(True)).order_by(PoolCiRepo.id)
+            select(PoolCiRepo).where(PoolCiRepo.enabled.is_(True)).order_by(PoolCiRepo.id),
         )
         return list(rows)
 
@@ -155,7 +166,7 @@ async def enable(user_id: int | None, raw_slug: str, on: bool) -> PoolCiRepo | N
     return row
 
 
-async def note(repo_id: int, state: str, error: str | None = None, scale_set: int | None = None):
+async def note(repo_id: int, state: str, error: str | None = None, scale_set: int | None = None) -> None:
     async with SessionLocal() as session:
         row = await session.get(PoolCiRepo, repo_id)
         if row is None:
@@ -192,8 +203,8 @@ async def running_jobs(repo_id: int) -> list[PoolCiJob]:
     async with SessionLocal() as session:
         rows = await session.scalars(
             select(PoolCiJob).where(
-                PoolCiJob.repo_id == repo_id, PoolCiJob.finished_at.is_(None)
-            )
+                PoolCiJob.repo_id == repo_id, PoolCiJob.finished_at.is_(None),
+            ),
         )
         return list(rows)
 
@@ -203,7 +214,7 @@ async def close_orphans() -> int:
 
     async with SessionLocal() as session:
         rows = list(
-            await session.scalars(select(PoolCiJob).where(PoolCiJob.finished_at.is_(None)))
+            await session.scalars(select(PoolCiJob).where(PoolCiJob.finished_at.is_(None))),
         )
         closed = 0
         for row in rows:
@@ -225,7 +236,7 @@ async def recent_jobs(repo_id: int, limit: int = 50) -> list[PoolCiJob]:
             select(PoolCiJob)
             .where(PoolCiJob.repo_id == repo_id)
             .order_by(PoolCiJob.started_at.desc())
-            .limit(limit)
+            .limit(limit),
         )
         return list(rows)
 
@@ -239,5 +250,5 @@ def snippet(row: PoolCiRepo) -> str:
             "",
             f"The label is the name of the scale set in {row.slug}.",
             "Arrays in runs-on do not work: pass the label as a plain string.",
-        ]
+        ],
     )

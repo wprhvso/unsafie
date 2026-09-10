@@ -63,7 +63,7 @@ async def refresh_credential(session_id: int):
 async def patch_credential(session_id: int, body: OpalSessionPatch):
     async with SessionLocal() as session:
         row = await OpalSessionRepository(session).update(
-            session_id, enabled=body.enabled, label=body.label, reset=body.reset
+            session_id, enabled=body.enabled, label=body.label, reset=body.reset,
         )
     if row is None:
         raise HTTPException(404, "no such opal session")
@@ -71,7 +71,7 @@ async def patch_credential(session_id: int, body: OpalSessionPatch):
 
 
 @router.delete("/{session_id}", status_code=204)
-async def delete_credential(session_id: int):
+async def delete_credential(session_id: int) -> None:
     await opal.invalidate(session_id)
     async with SessionLocal() as session:
         if not await OpalSessionRepository(session).delete(session_id):

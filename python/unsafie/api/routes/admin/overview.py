@@ -37,7 +37,7 @@ async def overview():
         app = await GithubAppRepository(session).get()
         polled = await poller.polled_by(await BotRepository(session).ids())
         alive = await instances()
-        data = OverviewRead(
+        return OverviewRead(
             users=counts["users"],
             chats=counts["chats"],
             bots=await _count(session, Bot),
@@ -55,10 +55,10 @@ async def overview():
             instances=len(alive),
             ssh_connections=sum(int(i.get("ssh_connections") or 0) for i in alive),
             deliveries_pending=await _count(
-                session, WebhookDelivery, WebhookDelivery.processed_at.is_(None)
+                session, WebhookDelivery, WebhookDelivery.processed_at.is_(None),
             ),
             deliveries_failed=await _count(
-                session, WebhookDelivery, WebhookDelivery.error.is_not(None)
+                session, WebhookDelivery, WebhookDelivery.error.is_not(None),
             ),
             history_bytes=await SegmentRepository(session).total_bytes(),
             github_app=app.slug if app else None,
@@ -67,4 +67,3 @@ async def overview():
             month=PeriodRead(**(await stats.period(now - timedelta(days=30))).__dict__),
             daily=[DayPointRead(**p.__dict__) for p in await stats.daily(30)],
         )
-    return data

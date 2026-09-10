@@ -9,7 +9,6 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.repo import Repo
 from unsafie.database.repositories.github import (
     GithubAccountRepository,
-    RepoRepository,
     UserRepoRepository,
 )
 from unsafie.github import pat
@@ -73,7 +72,7 @@ async def accounts(who: Github) -> dict:
                 "created_at": row.created_at,
                 "name": name,
                 "email": email,
-            }
+            },
         )
     return {"accounts": out}
 
@@ -181,7 +180,7 @@ async def call_api(body: ApiCall, who: Github) -> dict:
     path = body.path if body.path.startswith(("/", "http")) else f"/{body.path}"
     try:
         answer = await GithubHTTP(account.token).request(
-            body.method.upper(), path, params=body.params, json_body=body.body
+            body.method.upper(), path, params=body.params, json_body=body.body,
         )
     except GithubError as refused:
         raise HTTPException(400, str(refused)) from None

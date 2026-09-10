@@ -25,7 +25,7 @@ def retry_markup(turn_id: str, locale: str, in_progress: bool = False) -> Inline
     else:
         text = t("commands-retry-button", locale)
         button = InlineKeyboardButton(
-            text=text, callback_data=RetryCallback(turn_id=str(turn_id)).pack()
+            text=text, callback_data=RetryCallback(turn_id=str(turn_id)).pack(),
         )
     return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
@@ -36,7 +36,7 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
             return await fn()
         except TelegramRetryAfter as e:
             telemetry.event(
-                "telegram.rate_limited", {"attempt": attempt + 1, "retry_after": e.retry_after}
+                "telegram.rate_limited", {"attempt": attempt + 1, "retry_after": e.retry_after},
             )
             logger.warning("%s rate limited retry_after=%ss", what, e.retry_after)
             await asyncio.sleep(e.retry_after)

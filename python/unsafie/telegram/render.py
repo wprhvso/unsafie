@@ -60,7 +60,7 @@ def to_markdown(text: str | None, entities: Sequence[MessageEntity] | None) -> s
     units = _units(text)
     n = len(units)
     opens: dict[int, list[tuple[int, int, str]]] = {}
-    closes: dict[int, list[tuple[int, int, str]]] = {}
+    closes: dict[int, list[tuple[int, int, int, str]]] = {}
     quote_edges: dict[int, int] = {}
     for order, entity in enumerate(entities):
         start = max(0, min(n, entity.offset))
@@ -78,10 +78,8 @@ def to_markdown(text: str | None, entities: Sequence[MessageEntity] | None) -> s
     out: list[str] = []
     quote_depth = 0
     for pos in range(n + 1):
-        for item in sorted(closes.get(pos, ())):
-            out.append(item[-1])
-        for item in sorted(opens.get(pos, ())):
-            out.append(item[-1])
+        out.extend(item[-1] for item in sorted(closes.get(pos, ())))
+        out.extend(item[-1] for item in sorted(opens.get(pos, ())))
         quote_depth += quote_edges.get(pos, 0)
         if pos == n:
             break
@@ -93,7 +91,7 @@ def to_markdown(text: str | None, entities: Sequence[MessageEntity] | None) -> s
 
 
 def _clean(data: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in data.items() if v is not None and v != "" and v != [] and v != {}}
+    return {k: v for k, v in data.items() if v is not None and v not in ("", [], {})}
 
 
 def user_info(user: User | None) -> dict[str, Any] | None:
@@ -106,7 +104,7 @@ def user_info(user: User | None) -> dict[str, Any] | None:
             "name": user.full_name,
             "is_bot": True if user.is_bot else None,
             "language": user.language_code,
-        }
+        },
     )
 
 
@@ -114,7 +112,7 @@ def chat_info(chat: Chat | None) -> dict[str, Any] | None:
     if chat is None:
         return None
     return _clean(
-        {"id": chat.id, "type": chat.type, "title": chat.title, "username": chat.username}
+        {"id": chat.id, "type": chat.type, "title": chat.title, "username": chat.username},
     )
 
 
@@ -148,7 +146,7 @@ def _media(message: Message) -> dict[str, Any]:
                 "width": best.width,
                 "height": best.height,
                 "file_size": best.file_size,
-            }
+            },
         )
     if message.document:
         d = message.document
@@ -158,7 +156,7 @@ def _media(message: Message) -> dict[str, Any]:
                 "file_name": d.file_name,
                 "mime_type": d.mime_type,
                 "file_size": d.file_size,
-            }
+            },
         )
     if message.sticker:
         s = message.sticker
@@ -168,7 +166,7 @@ def _media(message: Message) -> dict[str, Any]:
                 "emoji": s.emoji,
                 "set_name": s.set_name,
                 "animated": True if (s.is_animated or s.is_video) else None,
-            }
+            },
         )
     for name in ("voice", "audio", "video", "video_note", "animation"):
         item = getattr(message, name, None)
@@ -183,7 +181,7 @@ def _media(message: Message) -> dict[str, Any]:
                 "title": getattr(item, "title", None),
                 "performer": getattr(item, "performer", None),
                 "file_size": getattr(item, "file_size", None),
-            }
+            },
         )
     if message.location:
         data["location"] = {
@@ -199,7 +197,7 @@ def _media(message: Message) -> dict[str, Any]:
                 "phone_number": c.phone_number,
                 "name": " ".join(p for p in (c.first_name, c.last_name) if p),
                 "user_id": c.user_id,
-            }
+            },
         )
     if message.poll:
         data["poll"] = {
@@ -219,7 +217,7 @@ def describe(message: Message, *, nested: bool = False) -> dict[str, Any]:
         "date": message.date.isoformat(),
         "from": user_info(message.from_user),
         "sender_chat": chat_info(message.sender_chat) if message.sender_chat else None,
-        "edited": message.edit_date.isoformat() if message.edit_date else None,
+        "edited": datetime.fromtimestamp(message.edit_date, tz=UTC).isoformat() if message.edit_date else None,
         "forwarded": _origin(message),
         "text": to_markdown(text, entities),
     }
@@ -239,14 +237,14 @@ def describe(message: Message, *, nested: bool = False) -> dict[str, Any]:
                     "external": True,
                     "chat": chat_info(message.external_reply.chat),
                     "message_id": message.external_reply.message_id,
-                }
+                },
             )
         if message.quote is not None:
             data["quote"] = _clean(
                 {
                     "text": to_markdown(message.quote.text, message.quote.entities),
                     "manual": True if message.quote.is_manual else None,
-                }
+                },
             )
         if message.content_type not in ("text", *media.keys()) and not text:
             data["content_type"] = str(message.content_type)
@@ -266,10 +264,10 @@ def describe_scheduled(task) -> dict[str, Any]:
                     "every_sec": task.interval_sec,
                     "run": task.runs + 1,
                     "origin_message_id": task.origin_message_id,
-                }
+                },
             ),
             "date": datetime.now(UTC).astimezone(tz).isoformat(timespec="seconds"),
-        }
+        },
     )
 
 
@@ -286,10 +284,10 @@ def describe_watch(watch, host, output: str, exit_code: int) -> dict[str, Any]:
                     "exit_code": exit_code,
                     "output": output[-3000:],
                     "origin_message_id": watch.origin_message_id,
-                }
+                },
             ),
             "date": datetime.now(UTC).isoformat(timespec="seconds"),
-        }
+        },
     )
 
 
@@ -315,9 +313,9 @@ def describe_callback(query: CallbackQuery) -> dict[str, Any]:
                     )
                     if message
                     else None,
-                }
+                },
             ),
             "date": datetime.now(UTC).isoformat(timespec="seconds"),
             "chat": chat_info(message.chat) if message else None,
-        }
+        },
     )

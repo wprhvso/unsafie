@@ -48,7 +48,7 @@ class Lineage:
 
 
 class SegmentRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def lineage(self, turn_id: UUID, *, max_depth: int, budget: int) -> Lineage:
@@ -77,7 +77,7 @@ class SegmentRepository:
         return Lineage([r.body for r in kept], rows[0].system, len(kept), dropped, total)
 
     async def save(
-        self, turn_id: UUID, *, body: bytes, count: int, size: int, system: str | None
+        self, turn_id: UUID, *, body: bytes, count: int, size: int, system: str | None,
     ) -> None:
         values = {
             "turn_id": turn_id,
@@ -91,7 +91,7 @@ class SegmentRepository:
             stmt.on_conflict_do_update(
                 index_elements=[TurnMessages.turn_id],
                 set_={k: v for k, v in values.items() if k != "turn_id"},
-            )
+            ),
         )
         await self.session.commit()
 
@@ -99,7 +99,7 @@ class SegmentRepository:
         cutoff = datetime.now(UTC) - timedelta(days=keep_days)
         result = await self.session.execute(PURGE, {"cutoff": cutoff})
         await self.session.commit()
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)
 
     async def total_bytes(self) -> int:
         return int(await self.session.scalar(select(func.sum(TurnMessages.bytes))) or 0)

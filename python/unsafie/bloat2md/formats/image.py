@@ -21,18 +21,21 @@ def normalise(raw: bytes, mime: str) -> Image:
             with Pillow.open(io.BytesIO(raw)) as opened:
                 width, height = opened.size
                 if width * height > limits.max_image_pixels:
-                    raise ConversionError("the image has too many pixels")
+                    msg = "the image has too many pixels"
+                    raise ConversionError(msg)
                 longest = max(width, height, 1)
                 if longest <= limits.render_edge and mime in _KEEP:
                     return Image(mime=mime, data=raw)
                 scale = min(limits.render_edge / longest, 1.0)
                 resized = opened.convert("RGB").resize(
-                    (max(int(width * scale), 1), max(int(height * scale), 1))
+                    (max(int(width * scale), 1), max(int(height * scale), 1)),
                 )
         except (Pillow.DecompressionBombError, Pillow.DecompressionBombWarning):
-            raise ConversionError("the image has too many pixels") from None
+            msg = "the image has too many pixels"
+            raise ConversionError(msg) from None
         except (OSError, UnidentifiedImageError, ValueError):
-            raise ConversionError("the image could not be read") from None
+            msg = "the image could not be read"
+            raise ConversionError(msg) from None
 
     buffer = io.BytesIO()
     resized.save(buffer, format="JPEG", quality=limits.render_quality, optimize=True)

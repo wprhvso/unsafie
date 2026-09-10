@@ -1,6 +1,6 @@
 import functools
 import logging
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -25,6 +25,9 @@ from unsafie.settings import settings
 from unsafie.telegram.retry import retry
 from unsafie.telemetry import attrs
 
+if TYPE_CHECKING:
+    from uuid import UUID
+
 logger = logging.getLogger(__name__)
 
 CAPTION_LIMIT = 1024
@@ -35,8 +38,8 @@ async def reply_target(turn: Turn) -> int | None:
         return await TurnRepository(session).reply_target(turn, settings.lineage_depth)
 
 
-def chunks_of(markdown: str) -> list[dict]:
-    return process_markdown(markdown) or [{"text": markdown, "entities": []}]
+def chunks_of(markdown: str) -> list[Any]:
+    return list(process_markdown(markdown)) or [{"text": markdown, "entities": []}]
 
 
 def _entities(chunk: dict) -> list[MessageEntity]:
@@ -168,7 +171,7 @@ async def send(
         if turn is not None and reply_to is None:
             reply_to = await reply_target(turn)
         ids = await _send_chunks(
-            bot, prefix, chat_id, chunks, reply_to, reply_markup, silent, preview
+            bot, prefix, chat_id, chunks, reply_to, reply_markup, silent, preview,
         )
         telemetry.set_attrs(
             span,
@@ -211,7 +214,7 @@ async def send_file(
             attrs.FILE_NAME: filename,
             attrs.FILE_BYTES: len(data),
             attrs.FILE_MEDIA: media,
-        }
+        },
     )
     if turn is not None and reply_to is None:
         reply_to = await reply_target(turn)
@@ -220,11 +223,11 @@ async def send_file(
     head = chunks[0] if inline else None
     tail = [] if inline else chunks
     file = BufferedInputFile(data, filename=filename)
-    kwargs: dict = dict(
-        reply_parameters=_reply_params(reply_to),
-        reply_markup=reply_markup if not tail else None,
-        disable_notification=silent or None,
-    )
+    kwargs: dict = {
+        "reply_parameters": _reply_params(reply_to),
+        "reply_markup": reply_markup if not tail else None,
+        "disable_notification": silent or None,
+    }
     if media != "sticker":
         kwargs["caption"] = head["text"] if head else None
         kwargs["caption_entities"] = _entities(head) if head else None
@@ -308,7 +311,7 @@ async def edit(
 ) -> str:
     prefix = f"bot={bot_id} chat={chat_id} msg={message_id}"
     telemetry.annotate(
-        **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id}
+        **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id},
     )
     if markdown is None:
         await retry(
@@ -323,7 +326,8 @@ async def edit(
         return "buttons"
     chunks = chunks_of(markdown)
     if len(chunks) != 1:
-        raise ValueError("text does not fit into one message; send a new one")
+        msg = "text does not fit into one message; send a new one"
+        raise ValueError(msg)
     chunk = chunks[0]
     try:
         await retry(
@@ -342,7 +346,8 @@ async def edit(
         if "no text in the message" not in str(e).lower():
             raise
         if len(chunk["text"]) > CAPTION_LIMIT:
-            raise ValueError(f"a caption cannot exceed {CAPTION_LIMIT} characters") from e
+            msg = f"a caption cannot exceed {CAPTION_LIMIT} characters"
+            raise ValueError(msg) from e
         await retry(
             functools.partial(
                 bot.edit_message_caption,
@@ -363,7 +368,7 @@ async def edit(
 @telemetry.traced("tg.delete", kind=telemetry.PRODUCER)
 async def delete(bot: Bot, *, bot_id: int, chat_id: int, message_id: int) -> None:
     telemetry.annotate(
-        **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id}
+        **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id},
     )
     await retry(
         functools.partial(bot.delete_message, chat_id=chat_id, message_id=message_id),
@@ -374,7 +379,7 @@ async def delete(bot: Bot, *, bot_id: int, chat_id: int, message_id: int) -> Non
 
 
 async def answer(
-    message: Message, bot_id: int, text: str, reply_markup: InlineKeyboardMarkup | None = None
+    message: Message, bot_id: int, text: str, reply_markup: InlineKeyboardMarkup | None = None,
 ) -> Response:
     assert message.bot is not None
     return await send(

@@ -38,7 +38,7 @@ def use(login: str | None) -> dict:
     store.write_text("".join(kept) + line, encoding="utf-8")
     store.chmod(0o600)
     subprocess.run(
-        ["git", "config", "--global", "credential.helper", "store"], check=False, capture_output=True
+        ["git", "config", "--global", "credential.helper", "store"], check=False, capture_output=True,
     )
     subprocess.run(["gh", "auth", "setup-git"], check=False, capture_output=True)
     return {"login": login, "name": name, "email": email}

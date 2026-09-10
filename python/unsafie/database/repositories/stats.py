@@ -23,7 +23,7 @@ class DayPoint:
 
 
 class StatsRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def period(self, since: datetime) -> Period:
@@ -32,7 +32,7 @@ class StatsRepository:
                 select(
                     func.count(),
                     func.count().filter(Turn.status == TurnStatus.FAILED),
-                ).where(Turn.created_at >= since)
+                ).where(Turn.created_at >= since),
             )
         ).one()
         return Period(int(row[0]), int(row[1]))
@@ -48,7 +48,7 @@ class StatsRepository:
                 )
                 .where(Turn.created_at >= since)
                 .group_by(day)
-                .order_by(day)
+                .order_by(day),
             )
         ).all()
         return [
@@ -56,7 +56,7 @@ class StatsRepository:
         ]
 
     async def top_chats(
-        self, since: datetime, limit: int = 10
+        self, since: datetime, limit: int = 10,
     ) -> list[tuple[int, int, int]]:
         rows = (
             await self.session.execute(
@@ -68,7 +68,7 @@ class StatsRepository:
                 .where(Turn.created_at >= since)
                 .group_by(Turn.bot_id, Turn.chat_id)
                 .order_by(func.count().desc())
-                .limit(limit)
+                .limit(limit),
             )
         ).all()
         return [(int(r[0]), int(r[1]), int(r[2])) for r in rows]
@@ -77,11 +77,11 @@ class StatsRepository:
         rows = (
             await self.session.execute(
                 select(
-                    Turn.credential_id, func.count()
+                    Turn.credential_id, func.count(),
                 )
                 .where(Turn.created_at >= since)
                 .group_by(Turn.credential_id)
-                .order_by(func.count().desc())
+                .order_by(func.count().desc()),
             )
         ).all()
         return [(r[0], int(r[1])) for r in rows]
@@ -91,7 +91,7 @@ class StatsRepository:
         chats = await self.session.scalar(select(func.count()).select_from(Chat)) or 0
         running = (
             await self.session.scalar(
-                select(func.count()).select_from(Turn).where(Turn.status == TurnStatus.RUNNING)
+                select(func.count()).select_from(Turn).where(Turn.status == TurnStatus.RUNNING),
             )
             or 0
         )
@@ -99,7 +99,7 @@ class StatsRepository:
             await self.session.scalar(
                 select(func.count())
                 .select_from(OpalSession)
-                .where(OpalSession.enabled.is_(True))
+                .where(OpalSession.enabled.is_(True)),
             )
             or 0
         )

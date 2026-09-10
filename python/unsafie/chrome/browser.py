@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import shutil
@@ -41,7 +42,8 @@ def binary() -> str:
         found = shutil.which(name)
         if found:
             return found
-    raise BrowserError("no chrome on this machine")
+    msg = "no chrome on this machine"
+    raise BrowserError(msg)
 
 
 def state_dir() -> Path:
@@ -73,24 +75,18 @@ def _kill_process(proc: subprocess.Popen | None) -> None:
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
     except (ProcessLookupError, PermissionError, OSError):
-        try:
+        with contextlib.suppress(OSError):
             proc.terminate()
-        except OSError:
-            pass
     try:
         proc.wait(timeout=1.0)
     except (subprocess.TimeoutExpired, OSError):
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
-            try:
+            with contextlib.suppress(OSError):
                 proc.kill()
-            except OSError:
-                pass
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired, OSError):
             proc.wait(timeout=1.0)
-        except (subprocess.TimeoutExpired, OSError):
-            pass
 
 
 def launch(profile: str | None, size: str, headless: bool) -> dict:
@@ -154,14 +150,16 @@ def _wait_for_devtools(port: int) -> str:
         if isinstance(version, dict) and version.get("webSocketDebuggerUrl"):
             return str(version["webSocketDebuggerUrl"])
         time.sleep(0.2)
-    raise BrowserError(f"chrome did not open devtools in {BOOT_WAIT:.0f}s: {last}")
+    msg = f"chrome did not open devtools in {BOOT_WAIT:.0f}s: {last}"
+    raise BrowserError(msg)
 
 
 def connect(endpoint: str, timeout: float = 30.0) -> Cdp:
     try:
         return Cdp(endpoint, timeout)
     except Exception as broken:
-        raise BrowserError(f"cannot reach the browser: {broken}") from None
+        msg = f"cannot reach the browser: {broken}"
+        raise BrowserError(msg) from None
 
 
 def page_target(port: int) -> str | None:
@@ -206,10 +204,8 @@ def stop(state: dict) -> None:
             else:
                 os.killpg(pgid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
-            try:
+            with contextlib.suppress(OSError):
                 os.kill(int(pid), signal.SIGKILL)
-            except OSError:
-                pass
     pkill = shutil.which("pkill")
     if pkill and not state.get("headless"):
         subprocess.run([pkill, "-f", f"x11vnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -255,7 +251,8 @@ def _alive(pid: int) -> bool:
 def session(state: dict) -> tuple[Cdp, str]:
     endpoint = page_target(int(state["port"])) or new_page(int(state["port"]))
     if not endpoint:
-        raise BrowserError("the browser has no page to drive")
+        msg = "the browser has no page to drive"
+        raise BrowserError(msg)
     cdp = connect(endpoint)
     try:
         cdp.call("Page.enable")

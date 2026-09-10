@@ -18,9 +18,7 @@ IGNORED_DIRS = {
 def is_binary(data: bytes) -> bool:
     if not data:
         return False
-    if b"\x00" in data[:1024]:
-        return True
-    return False
+    return b"\x00" in data[:1024]
 
 
 def collect_paths(targets: list[str]) -> list[Path]:
@@ -133,7 +131,7 @@ def read(
                 "end": actual_end,
                 "lines_read": len(slice_lines),
                 "truncated": truncated,
-            }
+            },
         )
 
     full_rendered = "\n".join(rendered_blocks)

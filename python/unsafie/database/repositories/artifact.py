@@ -14,7 +14,7 @@ ATTEMPTS = 16
 
 
 class ArtifactRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def by_slug(self, slug: str) -> Artifact | None:
@@ -22,7 +22,7 @@ class ArtifactRepository:
 
     async def of_turn(self, turn_id: UUID) -> Artifact | None:
         return await self.session.scalar(
-            select(Artifact).where(Artifact.turn_id == turn_id, Artifact.kind == ArtifactKind.TURN)
+            select(Artifact).where(Artifact.turn_id == turn_id, Artifact.kind == ArtifactKind.TURN),
         )
 
     async def _add(self, **fields) -> Artifact | None:
@@ -72,13 +72,13 @@ class ArtifactRepository:
         if existing is not None:
             return existing
         return await self._add(
-            kind=ArtifactKind.TURN, turn_id=turn_id, bot_id=bot_id, chat_id=chat_id
+            kind=ArtifactKind.TURN, turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
         )
 
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[Artifact], int]:
         total = await self.session.scalar(select(func.count()).select_from(Artifact)) or 0
         rows = await self.session.scalars(
-            select(Artifact).order_by(Artifact.id.desc()).offset(offset).limit(limit)
+            select(Artifact).order_by(Artifact.id.desc()).offset(offset).limit(limit),
         )
         return list(rows), int(total)
 
@@ -93,7 +93,7 @@ class ArtifactRepository:
         if chat_id is not None:
             query = query.where(Artifact.chat_id == chat_id)
         rows = await self.session.scalars(
-            query.order_by(Artifact.id.desc()).offset(offset).limit(limit)
+            query.order_by(Artifact.id.desc()).offset(offset).limit(limit),
         )
         return list(rows)
 

@@ -25,7 +25,8 @@ class Condition:
 def parse(raw: str) -> Condition:
     text = (raw or "").strip()
     if not text:
-        raise SshError("a condition is required")
+        msg = "a condition is required"
+        raise SshError(msg)
     low = text.lower()
     if low in ("changed", "change"):
         return Condition(text, "changed")
@@ -39,9 +40,11 @@ def parse(raw: str) -> Condition:
             if rest.startswith(op):
                 value = rest[len(op) :].strip()
                 if not value.lstrip("-").isdigit():
-                    raise SshError(f"'{raw}': a number is expected after {op}")
+                    msg = f"'{raw}': a number is expected after {op}"
+                    raise SshError(msg)
                 return Condition(text, "exit", "==" if op in ("=", "==") else op, float(value))
-        raise SshError("'exit' needs a comparison, e.g. 'exit != 0'")
+        msg = "'exit' needs a comparison, e.g. 'exit != 0'"
+        raise SshError(msg)
     for prefix, kind in (
         ("contains:", "contains"),
         ("!contains:", "not_contains"),
@@ -50,12 +53,14 @@ def parse(raw: str) -> Condition:
         if low.startswith(prefix):
             needle = text[len(prefix) :].strip()
             if not needle:
-                raise SshError(f"'{prefix}' needs text after it")
+                msg = f"'{prefix}' needs text after it"
+                raise SshError(msg)
             if kind == "matches":
                 try:
                     re.compile(needle)
                 except re.error as e:
-                    raise SshError(f"bad regular expression: {e}") from None
+                    msg = f"bad regular expression: {e}"
+                    raise SshError(msg) from None
             return Condition(text, kind, needle=needle)
     for op in OPERATORS:
         if text.startswith(op):
@@ -63,11 +68,15 @@ def parse(raw: str) -> Condition:
             try:
                 number = float(value)
             except ValueError:
-                raise SshError(f"'{raw}': a number is expected after {op}") from None
+                msg = f"'{raw}': a number is expected after {op}"
+                raise SshError(msg) from None
             return Condition(text, "number", "==" if op in ("=", "==") else op, number)
-    raise SshError(
+    msg = (
         f"cannot parse the condition '{raw}'. Available: '>90', '<10', '=0', '==0', 'exit != 0', "
         "'contains:ERROR', '!contains:ok', 'matches:regex', 'changed', 'empty', 'any'"
+    )
+    raise SshError(
+        msg,
     )
 
 
@@ -88,7 +97,7 @@ def first_number(text: str) -> float | None:
 
 
 def evaluate(
-    condition: Condition, output: str, exit_code: int, previous: str | None
+    condition: Condition, output: str, exit_code: int, previous: str | None,
 ) -> tuple[bool, str]:
     text = (output or "").strip()
     match condition.kind:
@@ -121,6 +130,8 @@ def evaluate(
                 return False, "no number in the output"
             fires = _compare(condition.operator, value, condition.number)
             return fires, f"{value:g} {condition.operator} {condition.number:g} is {fires}"
+        case _:
+            pass
     return False, "unknown condition"
 
 

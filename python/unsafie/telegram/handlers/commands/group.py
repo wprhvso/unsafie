@@ -1,3 +1,5 @@
+import contextlib
+
 from aiogram import Router
 from aiogram.enums import ChatType
 from aiogram.filters import Command
@@ -30,9 +32,9 @@ def group_mode_keyboard(current_mode: str, locale: str) -> InlineKeyboardMarkup:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=label, callback_data=GroupModeCallback(mode=mode.value).pack()
-                )
-            ]
+                    text=label, callback_data=GroupModeCallback(mode=mode.value).pack(),
+                ),
+            ],
         )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -62,7 +64,7 @@ def build_group_router() -> Router:
 
     @router.callback_query(GroupModeCallback.filter())
     async def group_mode_callback(
-        query: CallbackQuery, callback_data: GroupModeCallback, bot_id: int
+        query: CallbackQuery, callback_data: GroupModeCallback, bot_id: int,
     ) -> None:
         if not query.message or not query.bot:
             await query.answer()
@@ -85,13 +87,11 @@ def build_group_router() -> Router:
         await query.answer(t("commands-group-mode-updated", locale, mode=mode_label))
 
         new_markup = group_mode_keyboard(new_mode, locale)
-        try:
+        with contextlib.suppress(Exception):
             await query.bot.edit_message_reply_markup(
                 chat_id=chat_id,
                 message_id=query.message.message_id,
                 reply_markup=new_markup,
             )
-        except Exception:
-            pass
 
     return router

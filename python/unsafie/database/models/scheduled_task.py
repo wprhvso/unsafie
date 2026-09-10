@@ -3,7 +3,6 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import UUID as SQL_UUID
-
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 

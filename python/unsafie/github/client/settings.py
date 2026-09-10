@@ -1,7 +1,9 @@
 from typing import Any
 
+from unsafie.github.client.base import GithubHTTP
 
-class SettingsMixin:
+
+class SettingsMixin(GithubHTTP):
     async def info(self) -> dict:
         return await self.request("GET", self.base)
 
@@ -22,12 +24,12 @@ class SettingsMixin:
 
     async def branch_protection(self, branch: str) -> dict | None:
         return await self.request(
-            "GET", f"{self.base}/branches/{branch}/protection", allow_404=True
+            "GET", f"{self.base}/branches/{branch}/protection", allow_404=True,
         )
 
     async def protect_branch(self, branch: str, body: dict) -> dict:
         return await self.request(
-            "PUT", f"{self.base}/branches/{branch}/protection", json_body=body
+            "PUT", f"{self.base}/branches/{branch}/protection", json_body=body,
         )
 
     async def unprotect_branch(self, branch: str) -> None:
@@ -41,7 +43,7 @@ class SettingsMixin:
         return data.get("secrets", [])
 
     async def put_secret(
-        self, name: str, encrypted: str, key_id: str, scope: str = "actions"
+        self, name: str, encrypted: str, key_id: str, scope: str = "actions",
     ) -> None:
         await self.request(
             "PUT",
@@ -58,7 +60,7 @@ class SettingsMixin:
 
     async def put_variable(self, name: str, value: str) -> None:
         existing = await self.request(
-            "GET", f"{self.base}/actions/variables/{name}", allow_404=True
+            "GET", f"{self.base}/actions/variables/{name}", allow_404=True,
         )
         body: dict[str, Any] = {"name": name, "value": value}
         if existing:

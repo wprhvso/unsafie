@@ -58,49 +58,48 @@ async def route(
         ttl=settings.chat_lock_ttl,
         wait=settings.chat_lock_wait,
         renew=True,
-    ):
-        async with SessionLocal() as session:
-            turns = TurnRepository(session)
-            updates = UpdateRepository(session)
-            owner = await turns.owner(bot_id, chat_id, reply_to) if reply_to is not None else None
+    ), SessionLocal() as session:
+        turns = TurnRepository(session)
+        updates = UpdateRepository(session)
+        owner = await turns.owner(bot_id, chat_id, reply_to) if reply_to is not None else None
 
-            if owner is not None and accepting(owner):
-                if update_db_id is not None:
-                    await updates.attach(update_db_id, owner.id)
-                logger.info(
-                    "%s reply_to=%s -> inject into turn=%s running on %s",
-                    prefix,
-                    reply_to,
-                    owner.id,
-                    owner.instance_id,
-                )
-                return Plan(owner, inject=True, in_context=True)
-
-            turn = await turns.create(
-                bot_id=bot_id,
-                chat_id=chat_id,
-                user_id=user_id,
-                parent=owner,
-                reply_to=turn_reply_to if turn_reply_to is not None else reply_to,
-                is_inline=is_inline,
-                inline_message_id=inline_message_id,
-            )
+        if owner is not None and accepting(owner):
             if update_db_id is not None:
-                await updates.attach(update_db_id, turn.id)
+                await updates.attach(update_db_id, owner.id)
             logger.info(
-                "%s reply_to=%s owner=%s -> turn=%s root=%s",
+                "%s reply_to=%s -> inject into turn=%s running on %s",
                 prefix,
                 reply_to,
-                owner.id if owner else None,
-                turn.id,
-                turn.root_id,
+                owner.id,
+                owner.instance_id,
             )
-            return Plan(turn, inject=False, in_context=owner is not None)
+            return Plan(owner, inject=True, in_context=True)
+
+        turn = await turns.create(
+            bot_id=bot_id,
+            chat_id=chat_id,
+            user_id=user_id,
+            parent=owner,
+            reply_to=turn_reply_to if turn_reply_to is not None else reply_to,
+            is_inline=is_inline,
+            inline_message_id=inline_message_id,
+        )
+        if update_db_id is not None:
+            await updates.attach(update_db_id, turn.id)
+        logger.info(
+            "%s reply_to=%s owner=%s -> turn=%s root=%s",
+            prefix,
+            reply_to,
+            owner.id if owner else None,
+            turn.id,
+            turn.root_id,
+        )
+        return Plan(turn, inject=False, in_context=owner is not None)
 
 
 async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | None:
     async with cluster.lock(
-        chat_lock(bot_id, chat_id), ttl=settings.chat_lock_ttl, wait=settings.chat_lock_wait
+        chat_lock(bot_id, chat_id), ttl=settings.chat_lock_ttl, wait=settings.chat_lock_wait,
     ):
         leftover, _ = await queue.drain(turn_id)
         if leftover is None:

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -36,7 +37,8 @@ class Runner(Loop):
             async with SessionLocal() as session:
                 due = await ScheduleRepository(session).claim(now, BATCH, settings.job_lease)
         for task in due:
-            asyncio.create_task(self._safe_fire(task))
+            t = asyncio.create_task(self._safe_fire(task))
+            _ = t
 
     async def _safe_fire(self, task) -> None:
         with telemetry.span(

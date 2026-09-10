@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from unsafie.api.dependencies.paging import paging
@@ -14,7 +16,7 @@ def read(watch, host) -> WatchRead:
 
 
 @router.get("", response_model=Page[WatchRead])
-async def list_watches(params: PageParams = Depends(paging)):
+async def list_watches(params: Annotated[PageParams, Depends(paging)]):
     async with SessionLocal() as session:
         rows, total = await WatchRepository(session).page(params.offset, params.limit)
     return Page.of([read(w, h) for w, h in rows], total, params)
@@ -50,7 +52,8 @@ async def run_now(watch_id: int):
         fires, reason, result = await run_once(row, host)
     except SshError as e:
         raise HTTPException(502, str(e)) from None
-    return Ok(detail=f"{'fires' if fires else 'quiet'}: {reason}; exit={result.exit_code}")
+    exit_code = result.exit_code if result is not None else 0
+    return Ok(detail=f"{'fires' if fires else 'quiet'}: {reason}; exit={exit_code}")
 
 
 @router.delete("/{watch_id}", response_model=Ok)

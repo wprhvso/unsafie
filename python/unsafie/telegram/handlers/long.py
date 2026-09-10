@@ -1,3 +1,5 @@
+import contextlib
+
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
@@ -38,7 +40,7 @@ def build_long_router() -> Router:
         cleaned = _without_command(message)
         initial = cleaned if cleaned.text else None
         await long_input_service.start(
-            message.bot, bot_id, message.chat.id, initial, LongTarget.CHAT, locale
+            message.bot, bot_id, message.chat.id, initial, LongTarget.CHAT, locale,
         )
 
     @router.message(Command("system_long"))
@@ -50,7 +52,7 @@ def build_long_router() -> Router:
         cleaned = _without_command(message)
         initial = cleaned if cleaned.text else None
         await long_input_service.start(
-            message.bot, bot_id, message.chat.id, initial, LongTarget.SYSTEM, locale
+            message.bot, bot_id, message.chat.id, initial, LongTarget.SYSTEM, locale,
         )
 
     @router.callback_query(LongCallback.filter())
@@ -66,15 +68,13 @@ def build_long_router() -> Router:
         if callback_data.choice == LongChoice.RESET.value:
             await long_input_service.close(bot_id, chat_id)
             await query.answer(t("cmd-long-reset-ok", locale))
-            try:
+            with contextlib.suppress(Exception):
                 await query.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=query.message.message_id,
                     text=t("cmd-long-reset-ok", locale),
                     reply_markup=None,
                 )
-            except Exception:
-                pass
             return
 
         collected = await long_input_service.close(bot_id, chat_id)
@@ -94,27 +94,23 @@ def build_long_router() -> Router:
                 repo = ChatRepository(session)
                 await repo.set_system(bot_id, chat_id, full_text)
             await query.answer(t("cmd-system-ok", locale))
-            try:
+            with contextlib.suppress(Exception):
                 await query.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=query.message.message_id,
                     text=t("cmd-system-ok", locale),
                     reply_markup=None,
                 )
-            except Exception:
-                pass
             return
 
         await query.answer()
-        try:
+        with contextlib.suppress(Exception):
             await query.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=query.message.message_id,
                 text="✅ " + t("cmd-long-send", locale),
                 reply_markup=None,
             )
-        except Exception:
-            pass
 
         first = collected.messages[0]
         combined = first.model_copy(update={"text": full_text}).as_(query.bot)

@@ -1,19 +1,13 @@
 import asyncio
-import hashlib
-from unsafie import cluster
-import json
-from datetime import UTC, datetime
-from typing import Any
-from aiogram import Bot
-from sqlalchemy import select
-from unsafie.database import SessionLocal
-from unsafie.database.models.update import Update
-from unsafie.database.repositories.chat import ChatRepository
-from unsafie.database.repositories.response import ResponseRepository
 import base64
 import binascii
+import hashlib
+import json
 import logging
+from datetime import UTC, datetime
+from typing import Any
 
+from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (
     BufferedInputFile,
@@ -25,10 +19,16 @@ from aiogram.types import (
 )
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
+from unsafie import cluster
 from unsafie.agent import live
 from unsafie.api.routes.cli.deps import Chat
+from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
+from unsafie.database.models.update import Update
+from unsafie.database.repositories.chat import ChatRepository
+from unsafie.database.repositories.response import ResponseRepository
 from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
@@ -40,10 +40,7 @@ router = APIRouter(prefix="/chat", tags=["cli"])
 MAX_FILE = 20 * 1024 * 1024
 MEDIA = ("document", "photo", "video", "audio", "voice", "animation", "sticker")
 DICE = ("🎲", "🎯", "🏀", "⚽", "🎳", "🎰")
-REACTIONS = (
-    "👍 👎 ❤ 🔥 🥰 👏 😁 🤔 🤯 😱 🤬 😢 🎉 🤩 🤮 💩 🙏 👌 🕊 🤡 🥱 🥴 😍 🐳 ❤‍🔥 🌚 🌭 💯 🤣 ⚡ 🍌 🏆 💔 🤨 😐 "
-    "🍓 🍾 💋 🖕 😈 😴 😭 🤓 👻 👨‍💻 👀 🎃 🙈 😇 😨 🤝 ✍ 🤗 🫡 🎅 🎄 ☃ 💅 🤪 🗿 🆒 💘 🙉 🦄 😘 💊 🙊 😎 👾 🤷‍♂ 🤷 🤷‍♀ 😡"
-).split()
+REACTIONS = ["👍", "👎", "❤", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱", "🤬", "😢", "🎉", "🤩", "🤮", "💩", "🙏", "👌", "🕊", "🤡", "🥱", "🥴", "😍", "🐳", "❤\u200d🔥", "🌚", "🌭", "💯", "🤣", "⚡", "🍌", "🏆", "💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕", "😈", "😴", "😭", "🤓", "👻", "👨\u200d💻", "👀", "🎃", "🙈", "😇", "😨", "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🗿", "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊", "😎", "👾", "🤷\u200d♂", "🤷", "🤷\u200d♀", "😡"]
 ACTIONS = frozenset(
     {
         "typing",
@@ -57,7 +54,7 @@ ACTIONS = frozenset(
         "find_location",
         "record_video_note",
         "upload_video_note",
-    }
+    },
 )
 
 
@@ -238,7 +235,7 @@ def _trigger_bot_reply_turn(
                 select(Update)
                 .where(Update.bot_id == bot_id, Update.user_id == user_id)
                 .order_by(Update.id.desc())
-                .limit(1)
+                .limit(1),
             )
 
         chat_data: dict[str, Any] = {"id": chat_id}
@@ -293,7 +290,8 @@ def _trigger_bot_reply_turn(
                 reply_to,
             )
 
-    asyncio.create_task(_runner(), name=f"bot-reply:{sent_message_id or reply_to}")
+    task = asyncio.create_task(_runner(), name=f"bot-reply:{sent_message_id or reply_to}")
+    _ = task
 
 
 @router.post("/messages")
@@ -452,7 +450,7 @@ async def drop(message_id: int, who: Chat, chat_id: int | None = None) -> dict:
     target_chat = await who.target_chat(chat_id)
     try:
         await sender.delete(
-            bot, bot_id=who.bot_id or 0, chat_id=target_chat, message_id=message_id
+            bot, bot_id=who.bot_id or 0, chat_id=target_chat, message_id=message_id,
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -517,7 +515,7 @@ async def pin(message_id: int, body: Pin, who: Chat) -> dict:
     chat_id = await who.target_chat(body.chat_id)
     try:
         if body.unpin:
-            await bot.unpin_chat_message(chat_id, message_id or None)
+            await bot.unpin_chat_message(chat_id, message_id=message_id or None)
         else:
             await bot.pin_chat_message(chat_id, message_id, disable_notification=body.silent)
     except TelegramAPIError as refused:
@@ -529,29 +527,28 @@ async def pin(message_id: int, body: Pin, who: Chat) -> dict:
 async def forward(message_id: int, body: Forward, who: Chat) -> dict:
     bot = await who.bot()
     source = await who.target_chat(body.from_chat_id)
-    target: int | str = body.to
-    if isinstance(target, str) and target.lstrip("-").isdigit():
-        target = int(target)
-    if isinstance(target, str):
+    target: int | str
+    if body.to.lstrip("-").isdigit():
+        target = int(body.to)
+    else:
         if who.chat_id is not None:
             raise HTTPException(403, "cross-chat access is forbidden for this token")
         try:
-            resolved_chat = await bot.get_chat(target)
+            resolved_chat = await bot.get_chat(body.to)
             target = await who.target_chat(resolved_chat.id)
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(403, f"cannot access target chat: {e}") from None
-    else:
-        target = await who.target_chat(target)
+    target = await who.target_chat(target)
     try:
         if body.duplicate:
             sent = await bot.copy_message(
-                target, source, message_id, caption=body.caption, disable_notification=body.silent
+                target, source, message_id, caption=body.caption, disable_notification=body.silent,
             )
             return {"message_ids": [sent.message_id], "chat_id": str(target), "copied": True}
         sent = await bot.forward_message(
-            target, source, message_id, disable_notification=body.silent
+            target, source, message_id, disable_notification=body.silent,
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -611,7 +608,7 @@ async def location(body: Location, who: Chat) -> dict:
             )
         else:
             sent = await bot.send_location(
-                target_chat, latitude=body.latitude, longitude=body.longitude
+                target_chat, latitude=body.latitude, longitude=body.longitude,
             )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -664,7 +661,7 @@ async def history_search(
 
 @router.get("/history")
 async def history_get(
-    who: Chat, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None
+    who: Chat, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None,
 ) -> dict:
     from unsafie.database import SessionLocal
     from unsafie.database.repositories.history import HistoryRepository
@@ -748,7 +745,7 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
     chat_id = await who.target_chat(body.chat_id)
     try:
         await bot.restrict_chat_member(
-            chat_id, user_id, permissions=allowed, until_date=_until(body.until)
+            chat_id, user_id, permissions=allowed, until_date=_until(body.until),
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None

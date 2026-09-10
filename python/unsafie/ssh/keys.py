@@ -57,4 +57,5 @@ def load(private: str) -> asyncssh.SSHKey:
     try:
         return asyncssh.import_private_key(private)
     except (asyncssh.KeyImportError, ValueError) as e:
-        raise SshError(f"stored ssh key is broken: {e}") from e
+        msg = f"stored ssh key is broken: {e}"
+        raise SshError(msg) from e

@@ -98,13 +98,13 @@ class Settings(BaseSettings):
     sql_echo: bool = False
 
     service_name: str = Field(
-        default="unsafie", validation_alias=AliasChoices("SERVICE_NAME", "OTEL_SERVICE_NAME")
+        default="unsafie", validation_alias=AliasChoices("SERVICE_NAME", "OTEL_SERVICE_NAME"),
     )
     service_version: str = Field(
-        default="", validation_alias=AliasChoices("SERVICE_VERSION", "UNSAFIE_VERSION")
+        default="", validation_alias=AliasChoices("SERVICE_VERSION", "UNSAFIE_VERSION"),
     )
     environment: str = Field(
-        default="dev", validation_alias=AliasChoices("ENVIRONMENT", "DEPLOYMENT_ENVIRONMENT")
+        default="dev", validation_alias=AliasChoices("ENVIRONMENT", "DEPLOYMENT_ENVIRONMENT"),
     )
 
     otel_enabled: bool = True
@@ -267,7 +267,8 @@ class Settings(BaseSettings):
     def _role(cls, v):
         value = str(v or "all").strip().lower()
         if value not in ROLES:
-            raise ValueError(f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'")
+            msg = f"UNSAFIE_ROLE must be one of {', '.join(ROLES)}, got '{v}'"
+            raise ValueError(msg)
         return value
 
     @field_validator("cache_ttl", mode="before")
@@ -275,29 +276,39 @@ class Settings(BaseSettings):
     def _cache_ttl(cls, v):
         value = str(v or "1h").strip().lower()
         if value not in CACHE_TTLS:
-            raise ValueError(f"CACHE_TTL must be one of {', '.join(CACHE_TTLS)}, got '{v}'")
+            msg = f"CACHE_TTL must be one of {', '.join(CACHE_TTLS)}, got '{v}'"
+            raise ValueError(msg)
         return value
 
     @model_validator(mode="after")
     def _polling_handover(self):
         if self.poll_lock_ttl <= self.poll_timeout + POLL_TTL_MARGIN:
-            raise ValueError(
+            msg = (
                 f"POLL_LOCK_TTL must exceed POLL_TIMEOUT by more than {POLL_TTL_MARGIN}s: a dead "
                 f"instance leaves a getUpdates call hanging for up to POLL_TIMEOUT seconds, and "
                 f"the next instance must not start polling before telegram has dropped it "
                 f"(got {self.poll_lock_ttl} vs {self.poll_timeout})"
             )
-        if self.poll_claim_interval * 3 > self.poll_lock_ttl:
             raise ValueError(
+                msg,
+            )
+        if self.poll_claim_interval * 3 > self.poll_lock_ttl:
+            msg = (
                 "POLL_CLAIM_INTERVAL must be at most a third of POLL_LOCK_TTL, so that a lock "
                 f"survives two missed renewals (got {self.poll_claim_interval} "
                 f"vs {self.poll_lock_ttl})"
             )
-        if self.turn_stale_after < self.turn_heartbeat * 3:
             raise ValueError(
+                msg,
+            )
+        if self.turn_stale_after < self.turn_heartbeat * 3:
+            msg = (
                 "TURN_STALE_AFTER must be at least three heartbeats, or a running turn is "
                 f"reaped while its owner is alive (got {self.turn_stale_after} "
                 f"vs {self.turn_heartbeat})"
+            )
+            raise ValueError(
+                msg,
             )
         return self
 

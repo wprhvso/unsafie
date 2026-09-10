@@ -1,7 +1,9 @@
 from typing import Any
 
+from unsafie.github.client.base import GithubHTTP
 
-class ReleasesMixin:
+
+class ReleasesMixin(GithubHTTP):
     async def releases(self, limit: int = 20) -> list[dict]:
         return await self.paginate(f"{self.base}/releases").all(limit)
 

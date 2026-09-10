@@ -24,7 +24,7 @@ class Result:
 
 
 def three_way(
-    base: bytes | None, ours: bytes | None, theirs: bytes | None
+    base: bytes | None, ours: bytes | None, theirs: bytes | None,
 ) -> tuple[bytes | None, bool]:
     if ours == theirs:
         return ours, False
@@ -78,7 +78,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
 def _ops(base: list[str], other: list[str]) -> dict[int, tuple[int, list[str]]]:
     ops: dict[int, tuple[int, list[str]]] = {}
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
-        None, base, other, autojunk=False
+        None, base, other, autojunk=False,
     ).get_opcodes():
         if tag == "equal":
             continue

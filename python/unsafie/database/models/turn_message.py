@@ -12,7 +12,7 @@ class TurnMessages(Base):
     __tablename__ = "turn_messages"
 
     turn_id: Mapped[UUID] = mapped_column(
-        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="CASCADE"), primary_key=True
+        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="CASCADE"), primary_key=True,
     )
     count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

@@ -15,5 +15,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute(
         "ALTER TABLE pool_machines ADD COLUMN IF NOT EXISTS profile VARCHAR(16) "
-        "NOT NULL DEFAULT 'full'"
+        "NOT NULL DEFAULT 'full'",
     )

@@ -22,10 +22,11 @@ _PLACEHOLDER: Final = mammoth.images.img_element(lambda image: {"alt": "embedded
 def docx(raw: bytes) -> Payload:
     try:
         result = mammoth.convert_to_html(
-            io.BytesIO(raw), style_map=_STYLE_MAP, convert_image=_PLACEHOLDER
+            io.BytesIO(raw), style_map=_STYLE_MAP, convert_image=_PLACEHOLDER,
         )
     except (OSError, ValueError, KeyError) as error:
-        raise ConversionError("the document could not be read") from error
+        msg = "the document could not be read"
+        raise ConversionError(msg) from error
 
     markdown, dropped = to_markdown(result.value)
     return Payload(markdown=markdown, dropped={"hidden_nodes": dropped} if dropped else {})
@@ -39,9 +40,10 @@ def _shape_text(shape: object) -> str:
 
 
 def _shape_table(shape: object) -> str:
-    if not getattr(shape, "has_table", False):
+    tbl = getattr(shape, "table", None)
+    if tbl is None:
         return ""
-    rows = [[cell.text for cell in row.cells] for row in shape.table.rows]
+    rows = [[cell.text for cell in row.cells] for row in tbl.rows]
     return table(trim(rows))
 
 
@@ -49,7 +51,8 @@ def pptx(raw: bytes) -> Payload:
     try:
         deck = Presentation(io.BytesIO(raw))
     except (PackageNotFoundError, OSError, ValueError, KeyError) as error:
-        raise ConversionError("the presentation could not be read") from error
+        msg = "the presentation could not be read"
+        raise ConversionError(msg) from error
 
     sections: list[str] = []
     for number, slide in enumerate(deck.slides, start=1):

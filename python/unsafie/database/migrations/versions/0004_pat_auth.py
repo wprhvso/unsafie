@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.execute("ALTER TABLE repos DROP CONSTRAINT IF EXISTS repos_installation_id_fkey")
     op.execute(
         "ALTER TABLE repos ADD CONSTRAINT repos_installation_id_fkey "
-        "FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE SET NULL"
+        "FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE SET NULL",
     )
 
 
@@ -29,7 +29,7 @@ def downgrade() -> None:
     op.execute("ALTER TABLE repos DROP CONSTRAINT IF EXISTS repos_installation_id_fkey")
     op.execute(
         "ALTER TABLE repos ADD CONSTRAINT repos_installation_id_fkey "
-        "FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE"
+        "FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE",
     )
     op.execute("ALTER TABLE repos ALTER COLUMN installation_id SET NOT NULL")
     op.add_column(
@@ -52,11 +52,11 @@ def downgrade() -> None:
             nullable=False,
         ),
         sa.Column(
-            "bot_id", sa.Integer(), sa.ForeignKey("bots.id", ondelete="CASCADE"), nullable=False
+            "bot_id", sa.Integer(), sa.ForeignKey("bots.id", ondelete="CASCADE"), nullable=False,
         ),
         sa.Column("chat_id", sa.BigInteger(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False,
         ),
     )

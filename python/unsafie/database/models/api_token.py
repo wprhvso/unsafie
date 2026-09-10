@@ -18,10 +18,10 @@ class ApiToken(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=True,
     )
     bot_id: Mapped[int | None] = mapped_column(
-        ForeignKey("bots.id", ondelete="CASCADE"), nullable=True
+        ForeignKey("bots.id", ondelete="CASCADE"), nullable=True,
     )
     chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     name: Mapped[str] = mapped_column(String(64))

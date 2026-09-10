@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import json
 import os
 import secrets
@@ -26,7 +27,8 @@ class WebSocket:
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         parsed = urllib.parse.urlsplit(url)
         if parsed.scheme not in ("ws", "http", "wss", "https"):
-            raise WsError(f"cannot open a websocket to {parsed.scheme}")
+            msg = f"cannot open a websocket to {parsed.scheme}"
+            raise WsError(msg)
         secure = parsed.scheme in ("wss", "https")
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or (443 if secure else 80)
@@ -56,13 +58,16 @@ class WebSocket:
         while b"\r\n\r\n" not in self._buffer:
             chunk = self.sock.recv(4096)
             if not chunk:
-                raise WsError("the browser closed the connection during the handshake")
+                msg = "the browser closed the connection during the handshake"
+                raise WsError(msg)
             self._buffer += chunk
             if len(self._buffer) > HANDSHAKE_LIMIT:
-                raise WsError("handshake answer is absurdly large")
+                msg = "handshake answer is absurdly large"
+                raise WsError(msg)
         head, _, rest = self._buffer.partition(b"\r\n\r\n")
         if b"101" not in head.split(b"\r\n")[0]:
-            raise WsError(f"the browser refused the upgrade: {head.splitlines()[0]!r}")
+            msg = f"the browser refused the upgrade: {head.splitlines()[0]!r}"
+            raise WsError(msg)
         self._buffer = rest
 
     def send(self, payload: str) -> None:
@@ -130,7 +135,7 @@ class WebSocket:
         mask = os.urandom(4)
         header += mask
         self.sock.sendall(
-            bytes(header) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+            bytes(header) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)),
         )
 
     def _read(self, size: int) -> bytes | None:
@@ -138,9 +143,11 @@ class WebSocket:
             try:
                 chunk = self.sock.recv(65536)
             except TimeoutError:
-                raise WsError("the browser stopped answering") from None
+                msg = "the browser stopped answering"
+                raise WsError(msg) from None
             except OSError as broken:
-                raise WsError(f"the browser connection was closed: {broken}") from None
+                msg = f"the browser connection was closed: {broken}"
+                raise WsError(msg) from None
             if not chunk:
                 return None
             self._buffer += chunk
@@ -153,14 +160,10 @@ class WebSocket:
             self.sock.sendall(bytes([FIN | CLOSE, MASK | 0]) + os.urandom(4))
         except OSError:
             pass
-        try:
+        with contextlib.suppress(OSError):
             self.sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        try:
+        with contextlib.suppress(OSError):
             self.sock.close()
-        except OSError:
-            pass
 
 
 def json_get(url: str, timeout: float = 10.0) -> object:

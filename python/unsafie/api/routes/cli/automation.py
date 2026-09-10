@@ -220,7 +220,7 @@ async def sub_list(who: Automation) -> dict:
                 "filters": sub.filters,
             }
             for sub, repo in rows
-        ]
+        ],
     }
 
 
@@ -237,7 +237,7 @@ async def sub_add(body: SubIn, who: Automation) -> dict:
         raise HTTPException(400, str(refused)) from None
     async with SessionLocal() as session:
         sub = await SubscriptionRepository(session).add(
-            bot_id, chat_id, who.user_id, repo.id, body.kind, body.filters or {}
+            bot_id, chat_id, who.user_id, repo.id, body.kind, body.filters or {},
         )
     return {"id": sub.id, "kind": sub.kind, "repo": f"{repo.owner}/{repo.name}"}
 

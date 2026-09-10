@@ -60,17 +60,20 @@ async def _as_app(method: str, path: str) -> tuple[int, dict | list]:
 async def installation_token(installation_id: int) -> str:
     cached = await cluster.client().get(token_key(installation_id))
     if cached:
-        return cached
+        return cached.decode() if isinstance(cached, bytes) else str(cached)
     status, data = await _as_app("POST", f"/app/installations/{installation_id}/access_tokens")
     if status >= 400 or not isinstance(data, dict):
         message = data.get("message") if isinstance(data, dict) else data
-        raise GithubError(
+        msg = (
             f"could not get an installation token ({status}): {message}. "
             "The App may have been removed from this account."
         )
+        raise GithubError(
+            msg,
+        )
     token = data["token"]
     await cluster.client().set(
-        token_key(installation_id), token, px=int(settings.installation_token_ttl * 1000)
+        token_key(installation_id), token, px=int(settings.installation_token_ttl * 1000),
     )
     logger.info("installation=%s token issued", installation_id)
     return token
@@ -87,5 +90,6 @@ async def app_installations() -> list[dict]:
     status, data = await _as_app("GET", "/app/installations?per_page=100")
     if status >= 400 or not isinstance(data, list):
         message = data.get("message") if isinstance(data, dict) else data
-        raise GithubError(f"could not list app installations ({status}): {message}")
+        msg = f"could not list app installations ({status}): {message}"
+        raise GithubError(msg)
     return data

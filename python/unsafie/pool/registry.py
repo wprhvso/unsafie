@@ -3,6 +3,7 @@ import logging
 import secrets
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select, update
 
@@ -92,7 +93,7 @@ async def state_of(name: str) -> str | None:
 async def mark(name: str, state: str) -> None:
     redis = cluster.client()
     stored = await redis.get(keys.machine(name))
-    payload = json.loads(stored) if stored else {"seen": time.time()}
+    payload: dict[str, Any] = json.loads(stored) if stored else {"seen": time.time()}
     payload["state"] = state
     await redis.set(keys.machine(name), json.dumps(payload), ex=int(settings.pool_machine_ttl))
     if state == MachineState.IDLE:
@@ -107,10 +108,11 @@ async def grab_idle() -> str | None:
         found = await redis.zpopmin(keys.idle(), 1)
         if not found:
             return None
-        name = found[0][0]
+        raw_name = found[0][0]
+        name = raw_name.decode() if isinstance(raw_name, bytes) else str(raw_name)
         if await alive(name):
-            return str(name)
-        await forget(str(name), "vanished before it was taken")
+            return name
+        await forget(name, "vanished before it was taken")
 
 
 async def hold(name: str, seconds: float) -> float:
@@ -144,7 +146,7 @@ async def forget(name: str, reason: str) -> None:
         await session.execute(
             update(PoolMachine)
             .where(PoolMachine.name == name, PoolMachine.gone_at.is_(None))
-            .values(state=MachineState.GONE, gone_at=datetime.now(UTC), gone_reason=reason[:64])
+            .values(state=MachineState.GONE, gone_at=datetime.now(UTC), gone_reason=reason[:64]),
         )
         await session.commit()
     logger.info("pool machine %s gone: %s", name, reason)
@@ -160,7 +162,7 @@ async def live() -> list[PoolMachine]:
         rows = await session.scalars(
             select(PoolMachine)
             .where(PoolMachine.gone_at.is_(None))
-            .order_by(PoolMachine.started_at)
+            .order_by(PoolMachine.started_at),
         )
         return list(rows)
 
@@ -174,7 +176,7 @@ async def of_user(user_id: int) -> list[PoolMachine]:
                 PoolMachine.gone_at.is_(None),
                 PoolMachine.state == MachineState.LEASED,
             )
-            .order_by(PoolMachine.leased_at)
+            .order_by(PoolMachine.leased_at),
         )
         return list(rows)
 

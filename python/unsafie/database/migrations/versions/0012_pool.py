@@ -103,7 +103,7 @@ def upgrade() -> None:
         )
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_pool_commands_machine ON pool_commands (machine, created_at)"
+        "CREATE INDEX IF NOT EXISTS ix_pool_commands_machine ON pool_commands (machine, created_at)",
     )
     op.execute("CREATE INDEX IF NOT EXISTS ix_pool_commands_user ON pool_commands (user_id, created_at)")
 
@@ -213,7 +213,7 @@ def upgrade() -> None:
         ("pool_blocked", "BOOLEAN", "false"),
     ):
         op.execute(
-            f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {kind} NOT NULL DEFAULT {default}"
+            f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {kind} NOT NULL DEFAULT {default}",
         )
 
 

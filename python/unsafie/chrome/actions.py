@@ -28,7 +28,8 @@ def evaluate(cdp: Cdp, expression: str, await_promise: bool = False) -> Any:
 def goto(cdp: Cdp, url: str, wait: str = "load", timeout: float = 30.0) -> dict:
     answer = cdp.call("Page.navigate", {"url": url})
     if answer.get("errorText"):
-        raise CdpError(f"{url}: {answer['errorText']}")
+        msg = f"{url}: {answer['errorText']}"
+        raise CdpError(msg)
     if wait != "none":
         wait_for_load(cdp, timeout)
     return {"url": current_url(cdp), "frame": answer.get("frameId")}
@@ -43,7 +44,8 @@ def wait_for_load(cdp: Cdp, timeout: float = 30.0) -> None:
         except CdpError:
             pass
         time.sleep(POLL)
-    raise CdpError(f"the page did not finish loading in {timeout:.0f}s")
+    msg = f"the page did not finish loading in {timeout:.0f}s"
+    raise CdpError(msg)
 
 
 def current_url(cdp: Cdp) -> str:
@@ -70,13 +72,15 @@ def wait_for(cdp: Cdp, selector: str, state: str = "visible", timeout: float = 3
         "detached": f"!document.querySelector({_quote(selector)})",
     }.get(state)
     if check is None:
-        raise CdpError("state must be visible, hidden, attached or detached")
+        msg = "state must be visible, hidden, attached or detached"
+        raise CdpError(msg)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if evaluate(cdp, check):
             return
         time.sleep(POLL)
-    raise CdpError(f"{selector} is not {state} after {timeout:.0f}s")
+    msg = f"{selector} is not {state} after {timeout:.0f}s"
+    raise CdpError(msg)
 
 
 def wait_for_url(cdp: Cdp, pattern: str, timeout: float = 30.0) -> None:
@@ -85,7 +89,8 @@ def wait_for_url(cdp: Cdp, pattern: str, timeout: float = 30.0) -> None:
         if pattern in current_url(cdp):
             return
         time.sleep(POLL)
-    raise CdpError(f"the url did not become {pattern} in {timeout:.0f}s")
+    msg = f"the url did not become {pattern} in {timeout:.0f}s"
+    raise CdpError(msg)
 
 
 def wait_for_js(cdp: Cdp, expression: str, timeout: float = 30.0) -> None:
@@ -97,7 +102,8 @@ def wait_for_js(cdp: Cdp, expression: str, timeout: float = 30.0) -> None:
         except CdpError:
             pass
         time.sleep(POLL)
-    raise CdpError(f"the condition stayed false for {timeout:.0f}s")
+    msg = f"the condition stayed false for {timeout:.0f}s"
+    raise CdpError(msg)
 
 
 def centre(cdp: Cdp, selector: str) -> tuple[float, float]:
@@ -109,7 +115,8 @@ def centre(cdp: Cdp, selector: str) -> tuple[float, float]:
         " return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()",
     )
     if not box:
-        raise CdpError(f"no element matches {selector}")
+        msg = f"no element matches {selector}"
+        raise CdpError(msg)
     return float(box["x"]), float(box["y"])
 
 
@@ -139,7 +146,8 @@ def type_text(cdp: Cdp, selector: str, text: str, clear: bool = False) -> None:
         + " return true; })()"
     )
     if not evaluate(cdp, focus):
-        raise CdpError(f"no element matches {selector}")
+        msg = f"no element matches {selector}"
+        raise CdpError(msg)
     for character in text:
         cdp.call("Input.insertText", {"text": character})
     evaluate(
@@ -181,7 +189,8 @@ def press(cdp: Cdp, combination: str) -> None:
     named = KEYS.get(key)
     if named is None:
         if len(key) != 1:
-            raise CdpError(f"unknown key '{key}'")
+            msg = f"unknown key '{key}'"
+            raise CdpError(msg)
         named = (key.upper() if len(key) == 1 else key, key, ord(key.upper()))
     identifier, text, code = named
     for event in ("keyDown", "keyUp"):
@@ -205,7 +214,8 @@ def text_of(cdp: Cdp, selector: str) -> str:
         " return e ? e.innerText : null; })()",
     )
     if value is None:
-        raise CdpError(f"no element matches {selector}")
+        msg = f"no element matches {selector}"
+        raise CdpError(msg)
     return str(value)
 
 
@@ -217,7 +227,8 @@ def html_of(cdp: Cdp, selector: str | None) -> str:
             " return e ? e.outerHTML : null; })()",
         )
         if value is None:
-            raise CdpError(f"no element matches {selector}")
+            msg = f"no element matches {selector}"
+            raise CdpError(msg)
         return str(value)
     return str(evaluate(cdp, "document.documentElement.outerHTML") or "")
 
@@ -247,5 +258,6 @@ def upload(cdp: Cdp, selector: str, path: str) -> None:
         {"nodeId": document["root"]["nodeId"], "selector": selector},
     )
     if not node.get("nodeId"):
-        raise CdpError(f"no element matches {selector}")
+        msg = f"no element matches {selector}"
+        raise CdpError(msg)
     cdp.call("DOM.setFileInputFiles", {"files": [path], "nodeId": node["nodeId"]})

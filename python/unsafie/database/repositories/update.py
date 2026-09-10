@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class UpdateRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def save(
@@ -41,21 +41,21 @@ class UpdateRepository:
         fresh = stored is not None
         if not fresh:
             stored = await self.session.scalar(
-                select(Update.id).where(Update.bot_id == bot_id, Update.update_id == update_id)
+                select(Update.id).where(Update.bot_id == bot_id, Update.update_id == update_id),
             )
             logger.info("bot=%s update=%s redelivered, row=%s", bot_id, update_id, stored)
         await self.session.commit()
-        return int(stored), fresh
+        return int(stored or 0), fresh
 
     async def attach(self, update_db_id: int, turn_id: UUID) -> int:
         ordinal = await self.session.scalar(
-            select(func.coalesce(func.max(Update.ordinal) + 1, 0)).where(Update.turn_id == turn_id)
+            select(func.coalesce(func.max(Update.ordinal) + 1, 0)).where(Update.turn_id == turn_id),
         )
         await self.session.execute(
-            update(Update).where(Update.id == update_db_id).values(turn_id=turn_id, ordinal=ordinal)
+            update(Update).where(Update.id == update_db_id).values(turn_id=turn_id, ordinal=ordinal),
         )
         await self.session.commit()
-        return int(ordinal)
+        return int(ordinal or 0)
 
     async def turn_of(self, bot_id: int, chat_id: int, message_id: int) -> UUID | None:
         return await self.session.scalar(
@@ -67,7 +67,7 @@ class UpdateRepository:
                 Update.turn_id.is_not(None),
             )
             .order_by(Update.created_at.desc(), Update.id.desc())
-            .limit(1)
+            .limit(1),
         )
 
     async def last_message_id(self, turn_id: UUID) -> int | None:
@@ -75,11 +75,11 @@ class UpdateRepository:
             select(Update.message_id)
             .where(Update.turn_id == turn_id, Update.message_id.is_not(None))
             .order_by(Update.ordinal.desc())
-            .limit(1)
+            .limit(1),
         )
         return int(value) if value is not None else None
 
     async def first_for_turn(self, turn_id: UUID) -> Update | None:
         return await self.session.scalar(
-            select(Update).where(Update.turn_id == turn_id).order_by(Update.ordinal.asc()).limit(1)
+            select(Update).where(Update.turn_id == turn_id).order_by(Update.ordinal.asc()).limit(1),
         )

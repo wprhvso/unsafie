@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from unsafie.github import cache
-from unsafie.github.client.base import RAW, run_limited
+from unsafie.github.client.base import RAW, GithubHTTP, run_limited
 
 
 def _envelope(body: bytes) -> bytes:
@@ -19,7 +19,7 @@ def _envelope(body: bytes) -> bytes:
     return (data.get("content") or "").encode()
 
 
-class GitMixin:
+class GitMixin(GithubHTTP):
     async def branch(self, name: str) -> dict | None:
         return await self.request("GET", f"{self.base}/branches/{name}", allow_404=True)
 
@@ -31,7 +31,7 @@ class GitMixin:
         return await self.request("GET", f"{self.base}/git/commits/{sha}")
 
     async def commits(
-        self, ref: str | None = None, path: str | None = None, limit: int = 20
+        self, ref: str | None = None, path: str | None = None, limit: int = 20,
     ) -> list[dict]:
         params: dict[str, Any] = {}
         if ref:
@@ -101,7 +101,7 @@ class GitMixin:
         return result["sha"]
 
     async def create_commit(
-        self, message: str, tree: str, parents: list[str], author: dict | None = None
+        self, message: str, tree: str, parents: list[str], author: dict | None = None,
     ) -> dict:
         body: dict[str, Any] = {"message": message, "tree": tree, "parents": parents}
         if author:
@@ -111,12 +111,12 @@ class GitMixin:
 
     async def update_ref(self, ref: str, sha: str, force: bool = False) -> dict:
         return await self.request(
-            "PATCH", f"{self.base}/git/refs/heads/{ref}", json_body={"sha": sha, "force": force}
+            "PATCH", f"{self.base}/git/refs/heads/{ref}", json_body={"sha": sha, "force": force},
         )
 
     async def create_ref(self, ref: str, sha: str) -> dict:
         return await self.request(
-            "POST", f"{self.base}/git/refs", json_body={"ref": f"refs/heads/{ref}", "sha": sha}
+            "POST", f"{self.base}/git/refs", json_body={"ref": f"refs/heads/{ref}", "sha": sha},
         )
 
     async def delete_ref(self, ref: str) -> None:
@@ -131,5 +131,5 @@ class GitMixin:
     async def contents(self, path: str, ref: str | None = None) -> Any:
         params = {"ref": ref} if ref else None
         return await self.request(
-            "GET", f"{self.base}/contents/{path}", params=params, allow_404=True
+            "GET", f"{self.base}/contents/{path}", params=params, allow_404=True,
         )

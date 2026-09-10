@@ -20,7 +20,8 @@ class BlobError(OpsError):
 def clean(key: str) -> str:
     stripped = (key or "").strip().strip("/")
     if not stripped or ".." in stripped.split("/"):
-        raise BlobError(f"'{key}' is not a usable key")
+        msg = f"'{key}' is not a usable key"
+        raise BlobError(msg)
     return stripped[:512]
 
 
@@ -32,21 +33,25 @@ def path_of(user_id: int, key: str) -> Path:
 async def put(user_id: int, key: str, data: bytes, machine: str | None = None) -> PoolBlob:
     key = clean(key)
     if len(data) > settings.pool_max_blob_item:
+        msg = f"{len(data)} bytes is over the {settings.pool_max_blob_item} byte limit for one blob"
         raise BlobError(
-            f"{len(data)} bytes is over the {settings.pool_max_blob_item} byte limit for one blob"
+            msg,
         )
     held = await used(user_id)
     if held + len(data) > settings.pool_max_blob_bytes:
-        raise BlobError(
+        msg = (
             f"your blobs would take {held + len(data)} bytes, the limit is "
             f"{settings.pool_max_blob_bytes}; delete something with `unsafie blob rm`"
+        )
+        raise BlobError(
+            msg,
         )
     target = path_of(user_id, key)
     await asyncio.to_thread(_write, target, data)
     digest = hashlib.sha256(data).hexdigest()
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == key)
+            select(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == key),
         )
         if row is None:
             row = PoolBlob(user_id=user_id, key=key)
@@ -77,7 +82,7 @@ async def get(user_id: int, key: str) -> bytes | None:
 async def head(user_id: int, key: str) -> PoolBlob | None:
     async with SessionLocal() as session:
         return await session.scalar(
-            select(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == clean(key))
+            select(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == clean(key)),
         )
 
 
@@ -96,15 +101,15 @@ async def remove(user_id: int, key: str) -> bool:
     await asyncio.to_thread(target.unlink, True)
     async with SessionLocal() as session:
         done = await session.execute(
-            delete(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == key)
+            delete(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == key),
         )
         await session.commit()
-    return bool(done.rowcount)
+    return bool(getattr(done, "rowcount", 0))
 
 
 async def used(user_id: int) -> int:
     async with SessionLocal() as session:
         total = await session.scalar(
-            select(func.coalesce(func.sum(PoolBlob.size), 0)).where(PoolBlob.user_id == user_id)
+            select(func.coalesce(func.sum(PoolBlob.size), 0)).where(PoolBlob.user_id == user_id),
         )
     return int(total or 0)

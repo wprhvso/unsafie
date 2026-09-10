@@ -24,14 +24,14 @@ async def publish(
 ) -> Artifact | None:
     async with SessionLocal() as session:
         return await ArtifactRepository(session).markdown(
-            content=content, title=title, bot_id=bot_id, chat_id=chat_id, turn_id=turn_id
+            content=content, title=title, bot_id=bot_id, chat_id=chat_id, turn_id=turn_id,
         )
 
 
 async def for_turn(turn: Turn) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).for_turn(
-            turn_id=turn.id, bot_id=turn.bot_id, chat_id=turn.chat_id
+            turn_id=turn.id, bot_id=turn.bot_id, chat_id=turn.chat_id,
         )
     return artifact.slug if artifact is not None else None
 

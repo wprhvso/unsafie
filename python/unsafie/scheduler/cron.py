@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-MONTHS = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
-DAYS = {d: i for i, d in enumerate("sun mon tue wed thu fri sat".split())}
+MONTHS = {m: i + 1 for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+DAYS = {d: i for i, d in enumerate(["sun", "mon", "tue", "wed", "thu", "fri", "sat"])}
 ALIASES = {
     "@hourly": "0 * * * *",
     "@daily": "0 0 * * *",
@@ -25,9 +25,11 @@ def _value(s: str, lo: int, hi: int, names: dict[str, int] | None, raw: str) -> 
     elif s.isdigit():
         v = int(s)
     else:
-        raise CronError(f"unknown value '{s}' in '{raw}'")
+        msg = f"unknown value '{s}' in '{raw}'"
+        raise CronError(msg)
     if not lo <= v <= hi and not (names is DAYS and v == 7):
-        raise CronError(f"{v} out of range {lo}-{hi} in '{raw}'")
+        msg = f"{v} out of range {lo}-{hi} in '{raw}'"
+        raise CronError(msg)
     return v
 
 
@@ -37,12 +39,14 @@ def _parse_field(raw: str, lo: int, hi: int, names: dict[str, int] | None) -> tu
     for part in raw.split(","):
         part = part.strip().lower()
         if not part:
-            raise CronError(f"empty element in '{raw}'")
+            msg = f"empty element in '{raw}'"
+            raise CronError(msg)
         step = 1
         if "/" in part:
             part, step_s = part.split("/", 1)
             if not step_s.isdigit() or int(step_s) < 1:
-                raise CronError(f"bad step in '{raw}'")
+                msg = f"bad step in '{raw}'"
+                raise CronError(msg)
             step = int(step_s)
         if part == "*":
             start, end = lo, hi
@@ -53,7 +57,8 @@ def _parse_field(raw: str, lo: int, hi: int, names: dict[str, int] | None) -> tu
             if "-" not in part and step > 1:
                 end = hi
             if start > end:
-                raise CronError(f"reversed range in '{raw}'")
+                msg = f"reversed range in '{raw}'"
+                raise CronError(msg)
         out.update(range(start, end + 1, step))
     return out, star
 
@@ -96,7 +101,8 @@ class Cron:
                 t += timedelta(minutes=1)
                 continue
             return t
-        raise CronError(f"'{self.expr}' never fires")
+        msg = f"'{self.expr}' never fires"
+        raise CronError(msg)
 
 
 def parse(expr: str) -> Cron:
@@ -104,7 +110,8 @@ def parse(expr: str) -> Cron:
     expr = ALIASES.get(expr.lower(), expr)
     fields = expr.split(" ")
     if len(fields) != 5:
-        raise CronError("cron takes 5 fields: minute hour day month weekday, e.g. '0 9 * * 1-5'")
+        msg = "cron takes 5 fields: minute hour day month weekday, e.g. '0 9 * * 1-5'"
+        raise CronError(msg)
     minutes, _ = _parse_field(fields[0], 0, 59, None)
     hours, _ = _parse_field(fields[1], 0, 23, None)
     days, dom_star = _parse_field(fields[2], 1, 31, None)

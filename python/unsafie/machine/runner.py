@@ -1,3 +1,4 @@
+import contextlib
 import os
 import platform
 import shutil
@@ -26,7 +27,8 @@ SMALL = 1 << 20
 def _arch() -> str:
     machine = platform.machine().lower()
     if machine not in ARCHES:
-        raise RuntimeError(f"there is no actions runner for {machine}")
+        msg = f"there is no actions runner for {machine}"
+        raise RuntimeError(msg)
     return ARCHES[machine]
 
 
@@ -36,7 +38,8 @@ def _version() -> str:
         landed = answer.url
     tag = landed.rsplit("/v", 1)[-1].strip("/") if "/tag/v" in landed else ""
     if not tag:
-        raise RuntimeError(f"could not tell the runner version from {landed}")
+        msg = f"could not tell the runner version from {landed}"
+        raise RuntimeError(msg)
     return tag
 
 
@@ -99,9 +102,7 @@ def run_runner(
         code = process.wait()
     finally:
         if process is not None and process.poll() is None:
-            try:
+            with contextlib.suppress(Exception):
                 os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            except Exception:
-                pass
         shutil.rmtree(root, ignore_errors=True)
     return OK if code == 0 else FAILED

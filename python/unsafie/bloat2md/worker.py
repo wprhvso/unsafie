@@ -54,7 +54,7 @@ def main() -> int:
                 "pages": payload.pages,
                 "truncated": payload.truncated,
                 "dropped": payload.dropped,
-            }
+            },
         )
     return 0
 

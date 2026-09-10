@@ -19,11 +19,13 @@ ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 async def ensure_database() -> None:
     url = make_url(settings.database_url)
     name = url.database
+    if not name:
+        return
     engine = create_async_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
     try:
         async with engine.connect() as conn:
             exists = await conn.scalar(
-                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}
+                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name},
             )
             if exists:
                 logger.debug("database %s exists", name)

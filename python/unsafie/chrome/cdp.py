@@ -35,7 +35,8 @@ class Cdp:
             answer = self._wait(message_id)
         if "error" in answer:
             problem = answer["error"]
-            raise CdpError(f"{method}: {problem.get('message')} ({problem.get('code')})")
+            msg = f"{method}: {problem.get('message')} ({problem.get('code')})"
+            raise CdpError(msg)
         return answer.get("result", {})
 
     def _wait(self, message_id: int) -> dict:
@@ -45,10 +46,12 @@ class Cdp:
             if stored is not None:
                 return stored
             if time.monotonic() > deadline:
-                raise CdpError(f"the browser did not answer message {message_id}")
+                msg = f"the browser did not answer message {message_id}"
+                raise CdpError(msg)
             raw = self.socket.recv()
             if raw is None:
-                raise CdpError("the browser closed the devtools connection")
+                msg = "the browser closed the devtools connection"
+                raise CdpError(msg)
             try:
                 message = json.loads(raw)
             except ValueError:

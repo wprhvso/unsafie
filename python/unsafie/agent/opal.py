@@ -25,14 +25,17 @@ async def refresh_access_token(refresh_token: str) -> str:
         try:
             async with http.get(settings.opal_refresh_url, cookies=cookies, headers=headers) as resp:
                 if resp.status != 200:
-                    raise OpalRefreshFailed(f"opal refresh returned HTTP {resp.status}")
+                    msg = f"opal refresh returned HTTP {resp.status}"
+                    raise OpalRefreshFailed(msg)
                 data = await resp.json(content_type=None)
         except (aiohttp.ClientError, TimeoutError, ValueError) as e:
-            raise OpalRefreshFailed(f"opal refresh request failed: {e}") from e
+            msg = f"opal refresh request failed: {e}"
+            raise OpalRefreshFailed(msg) from e
 
     access_token = data.get("access_token") if isinstance(data, dict) else None
     if not isinstance(access_token, str) or not access_token:
-        raise OpalRefreshFailed("opal response missing access_token")
+        msg = "opal response missing access_token"
+        raise OpalRefreshFailed(msg)
     return access_token
 
 

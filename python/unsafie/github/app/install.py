@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 async def create_from_manifest(code: str) -> dict:
     data = await GithubHTTP().request("POST", f"/app-manifests/{code}/conversions")
     if not data or not data.get("id"):
-        raise GithubError("github did not return app credentials")
+        msg = "github did not return app credentials"
+        raise GithubError(msg)
     async with SessionLocal() as session:
         app = await GithubAppRepository(session).save(
             app_id=int(data["id"]),
@@ -63,17 +64,16 @@ async def sync_repos(session: AsyncSession, installation_id: int, repos: list[di
                 name,
                 item.get("default_branch") or "main",
                 bool(item.get("private", True)),
-            )
+            ),
         )
     return saved
 
 
 async def fetch_installation_repos(installation_id: int) -> list[dict]:
     token = await auth.installation_token(installation_id)
-    items = (
+    return (
         await GithubHTTP(token).paginate("/installation/repositories", key="repositories").all(1000)
     )
-    return items
 
 
 async def bind_user(session: AsyncSession, user_id: int, repos: list) -> list[str]:

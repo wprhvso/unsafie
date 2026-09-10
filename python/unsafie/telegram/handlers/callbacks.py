@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from uuid import UUID
 
@@ -23,7 +24,7 @@ def build_callbacks_router() -> Router:
 
     @router.callback_query(RetryCallback.filter())
     async def retry_callback_handler(
-        query: CallbackQuery, callback_data: RetryCallback, bot_id: int
+        query: CallbackQuery, callback_data: RetryCallback, bot_id: int,
     ) -> None:
         message = query.message if isinstance(query.message, Message) else None
         if message is None or query.bot is None:
@@ -51,10 +52,9 @@ def build_callbacks_router() -> Router:
         if (
             message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
             and origin_turn.user_id != user_id
-        ):
-            if not await is_admin(query.bot, chat_id, user_id):
-                await query.answer(t("commands-retry-denied", locale), show_alert=True)
-                return
+        ) and not await is_admin(query.bot, chat_id, user_id):
+            await query.answer(t("commands-retry-denied", locale), show_alert=True)
+            return
 
         if origin_turn.status == TurnStatus.RUNNING:
             await query.answer(t("commands-retry-already-running", locale), show_alert=True)
@@ -62,14 +62,12 @@ def build_callbacks_router() -> Router:
 
         await query.answer(t("commands-retry-toast", locale))
 
-        try:
+        with contextlib.suppress(Exception):
             await query.bot.edit_message_reply_markup(
                 chat_id=chat_id,
                 message_id=message.message_id,
                 reply_markup=retry_markup(str(origin_turn.id), locale, in_progress=True),
             )
-        except Exception:
-            pass
 
         from unsafie.agent.runtime import retry_turn
 

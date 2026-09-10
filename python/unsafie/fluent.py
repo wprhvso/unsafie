@@ -19,8 +19,8 @@ def _load(locale: str, part: str = "python") -> FluentBundle | None:
         resource = FluentResource(path.read_text(encoding="utf-8"))
         try:
             bundle.add_resource(resource)
-        except Exception as e:
-            logger.error("fluent %s: %s", path, e)
+        except Exception:
+            logger.exception("fluent %s", path)
     return bundle
 
 
@@ -59,7 +59,7 @@ def t(key: str, locale: str | None = None, /, **args: Any) -> str:
     text, errors = b.format_pattern(message.value, args)
     for err in errors:
         logger.error("fluent: %s in %s: %s", type(err).__name__, key, err)
-    return text
+    return str(text)
 
 
 def attr(key: str, name: str, locale: str | None = None, /, **args: Any) -> str:
@@ -70,4 +70,4 @@ def attr(key: str, name: str, locale: str | None = None, /, **args: Any) -> str:
     text, errors = b.format_pattern(b.get_message(key).attributes[name], args)
     for err in errors:
         logger.error("fluent: %s in %s.%s: %s", type(err).__name__, key, name, err)
-    return text
+    return str(text)

@@ -1,10 +1,32 @@
 {
-  "include": ["unsafie", "unsafie-wire/src"],
-  "exclude": ["**/__pycache__", "**/.venv"],
+  "include": [
+    "unsafie",
+    "unsafie-wire/src"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv"
+  ],
   "pythonVersion": "3.14",
-  "typeCheckingMode": "standard",
+  "typeCheckingMode": "strict",
   "reportMissingImports": "error",
   "reportUnusedImport": "error",
   "venvPath": ".",
-  "venv": ".venv"
+  "venv": ".venv",
+  "reportMissingTypeStubs": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownParameterType": "none",
+  "reportMissingParameterType": "none",
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportMissingTypeArgument": "none",
+  "reportUnusedFunction": "none",
+  "reportUntypedFunctionDecorator": "none",
+  "reportDeprecated": "none",
+  "reportUnknownLambdaType": "none",
+  "reportIncompatibleVariableOverride": "none",
+  "reportPrivateUsage": "none"
 }

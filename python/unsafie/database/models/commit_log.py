@@ -11,7 +11,7 @@ class CommitLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     worktree_id: Mapped[int] = mapped_column(
-        ForeignKey("worktrees.id", ondelete="CASCADE"), index=True
+        ForeignKey("worktrees.id", ondelete="CASCADE"), index=True,
     )
     user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     kind: Mapped[str] = mapped_column(String(16))

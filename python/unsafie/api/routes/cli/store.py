@@ -75,7 +75,7 @@ async def list_kv(who: Pool, prefix: str = "") -> dict:
 async def get_kv(key: str, who: Pool) -> dict:
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(UserKv).where(UserKv.user_id == who.user_id, UserKv.key == key)
+            select(UserKv).where(UserKv.user_id == who.user_id, UserKv.key == key),
         )
     if row is None:
         raise HTTPException(404, "no such key")
@@ -86,7 +86,7 @@ async def get_kv(key: str, who: Pool) -> dict:
 async def set_kv(key: str, body: Pair, who: Pool) -> dict:
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(UserKv).where(UserKv.user_id == who.user_id, UserKv.key == key)
+            select(UserKv).where(UserKv.user_id == who.user_id, UserKv.key == key),
         )
         if row is None:
             row = UserKv(user_id=who.user_id, key=key[:255])
@@ -100,17 +100,17 @@ async def set_kv(key: str, body: Pair, who: Pool) -> dict:
 async def drop_kv(key: str, who: Pool) -> dict:
     async with SessionLocal() as session:
         done = await session.execute(
-            delete(UserKv).where(UserKv.user_id == who.user_id, UserKv.key == key)
+            delete(UserKv).where(UserKv.user_id == who.user_id, UserKv.key == key),
         )
         await session.commit()
-    return {"deleted": bool(done.rowcount)}
+    return {"deleted": bool(getattr(done, "rowcount", 0))}
 
 
 @router.get("/secrets")
 async def list_secrets(who: Secrets) -> dict:
     async with SessionLocal() as session:
         rows = await session.scalars(
-            select(UserSecret).where(UserSecret.user_id == who.user_id).order_by(UserSecret.name)
+            select(UserSecret).where(UserSecret.user_id == who.user_id).order_by(UserSecret.name),
         )
         return {"secrets": [{"name": row.name, "updated_at": row.updated_at} for row in rows]}
 
@@ -119,7 +119,7 @@ async def list_secrets(who: Secrets) -> dict:
 async def secret_values(who: Secrets, prefix: str = "") -> dict:
     async with SessionLocal() as session:
         rows = await session.scalars(
-            select(UserSecret).where(UserSecret.user_id == who.user_id).order_by(UserSecret.name)
+            select(UserSecret).where(UserSecret.user_id == who.user_id).order_by(UserSecret.name),
         )
         return {"values": {f"{prefix}{row.name}": row.value for row in rows}}
 
@@ -128,7 +128,7 @@ async def secret_values(who: Secrets, prefix: str = "") -> dict:
 async def get_secret(name: str, who: Secrets) -> dict:
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(UserSecret).where(UserSecret.user_id == who.user_id, UserSecret.name == name)
+            select(UserSecret).where(UserSecret.user_id == who.user_id, UserSecret.name == name),
         )
     if row is None:
         raise HTTPException(404, "no such secret")
@@ -139,7 +139,7 @@ async def get_secret(name: str, who: Secrets) -> dict:
 async def set_secret(name: str, body: Pair, who: Secrets) -> dict:
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(UserSecret).where(UserSecret.user_id == who.user_id, UserSecret.name == name)
+            select(UserSecret).where(UserSecret.user_id == who.user_id, UserSecret.name == name),
         )
         if row is None:
             row = UserSecret(user_id=who.user_id, name=name[:128])
@@ -154,7 +154,7 @@ async def set_secret(name: str, body: Pair, who: Secrets) -> dict:
 async def drop_secret(name: str, who: Secrets) -> dict:
     async with SessionLocal() as session:
         done = await session.execute(
-            delete(UserSecret).where(UserSecret.user_id == who.user_id, UserSecret.name == name)
+            delete(UserSecret).where(UserSecret.user_id == who.user_id, UserSecret.name == name),
         )
         await session.commit()
-    return {"deleted": bool(done.rowcount)}
+    return {"deleted": bool(getattr(done, "rowcount", 0))}

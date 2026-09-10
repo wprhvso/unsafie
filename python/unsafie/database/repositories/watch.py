@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class WatchRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def add(self, **fields) -> SshWatch:
@@ -36,7 +36,7 @@ class WatchRepository:
             select(SshWatch, SshHost)
             .join(SshHost, SshHost.id == SshWatch.host_id)
             .where(SshWatch.bot_id == bot_id, SshWatch.chat_id == chat_id)
-            .order_by(SshWatch.id)
+            .order_by(SshWatch.id),
         )
         return [(w, h) for w, h in rows.all()]
 
@@ -45,13 +45,13 @@ class WatchRepository:
             await self.session.scalar(
                 select(func.count())
                 .select_from(SshWatch)
-                .where(SshWatch.bot_id == bot_id, SshWatch.chat_id == chat_id)
+                .where(SshWatch.bot_id == bot_id, SshWatch.chat_id == chat_id),
             )
-            or 0
+            or 0,
         )
 
     async def claim(
-        self, now: datetime, limit: int, lease: float
+        self, now: datetime, limit: int, lease: float,
     ) -> list[tuple[SshWatch, SshHost]]:
         rows = (
             await self.session.execute(
@@ -60,7 +60,7 @@ class WatchRepository:
                 .where(SshWatch.enabled.is_(True), SshWatch.next_run_at <= now)
                 .order_by(SshWatch.next_run_at)
                 .limit(limit)
-                .with_for_update(skip_locked=True, of=SshWatch)
+                .with_for_update(skip_locked=True, of=SshWatch),
             )
         ).all()
         for watch, _ in rows:
@@ -80,16 +80,16 @@ class WatchRepository:
 
     async def remove_all(self, bot_id: int, chat_id: int) -> int:
         result = await self.session.execute(
-            delete(SshWatch).where(SshWatch.bot_id == bot_id, SshWatch.chat_id == chat_id)
+            delete(SshWatch).where(SshWatch.bot_id == bot_id, SshWatch.chat_id == chat_id),
         )
         await self.session.commit()
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)
 
     async def save(self) -> None:
         await self.session.commit()
 
     async def page(
-        self, offset: int = 0, limit: int = 50
+        self, offset: int = 0, limit: int = 50,
     ) -> tuple[list[tuple[SshWatch, SshHost]], int]:
         total = await self.session.scalar(select(func.count()).select_from(SshWatch)) or 0
         rows = await self.session.execute(
@@ -97,6 +97,6 @@ class WatchRepository:
             .join(SshHost, SshHost.id == SshWatch.host_id)
             .order_by(SshWatch.id.desc())
             .offset(offset)
-            .limit(limit)
+            .limit(limit),
         )
         return [(w, h) for w, h in rows.all()], int(total)

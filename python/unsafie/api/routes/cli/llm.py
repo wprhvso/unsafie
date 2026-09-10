@@ -132,7 +132,7 @@ async def stream(data: LLMGenerateIn, who: Who) -> StreamingResponse:
             loop_queue.put_nowait((name, payload))
 
         send_task = asyncio.create_task(
-            client.send(access_token, FIXED_MODEL, body, on_event=on_event)
+            client.send(access_token, FIXED_MODEL, body, on_event=on_event),
         )
 
         done = False
