@@ -134,13 +134,23 @@ class Daemon:
         kind = str(raw.get("kind") or "")
         if kind in (wire.FrameKind.COMMAND, wire.FrameKind.PYTHON):
             if raw.get("tunnel"):
-                from unsafie.machine.tunnel import serve_tunnel
+                from unsafie.machine.tunnel import serve_tunnel, TunnelError
                 channel_id = str(raw["tunnel"].get("channel") or "")
                 port = int(raw["tunnel"].get("port") or 0)
                 kind_t = str(raw["tunnel"].get("kind") or "vnc")
                 base = self.link.base.replace("https://", "wss://").replace("http://", "ws://")
                 url = f"{base}/api/v1/machines/{self.name}/tunnel/{channel_id}?token={self.link.token}"
-                threading.Thread(target=serve_tunnel, args=(url, kind_t, port), daemon=True).start()
+
+                def _tunnel_worker() -> None:
+                    try:
+                        serve_tunnel(url, kind_t, port)
+                    except TunnelError as e:
+                        try:
+                            self.link.call("POST", f"/machines/{self.name}/tunnel/{channel_id}/failed", body={"error": str(e)})
+                        except Exception:
+                            pass
+
+                threading.Thread(target=_tunnel_worker, daemon=True).start()
                 return
             threading.Thread(target=self._execute, args=(raw,), daemon=True).start()
         elif kind == wire.FrameKind.ASSIGN:
@@ -237,10 +247,12 @@ class Daemon:
                     batch.append(self.outbox.get_nowait())
                 except queue.Empty:
                     break
-            try:
-                self.link.call("POST", f"/machines/{self.name}/output", body={"frames": batch})
-            except Exception:
-                pass
+            while batch and not self.stop.is_set():
+                try:
+                    self.link.call("POST", f"/machines/{self.name}/output", body={"frames": batch})
+                    break
+                except Exception:
+                    time.sleep(1.0)
 
     def _heartbeat(self) -> None:
         while not self.stop.wait(self.beat):

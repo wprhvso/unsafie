@@ -97,7 +97,6 @@ class Runner:
                 hours=2.0,
             )
             await self._install_ssh_keys()
-            await self._install_git_credentials()
         return self._cli_token
 
     async def _install_ssh_keys(self) -> None:
@@ -212,7 +211,7 @@ class Runner:
             try:
                 await spool.wait(timeout=settings.agent_block_timeout)
             except TimeoutError:
-                spool.terminate(grace=2.0)
+                await spool.terminate(grace=2.0)
                 block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
                 block.exit_code = 124
             finally:
@@ -334,17 +333,17 @@ class Runner:
             await spool.launch(bash_bin=bash_bin, env=env)
             await spool.wait(timeout=settings.agent_block_timeout)
         except TimeoutError:
-            spool.terminate(grace=2.0)
+            await spool.terminate(grace=2.0)
             block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
             block.exit_code = 124
         except asyncio.CancelledError:
-            spool.terminate(grace=1.0)
+            await spool.terminate(grace=1.0)
             block.error = "stopped by the user"
             block.seconds = time.monotonic() - block.started_at
             self._finished(block)
             raise
         except Exception as broken:
-            spool.terminate(grace=1.0)
+            await spool.terminate(grace=1.0)
             block.error = f"{type(broken).__name__}: {broken}"
             block.seconds = time.monotonic() - block.started_at
             logger.exception("%s bash block %s could not run", self.ctx.prefix, block.index)

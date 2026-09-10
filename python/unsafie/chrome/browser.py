@@ -210,6 +210,9 @@ def stop(state: dict) -> None:
                 os.kill(int(pid), signal.SIGKILL)
             except OSError:
                 pass
+    pkill = shutil.which("pkill")
+    if pkill and not state.get("headless"):
+        subprocess.run([pkill, "-f", f"x11vnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def state_file() -> Path:

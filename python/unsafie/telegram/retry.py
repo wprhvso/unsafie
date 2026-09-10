@@ -51,6 +51,9 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
 
 
 async def download(bot: Bot, file_id: str, what: str) -> bytes:
-    buf = BytesIO()
-    await retry(lambda: bot.download(file_id, destination=buf), what)
-    return buf.getvalue()
+    async def _fetch() -> bytes:
+        buf = BytesIO()
+        await bot.download(file_id, destination=buf)
+        return buf.getvalue()
+
+    return await retry(_fetch, what)

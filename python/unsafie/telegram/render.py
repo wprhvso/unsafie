@@ -71,17 +71,17 @@ def to_markdown(text: str | None, entities: Sequence[MessageEntity] | None) -> s
         if markers is None:
             continue
         opens.setdefault(start, []).append((-(end - start), order, markers[0]))
-        closes.setdefault(end, []).append((-start, end - start, markers[1]))
+        closes.setdefault(end, []).append((-start, -(end - start), -order, markers[1]))
         if entity.type in _QUOTES:
             quote_edges[start] = quote_edges.get(start, 0) + 1
             quote_edges[end] = quote_edges.get(end, 0) - 1
     out: list[str] = []
     quote_depth = 0
     for pos in range(n + 1):
-        for _, _, marker in sorted(closes.get(pos, ())):
-            out.append(marker)
-        for _, _, marker in sorted(opens.get(pos, ())):
-            out.append(marker)
+        for item in sorted(closes.get(pos, ())):
+            out.append(item[-1])
+        for item in sorted(opens.get(pos, ())):
+            out.append(item[-1])
         quote_depth += quote_edges.get(pos, 0)
         if pos == n:
             break

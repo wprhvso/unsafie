@@ -18,6 +18,7 @@ _PARSER: Final = HTMLParser(remove_comments=True, remove_pis=True, no_network=Tr
 
 def _prune(root: html.HtmlElement) -> int:
     dropped = 0
+    to_remove = []
     for element in root.iter():
         if not isinstance(element.tag, str):
             continue
@@ -27,11 +28,12 @@ def _prune(root: html.HtmlElement) -> int:
         )
         if not hidden and element.get("hidden") is None:
             continue
+        to_remove.append(element)
+    for element in to_remove:
         parent = element.getparent()
-        if parent is None:
-            continue
-        parent.remove(element)
-        dropped += 1
+        if parent is not None:
+            parent.remove(element)
+            dropped += 1
     return dropped
 
 
