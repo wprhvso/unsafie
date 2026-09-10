@@ -1,10 +1,12 @@
 from aiogram import Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.chat import ChatRepository
 from unsafie.fluent import t
+from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
@@ -16,6 +18,11 @@ def build_system_router() -> Router:
     async def system_command(message: Message, command: CommandObject, bot_id: int) -> None:
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
+            if not await is_admin(message.bot, message.chat.id, user_id):
+                await answer(message, bot_id, t("commands-group-admin-only", locale))
+                return
+
         prompt = (command.args or "").strip()
 
         if not prompt:
@@ -36,6 +43,11 @@ def build_system_router() -> Router:
     async def system_clear_command(message: Message, bot_id: int) -> None:
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
+
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
+            if not await is_admin(message.bot, message.chat.id, user_id):
+                await answer(message, bot_id, t("commands-group-admin-only", locale))
+                return
 
         async with SessionLocal() as session:
             repo = ChatRepository(session)

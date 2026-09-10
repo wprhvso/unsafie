@@ -121,7 +121,7 @@ async def wait_for_subagents(body: WaitIn, who: Who) -> list[dict]:
         repo = TurnRepository(session)
         for uid in uuids:
             t = await repo.get(uid)
-            if t is not None:
+            if t is not None and t.user_id == who.user_id:
                 slug = await artifacts.of_turn(t.id)
                 results.append(_format_turn(t, slug))
             else:
@@ -160,6 +160,8 @@ async def get_subagent(turn_id: str, who: Who) -> dict:
         t = await TurnRepository(session).get(uid)
     if t is None or not t.is_subagent:
         raise HTTPException(404, "no such subagent")
+    if t.user_id != who.user_id:
+        raise HTTPException(403, "access denied")
     slug = await artifacts.of_turn(t.id)
     return _format_turn(t, slug)
 
@@ -167,13 +169,17 @@ async def get_subagent(turn_id: str, who: Who) -> dict:
 @router.post("/cancel")
 async def cancel_subagents(body: CancelIn, who: Who) -> dict:
     cancelled = []
-    for raw_id in body.ids:
-        try:
-            uid = UUID(raw_id)
-            await stop(uid)
-            cancelled.append(str(uid))
-        except ValueError:
-            pass
+    async with SessionLocal() as session:
+        repo = TurnRepository(session)
+        for raw_id in body.ids:
+            try:
+                uid = UUID(raw_id)
+                t = await repo.get(uid)
+                if t is not None and t.user_id == who.user_id:
+                    await stop(uid)
+                    cancelled.append(str(uid))
+            except ValueError:
+                pass
     return {"cancelled": cancelled}
 
 
@@ -184,5 +190,11 @@ async def set_subagent_result(turn_id: str, body: ResultIn, who: Who) -> dict:
     except ValueError:
         raise HTTPException(400, "invalid uuid") from None
     async with SessionLocal() as session:
-        await TurnRepository(session).set_result(uid, body.result)
+        repo = TurnRepository(session)
+        t = await repo.get(uid)
+        if t is None or not t.is_subagent:
+            raise HTTPException(404, "no such subagent")
+        if t.user_id != who.user_id:
+            raise HTTPException(403, "access denied")
+        await repo.set_result(uid, body.result)
     return {"id": turn_id, "recorded": True}

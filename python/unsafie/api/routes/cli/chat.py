@@ -532,7 +532,17 @@ async def forward(message_id: int, body: Forward, who: Chat) -> dict:
     target: int | str = body.to
     if isinstance(target, str) and target.lstrip("-").isdigit():
         target = int(target)
-    if isinstance(target, int):
+    if isinstance(target, str):
+        if who.chat_id is not None:
+            raise HTTPException(403, "cross-chat access is forbidden for this token")
+        try:
+            resolved_chat = await bot.get_chat(target)
+            target = await who.target_chat(resolved_chat.id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(403, f"cannot access target chat: {e}") from None
+    else:
         target = await who.target_chat(target)
     try:
         if body.duplicate:

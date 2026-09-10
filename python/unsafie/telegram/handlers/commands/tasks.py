@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
@@ -8,6 +9,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.repositories.schedule import ScheduleRepository
 from unsafie.database.repositories.watch import WatchRepository
 from unsafie.fluent import t
+from unsafie.telegram.group import is_admin
 from unsafie.scheduler import service
 from unsafie.ssh import watches
 from unsafie.telegram.handlers.locale import locale_for
@@ -28,6 +30,10 @@ def build_tasks_router() -> Router:
         chat_id = message.chat.id
         arg = (command.args or "").strip().lower()
         if arg in ("clear", "rm all"):
+            if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
+                if not await is_admin(message.bot, message.chat.id, user_id):
+                    await answer(message, bot_id, t("commands-group-admin-only", locale))
+                    return
             async with SessionLocal() as session:
                 schedule = ScheduleRepository(session)
                 watchdog = WatchRepository(session)

@@ -20,6 +20,8 @@ auth-usage =
     /auth list — توکن‌های صادرشده
     /auth rm NAME — لغو توکن
 
+auth-private-only = مدیریت توکن‌ها فقط در پیام‌های خصوصی با بات مجاز است.
+
 pool-empty =
     هنوز ماشینی وجود ندارد.
 

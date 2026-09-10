@@ -92,7 +92,10 @@ class Caller:
         except ValueError:
             return None
         async with SessionLocal() as session:
-            return await TurnRepository(session).get(parsed)
+            turn = await TurnRepository(session).get(parsed)
+        if turn is None or turn.user_id != self.user_id:
+            return None
+        return turn
 
 
 async def _caller(

@@ -20,6 +20,8 @@ auth-usage =
     /auth list — tokens emitidos
     /auth rm NOMBRE — revocar
 
+auth-private-only = La gestión de tokens solo está permitida en mensajes privados con el bot.
+
 pool-empty =
     Aún no hay máquinas.
 
