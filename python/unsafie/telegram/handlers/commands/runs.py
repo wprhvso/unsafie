@@ -3,8 +3,10 @@ from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
+from unsafie import artifacts
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.settings import settings
 from unsafie.telegram.sender import answer
 
 
@@ -21,6 +23,12 @@ def build_runs_router() -> Router:
                 running = await repo.running(bot_id)
         if not running:
             return
-        await answer(message, bot_id, "\n".join(str(turn.id) for turn in running))
+        links: list[str] = []
+        for turn in running:
+            slug = await artifacts.of_turn(turn.id)
+            links.append(
+                artifacts.url(slug) if slug else f"{settings.artifact_origin}/turn/{turn.id}"
+            )
+        await answer(message, bot_id, "\n".join(links))
 
     return router
