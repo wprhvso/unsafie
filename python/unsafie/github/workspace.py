@@ -11,7 +11,6 @@ from unsafie.database.repositories.github import (
     UserRepoRepository,
     WorktreeRepository,
 )
-from unsafie.database.repositories.user import UserRepository
 from unsafie.github import bulk, cache, pat
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.errors import GithubError, NotFound

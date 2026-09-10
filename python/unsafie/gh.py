@@ -2,7 +2,6 @@ import asyncio
 import os
 import platform
 import shutil
-import sys
 import tarfile
 import tempfile
 import urllib.request
