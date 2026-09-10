@@ -177,7 +177,9 @@ async def _account(user_id: int, login: str | None):
 @router.post("/api")
 async def call_api(body: ApiCall, who: Github) -> dict:
     account = await _account(who.user_id, body.login)
-    path = body.path if body.path.startswith(("/", "http")) else f"/{body.path}"
+    if body.path.startswith(("http://", "https://", "//")) or "://" in body.path:
+        raise HTTPException(400, "only relative GitHub API paths are allowed")
+    path = body.path if body.path.startswith("/") else f"/{body.path}"
     try:
         answer = await GithubHTTP(account.token).request(
             body.method.upper(), path, params=body.params, json_body=body.body,

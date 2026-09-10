@@ -42,6 +42,22 @@ class Held:
         return not self.connection.is_closed()
 
 
+class _HostKeyValidator(asyncssh.SSHClient):
+    def __init__(self, expected_fingerprint: str | None) -> None:
+        self.expected_fingerprint = expected_fingerprint
+        self.server_key: asyncssh.SSHKey | None = None
+        self.fingerprint: str | None = None
+        self.mismatch = False
+
+    def validate_host_public_key(self, host: str, addr: str, port: int, key: asyncssh.SSHKey) -> bool:
+        self.server_key = key
+        self.fingerprint = fingerprint(key)
+        if self.expected_fingerprint and self.expected_fingerprint != self.fingerprint:
+            self.mismatch = True
+            return False
+        return True
+
+
 class Pool:
     def __init__(self) -> None:
         self._held: dict[tuple[int, int], Held] = {}
@@ -80,6 +96,7 @@ class Pool:
                 raise NoKey
             private = keys.load(pair[0])
             logger.info("user=%s ssh connect %s (%s)", user_id, host.alias, host.label)
+            validator = _HostKeyValidator(host.fingerprint)
             try:
                 connection = await asyncio.wait_for(
                     asyncssh.connect(
@@ -87,7 +104,9 @@ class Pool:
                         port=host.port,
                         username=host.username,
                         client_keys=[private],
-                        known_hosts=None,
+                        known_hosts=(),
+                        server_host_key_algs="default",
+                        client_factory=lambda: validator,
                         keepalive_interval=settings.ssh_keepalive,
                         connect_timeout=settings.ssh_connect_timeout,
                     ),
@@ -102,14 +121,19 @@ class Pool:
                 raise SshError(
                     msg,
                 ) from None
-            except (TimeoutError, asyncssh.Error, OSError) as e:
-                msg = f"{host.alias}: cannot connect ({type(e).__name__}: {e})"
-                raise SshError(msg) from None
-            server_key = connection.get_server_host_key()
+            except Exception as e:
+                if validator.mismatch and host.fingerprint and validator.fingerprint:
+                    raise HostKeyChanged(host.alias, host.fingerprint, validator.fingerprint) from None
+                if isinstance(e, (TimeoutError, asyncssh.Error, OSError)):
+                    msg = f"{host.alias}: cannot connect ({type(e).__name__}: {e})"
+                    raise SshError(msg) from None
+                raise
+            server_key = validator.server_key or connection.get_server_host_key()
             if server_key is None:
+                connection.abort()
                 msg = f"{host.alias}: server did not provide host key"
                 raise SshError(msg)
-            got = fingerprint(server_key)
+            got = validator.fingerprint or fingerprint(server_key)
             if host.fingerprint and host.fingerprint != got:
                 connection.abort()
                 raise HostKeyChanged(host.alias, host.fingerprint, got)
