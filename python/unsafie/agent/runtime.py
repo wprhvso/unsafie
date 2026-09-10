@@ -346,7 +346,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             logger.info("%s stopped by the user", prefix)
             await queue.clear(turn.id)
             await notify(bot, turn, t("agent-stopped", locale))
-        except Exception as e:
+        except Exception:
             telemetry.fail(turn_span, e)
             logger.exception("%s turn crashed", prefix)
             await queue.clear(turn.id)
@@ -476,7 +476,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
             status = TurnStatus.CANCELLED
             note = "stopped"
             logger.info("%s stopped", prefix)
-        except Exception as e:
+        except Exception:
             telemetry.fail(turn_span, e)
             logger.exception("%s subagent crashed", prefix)
             status = TurnStatus.FAILED
