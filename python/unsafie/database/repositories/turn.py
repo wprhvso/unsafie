@@ -271,6 +271,15 @@ class TurnRepository:
         )
         await self.session.commit()
 
+    async def find_running(self, limit: int = 50) -> list[Turn]:
+        rows = await self.session.scalars(
+            select(Turn)
+            .where(Turn.status == TurnStatus.RUNNING)
+            .order_by(Turn.created_at.asc())
+            .limit(limit),
+        )
+        return list(rows)
+
     async def find_stale_running(self, threshold_seconds: float, limit: int = 50) -> list[Turn]:
         cutoff = datetime.now(UTC) - timedelta(seconds=threshold_seconds)
         rows = await self.session.scalars(

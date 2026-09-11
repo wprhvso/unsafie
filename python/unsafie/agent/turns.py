@@ -143,6 +143,16 @@ async def _beat(turn_id: UUID, owner: asyncio.Task) -> None:
 _here: dict[UUID, asyncio.Task] = {}
 _idle = asyncio.Event()
 _idle.set()
+_shutting_down = False
+
+
+def is_shutting_down() -> bool:
+    return _shutting_down
+
+
+def set_shutting_down() -> None:
+    global _shutting_down
+    _shutting_down = True
 
 
 def busy() -> list[UUID]:
@@ -161,6 +171,7 @@ async def stop(turn_id: UUID) -> None:
 
 
 async def drain(grace: float) -> list[UUID]:
+    set_shutting_down()
     if not _here:
         return []
     logger.info("waiting up to %ss for turn(s) %s to finish", grace, busy())

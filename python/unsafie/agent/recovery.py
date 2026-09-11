@@ -17,14 +17,14 @@ class RecoverySupervisor(Loop):
 
     @property
     def enabled(self) -> bool:
-        return settings.runs_worker
+        return settings.runs_worker or settings.runs_web
 
     async def startup_sweep(self) -> list[UUID]:
         async with SessionLocal() as session:
             repo = TurnRepository(session)
-            stale = await repo.find_stale_running(threshold_seconds=settings.turn_heartbeat * 2)
+            running = await repo.find_running(limit=50)
         recovered: list[UUID] = []
-        for turn in stale:
+        for turn in running:
             claimed = await self.recover(turn.id)
             if claimed:
                 recovered.append(turn.id)
