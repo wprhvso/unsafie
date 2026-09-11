@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_DIR="{{ unsafie_config_dir }}"
+UPSTREAM_FILE="${CONFIG_DIR}/active-upstream.conf"
+TMP_UPSTREAM="${CONFIG_DIR}/active-upstream.conf.tmp"
+HOST="{{ unsafie_host }}"
+BLUE_PORT={{ unsafie_blue_port | default(8001) }}
+GREEN_PORT={{ unsafie_green_port | default(8002) }}
+TIMEOUT=45
+
+is_active() {
+    systemctl is-active --quiet "$1"
+}
+
+wait_for_health() {
+    local port="$1"
+    local url="http://${HOST}:${port}/health"
+    local elapsed=0
+    while [ "$elapsed" -lt "$TIMEOUT" ]; do
+        if curl -s -f -m 2 "$url" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    return 1
+}
+
+switch_upstream() {
+    local port="$1"
+    echo "server ${HOST}:${port};" > "$TMP_UPSTREAM"
+    mv "$TMP_UPSTREAM" "$UPSTREAM_FILE"
+    nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null || true
+}
+
+do_reload() {
+    local current=""
+    local target=""
+    local target_port=""
+
+    if is_active unsafie@green; then
+        current="green"
+        target="blue"
+        target_port="$BLUE_PORT"
+    else
+        current="blue"
+        target="green"
+        target_port="$GREEN_PORT"
+    fi
+
+    if ! is_active "unsafie@${current}"; then
+        do_start
+        return 0
+    fi
+
+    systemctl start "unsafie@${target}"
+
+    if ! wait_for_health "$target_port"; then
+        systemctl stop "unsafie@${target}" 2>/dev/null || true
+        exit 1
+    fi
+
+    switch_upstream "$target_port"
+    systemctl stop "unsafie@${current}"
+}
+
+do_start() {
+    if is_active unsafie@blue; then
+        switch_upstream "$BLUE_PORT"
+        return 0
+    fi
+    if is_active unsafie@green; then
+        switch_upstream "$GREEN_PORT"
+        return 0
+    fi
+    systemctl start unsafie@blue
+    if wait_for_health "$BLUE_PORT"; then
+        switch_upstream "$BLUE_PORT"
+    fi
+}
+
+do_stop() {
+    systemctl stop unsafie@blue unsafie@green 2>/dev/null || true
+}
+
+do_status() {
+    echo "unsafie@blue:  $(systemctl is-active unsafie@blue 2>/dev/null || echo 'inactive')"
+    echo "unsafie@green: $(systemctl is-active unsafie@green 2>/dev/null || echo 'inactive')"
+    if [ -f "$UPSTREAM_FILE" ]; then
+        echo "active upstream: $(cat "$UPSTREAM_FILE")"
+    fi
+}
+
+case "${1:-reload}" in
+    reload)
+        do_reload
+        ;;
+    start)
+        do_start
+        ;;
+    stop)
+        do_stop
+        ;;
+    restart)
+        do_reload
+        ;;
+    status)
+        do_status
+        ;;
+    *)
+        echo "Usage: $0 {reload|start|stop|restart|status}" >&2
+        exit 1
+        ;;
+esac

@@ -20,6 +20,10 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
 
+    proxy_next_upstream error timeout http_502 http_503;
+    proxy_next_upstream_tries 3;
+    proxy_next_upstream_timeout 10s;
+
     include /etc/nginx/snippets/{{ unsafie_domain }}/*.conf;
 
     location /_app/ {

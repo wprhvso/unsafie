@@ -1,11 +1,46 @@
-- name: Install the systemd unit
+- name: Ensure active upstream configuration exists
+  ansible.builtin.copy:
+    content: "server {{ unsafie_host }}:{{ unsafie_blue_port | default(8001) }};\n"
+    dest: "{{ unsafie_config_dir }}/active-upstream.conf"
+    owner: root
+    group: "{{ unsafie_group }}"
+    mode: "0644"
+    force: false
+
+- name: Write slot environment files
+  ansible.builtin.template:
+    src: slot.env.j2
+    dest: "{{ unsafie_config_dir }}/app-{{ item.name }}.env"
+    owner: root
+    group: "{{ unsafie_group }}"
+    mode: "0640"
+  loop:
+    - { name: blue, port: "{{ unsafie_blue_port | default(8001) }}" }
+    - { name: green, port: "{{ unsafie_green_port | default(8002) }}" }
+
+- name: Install unsafie-reload script
+  ansible.builtin.template:
+    src: unsafie-reload.j2
+    dest: /usr/local/bin/unsafie-reload
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install templated unit for slot instances
+  ansible.builtin.template:
+    src: unsafie@.service.j2
+    dest: /etc/systemd/system/unsafie@.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install main systemd unit
   ansible.builtin.template:
     src: unsafie.service.j2
     dest: /etc/systemd/system/unsafie.service
     owner: root
     group: root
     mode: "0644"
-  notify: restart unsafie
 
 - name: Enable and start unsafie
   ansible.builtin.systemd_service:
@@ -14,16 +49,8 @@
     state: started
     daemon_reload: true
 
-- name: Install the templated unit for extra instances
-  when: unsafie_instances | length > 0
-  ansible.builtin.template:
-    src: unsafie@.service.j2
-    dest: /etc/systemd/system/unsafie@.service
-    owner: root
-    group: root
-    mode: "0644"
-
 - name: Write the environment of every extra instance
+  when: unsafie_instances | length > 0
   loop: "{{ unsafie_instances }}"
   loop_control:
     label: "{{ item.name }}"
@@ -36,6 +63,7 @@
   register: unsafie_instance_env
 
 - name: Enable and start every extra instance
+  when: unsafie_instances | length > 0
   loop: "{{ unsafie_instances }}"
   loop_control:
     label: "{{ item.name }}"
