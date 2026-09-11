@@ -33,7 +33,7 @@ def run(
             kind_enum, payload = convert(raw, filename)
             kind = kind_enum.value
         else:
-            kind, payload = asyncio.run(run_isolated(raw, filename))
+            kind, payload = asyncio.run(run_isolated(raw, filename, max_pages=max_pages))
 
         saved_images: list[str] = []
         if images_dir and payload.images:

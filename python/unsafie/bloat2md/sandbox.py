@@ -43,7 +43,7 @@ async def _terminate(process: asyncio.subprocess.Process) -> None:
             _ = await process.wait()
 
 
-async def run_isolated(raw: bytes, name: str) -> tuple[str, Payload]:
+async def run_isolated(raw: bytes, name: str, max_pages: int | None = None) -> tuple[str, Payload]:
     limits = settings()
     process = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -57,11 +57,11 @@ async def run_isolated(raw: bytes, name: str) -> tuple[str, Payload]:
         env={
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", "/tmp"),
-            "PYTHONPATH": os.pathsep.join(sys.path[1:]),
+            "PYTHONPATH": os.pathsep.join(sys.path),
             "BLOAT2MD_MEMORY_LIMIT_MB": str(limits.memory_limit_mb),
             "BLOAT2MD_CPU_SECONDS": str(limits.cpu_seconds),
             "BLOAT2MD_OUTPUT_LIMIT_MB": str(limits.output_limit_mb),
-            "BLOAT2MD_MAX_PAGES": str(limits.max_pages),
+            "BLOAT2MD_MAX_PAGES": str(max_pages if max_pages is not None else limits.max_pages),
             "BLOAT2MD_MAX_RENDER_PAGES": str(limits.max_render_pages),
             "BLOAT2MD_RENDER_EDGE": str(limits.render_edge),
             "BLOAT2MD_RENDER_QUALITY": str(limits.render_quality),
