@@ -2,6 +2,7 @@ from sqlalchemy import BigInteger, Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from unsafie.database import Base
+from unsafie.database.types import EncryptedText
 
 
 class User(Base):
@@ -13,7 +14,7 @@ class User(Base):
     effort: Mapped[str | None] = mapped_column(String(16), nullable=True)
     git_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     git_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    ssh_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ssh_private_key: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     ssh_public_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     pool_max_machines: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
     pool_max_background: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
