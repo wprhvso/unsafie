@@ -29,8 +29,14 @@ FLAGS = (
     "--disable-features=Translate,MediaRouter,OptimizationHints",
     "--disable-dev-shm-usage",
     "--password-store=basic",
-    "--no-sandbox",
 )
+
+
+def _flags() -> tuple[str, ...]:
+    base = list(FLAGS)
+    if os.getuid() == 0 or os.environ.get("UNSAFIE_CHROME_NO_SANDBOX") == "1":
+        base.append("--no-sandbox")
+    return tuple(base)
 
 
 class BrowserError(RuntimeError):
@@ -47,14 +53,23 @@ def binary() -> str:
 
 
 def state_dir() -> Path:
-    STATE.mkdir(parents=True, exist_ok=True)
-    return STATE
+    try:
+        STATE.mkdir(parents=True, exist_ok=True)
+        return STATE
+    except OSError:
+        fallback = Path.home() / ".local" / "state" / "unsafie"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
 
 
 def profile_dir(name: str | None) -> Path:
     if not name:
         return state_dir() / "profile-scratch"
-    target = PROFILES / name
+    target = (PROFILES / name).resolve()
+    PROFILES.mkdir(parents=True, exist_ok=True)
+    if not target.is_relative_to(PROFILES.resolve()):
+        msg = f"invalid profile name: {name}"
+        raise BrowserError(msg)
     target.mkdir(parents=True, exist_ok=True)
     return target
 
@@ -100,7 +115,7 @@ def launch(profile: str | None, size: str, headless: bool) -> dict:
         "--remote-allow-origins=*",
         f"--user-data-dir={data}",
         f"--window-size={width},{height}",
-        *FLAGS,
+        *_flags(),
         "about:blank",
     ]
     if headless or not display:
@@ -206,13 +221,22 @@ def stop(state: dict) -> None:
         except (ProcessLookupError, PermissionError, OSError):
             with contextlib.suppress(OSError):
                 os.kill(int(pid), signal.SIGKILL)
-    pkill = shutil.which("pkill")
-    if pkill and not state.get("headless"):
-        subprocess.run([pkill, "-f", f"x11vnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    vnc_pid = state.get("vnc_pid")
+    if vnc_pid:
+        with contextlib.suppress(OSError):
+            os.kill(int(vnc_pid), signal.SIGTERM)
+    elif not state.get("headless"):
+        pkill = shutil.which("pkill")
+        if pkill:
+            display = state.get("display")
+            pattern = f"x11vnc.*{display}" if display else f"x11vnc.*{vnc.RFB_PORT}"
+            subprocess.run([pkill, "-f", pattern], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def state_file() -> Path:
-    return state_dir() / "chrome.json"
+    turn_id = os.environ.get("UNSAFIE_TURN")
+    filename = f"chrome_{turn_id}.json" if turn_id else "chrome.json"
+    return state_dir() / filename
 
 
 def save(state: dict) -> None:
