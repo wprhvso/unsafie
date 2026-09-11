@@ -100,13 +100,16 @@ class Settings(BaseSettings):
     sql_echo: bool = False
 
     service_name: str = Field(
-        default="unsafie", validation_alias=AliasChoices("SERVICE_NAME", "OTEL_SERVICE_NAME"),
+        default="unsafie",
+        validation_alias=AliasChoices("SERVICE_NAME", "OTEL_SERVICE_NAME"),
     )
     service_version: str = Field(
-        default="", validation_alias=AliasChoices("SERVICE_VERSION", "UNSAFIE_VERSION"),
+        default="",
+        validation_alias=AliasChoices("SERVICE_VERSION", "UNSAFIE_VERSION"),
     )
     environment: str = Field(
-        default="dev", validation_alias=AliasChoices("ENVIRONMENT", "DEPLOYMENT_ENVIRONMENT"),
+        default="dev",
+        validation_alias=AliasChoices("ENVIRONMENT", "DEPLOYMENT_ENVIRONMENT"),
     )
 
     otel_enabled: bool = True
@@ -136,8 +139,8 @@ class Settings(BaseSettings):
     gemini_connect_timeout: float = 20.0
     gemini_read_timeout: float = 180.0
     gemini_retries: int = 30
-    gemini_retry_base: float = 1.0
-    gemini_retry_max: float = 2.0
+    gemini_retry_base: float = 0.0
+    gemini_retry_max: float = 0.0
     gemini_connections: int = 16
 
     opal_refresh_url: str = "https://opal.google/connection/refresh"
