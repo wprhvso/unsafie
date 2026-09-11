@@ -4,7 +4,6 @@ from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, UniqueCon
 from sqlalchemy.orm import Mapped, mapped_column
 
 from unsafie.database import Base
-from unsafie.database.types import EncryptedText
 
 
 class GithubAccount(Base):
@@ -17,7 +16,7 @@ class GithubAccount(Base):
     )
     github_id: Mapped[int] = mapped_column(BigInteger, index=True)
     login: Mapped[str] = mapped_column(String(255))
-    token: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
+    token: Mapped[str | None] = mapped_column(Text, nullable=True)
     scopes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
