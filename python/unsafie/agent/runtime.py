@@ -669,20 +669,24 @@ async def handle(message: Message, bot_id: int, update_db_id: int | None = None)
 
 
 async def handle_callback(
-    query: CallbackQuery, message: Message, bot_id: int, update_db_id: int | None,
+    query: CallbackQuery, message: Message | None, bot_id: int, update_db_id: int | None,
 ) -> None:
     if query.bot is None or update_db_id is None:
         return
     prompt = json.dumps(render.describe_callback(query), ensure_ascii=False)
+    chat_id = message.chat.id if message else query.from_user.id
+    reply_to = message.message_id if message else None
     await dispatch(
         query.bot,
         bot_id=bot_id,
-        chat_id=message.chat.id,
+        chat_id=chat_id,
         user_id=query.from_user.id,
-        reply_to=message.message_id,
+        reply_to=reply_to,
         update_db_id=update_db_id,
         build_prompt=lambda _: prompt,
         locale=await _user_locale(query.from_user.id, query.from_user),
+        is_inline=query.inline_message_id is not None,
+        inline_message_id=query.inline_message_id,
         what=f"callback={query.id}",
     )
 
@@ -760,9 +764,11 @@ async def handle_inline(chosen: ChosenInlineResult, bot_id: int) -> None:
     user_id = chosen.from_user.id
     locale = await _user_locale(user_id, chosen.from_user)
     query = chosen.query.strip()
+    variant = chosen.result_id.split(":")[0] if chosen.result_id else "text"
     data = {
         "inline_query": query,
         "inline_message_id": chosen.inline_message_id,
+        "variant": variant,
         "from": render.user_info(chosen.from_user),
     }
     prompt = json.dumps(data, ensure_ascii=False)

@@ -89,7 +89,9 @@ def build_callbacks_router() -> Router:
             await query.answer()
         except TelegramAPIError as e:
             logger.warning("bot=%s callback=%s answer failed: %s", bot_id, query.id, e)
-        if message is None or query.data is None:
+        if query.data is None:
+            return
+        if message is None and query.inline_message_id is None:
             return
         await handle_callback(query, message, bot_id, update_db_id)
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from unsafie.api.routes.cli.deps import Chat
 from unsafie.telegram.keyboard import parse_buttons
+from unsafie.telegram.sender import _entities, chunks_of
 
 router = APIRouter(prefix="/inline", tags=["cli"])
 
@@ -18,10 +19,13 @@ class EditInline(BaseModel):
 async def edit_inline(body: EditInline, who: Chat) -> dict:
     bot = await who.bot()
     markup = parse_buttons(body.buttons) if body.buttons else None
+    chunks = chunks_of(body.text)
+    chunk = chunks[0] if chunks else {"text": body.text, "entities": []}
     try:
         await bot.edit_message_text(
             inline_message_id=body.inline_message_id,
-            text=body.text,
+            text=chunk["text"],
+            entities=_entities(chunk),
             reply_markup=markup,
         )
     except TelegramAPIError as e:
