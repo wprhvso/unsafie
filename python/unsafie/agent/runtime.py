@@ -376,6 +376,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             )
         finally:
             await cancel_subagents_of(turn.id)
+            fresh: Turn | None = None
             if status == TurnStatus.RUNNING:
                 await turns.seal(turn.id)
                 await segments.save(turn, messages[base:], snapshot)
@@ -512,6 +513,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
             status = TurnStatus.FAILED
             note = f"crashed: {e}"
         finally:
+            fresh: Turn | None = None
             if status == TurnStatus.RUNNING:
                 await turns.seal(turn.id)
                 await segments.save(turn, messages, system=system_prompt)
@@ -532,6 +534,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                     )
                     await repo.finish(turn.id, status, final_result)
                     fresh = await repo.get(turn.id)
+                await checkpoints.clear(turn.id)
 
             if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
                 cleanup_turn(turn.id)
@@ -833,8 +836,10 @@ async def resume_turn(turn_id: UUID) -> None:
         system_prompt = history.system or SYSTEM_PROMPT
         snapshot = None if history.system else system_prompt
 
-        messages = checkpoint.messages if checkpoint else list(history.messages)
-        if not messages:
+        if checkpoint:
+            messages = checkpoint.messages
+        else:
+            messages = list(history.messages)
             async with SessionLocal() as session:
                 update_repo = UpdateRepository(session)
                 update_row = await update_repo.first_for_turn(turn.id)
@@ -845,7 +850,7 @@ async def resume_turn(turn_id: UUID) -> None:
                 prompt = f"Resume turn {turn.id}"
             async with SessionLocal() as session:
                 context = await build_context(session, ctx)
-            messages = [request.user(prompt, context)]
+            messages.append(request.user(prompt, context))
 
         status = TurnStatus.FAILED
         note: str | None = None
@@ -915,6 +920,7 @@ async def resume_turn(turn_id: UUID) -> None:
             )
         finally:
             await cancel_subagents_of(turn.id)
+            fresh: Turn | None = None
             if status == TurnStatus.RUNNING:
                 await turns.seal(turn.id)
                 await segments.save(turn, messages[base:], snapshot)

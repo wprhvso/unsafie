@@ -13,10 +13,15 @@ _tasks: dict[UUID, asyncio.Task] = {}
 _events: dict[UUID, asyncio.Event] = {}
 
 
+def _cleanup_subagent(turn_id: UUID) -> None:
+    _tasks.pop(turn_id, None)
+    _events.pop(turn_id, None)
+
+
 def register_subagent_task(turn_id: UUID, task: asyncio.Task) -> None:
     _tasks[turn_id] = task
     _events[turn_id] = asyncio.Event()
-    task.add_done_callback(lambda _: _tasks.pop(turn_id, None))
+    task.add_done_callback(lambda _: _cleanup_subagent(turn_id))
 
 
 def mark_subagent_done(turn_id: UUID) -> None:
@@ -36,26 +41,30 @@ async def notify_subagent_done(turn_id: UUID) -> None:
 
 async def wait_subagents(turn_ids: list[UUID], timeout: float = 600.0) -> None:
     deadline = asyncio.get_running_loop().time() + timeout
-    for tid in turn_ids:
-        remaining = deadline - asyncio.get_running_loop().time()
-        if remaining <= 0:
-            break
-        ev = _events.setdefault(tid, asyncio.Event())
-        while not ev.is_set():
+    try:
+        for tid in turn_ids:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
                 break
-            async with SessionLocal() as session:
-                t = await TurnRepository(session).get(tid)
-                if t and t.status in (TurnStatus.DONE, TurnStatus.FAILED, TurnStatus.CANCELLED):
-                    ev.set()
+            ev = _events.setdefault(tid, asyncio.Event())
+            while not ev.is_set():
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
                     break
-            try:
-                await asyncio.wait_for(ev.wait(), timeout=min(3.0, max(0.5, remaining)))
-            except TimeoutError:
-                pass
-            except Exception:
-                break
+                async with SessionLocal() as session:
+                    t = await TurnRepository(session).get(tid)
+                    if t and t.status in (TurnStatus.DONE, TurnStatus.FAILED, TurnStatus.CANCELLED):
+                        ev.set()
+                        break
+                try:
+                    await asyncio.wait_for(ev.wait(), timeout=min(3.0, max(0.5, remaining)))
+                except TimeoutError:
+                    pass
+                except Exception:
+                    break
+    finally:
+        for tid in turn_ids:
+            _events.pop(tid, None)
 
 
 async def cancel_subagents_of(parent_id: UUID) -> None:

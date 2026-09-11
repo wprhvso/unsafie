@@ -177,6 +177,15 @@ async def drain(grace: float) -> list[UUID]:
     logger.info("waiting up to %ss for turn(s) %s to finish", grace, busy())
     with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(_idle.wait(), timeout=grace)
+    if _here:
+        tasks = [t for t in _here.values() if not t.done()]
+        for task in tasks:
+            task.cancel()
+        with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=5.0,
+            )
     return busy()
 
 

@@ -9,6 +9,8 @@ from unsafie.settings import settings
 
 logger = logging.getLogger(__name__)
 
+_RECOVERY_TASKS: set[asyncio.Task] = set()
+
 
 class RecoverySupervisor(Loop):
     name = "recovery-supervisor"
@@ -22,9 +24,9 @@ class RecoverySupervisor(Loop):
     async def startup_sweep(self) -> list[UUID]:
         async with SessionLocal() as session:
             repo = TurnRepository(session)
-            running = await repo.find_running(limit=50)
+            resumable = await repo.find_resumable(stale_after=settings.turn_stale_after, limit=50)
         recovered: list[UUID] = []
-        for turn in running:
+        for turn in resumable:
             claimed = await self.recover(turn.id)
             if claimed:
                 recovered.append(turn.id)
@@ -33,7 +35,7 @@ class RecoverySupervisor(Loop):
     async def tick(self) -> None:
         async with SessionLocal() as session:
             repo = TurnRepository(session)
-            stale = await repo.find_stale_running(threshold_seconds=settings.turn_heartbeat * 2)
+            stale = await repo.find_stale_running(threshold_seconds=settings.turn_stale_after)
         for turn in stale:
             await self.recover(turn.id)
 
@@ -44,6 +46,7 @@ class RecoverySupervisor(Loop):
                 turn_id=turn_id,
                 instance_id=settings.instance_id,
                 max_recoveries=3,
+                stale_after=settings.turn_stale_after,
             )
         if turn is None:
             return False
@@ -52,7 +55,8 @@ class RecoverySupervisor(Loop):
         from unsafie.agent.runtime import resume_turn
 
         task = asyncio.create_task(resume_turn(turn.id), name=f"resume:{turn.id}")
-        _ = task
+        _RECOVERY_TASKS.add(task)
+        task.add_done_callback(_RECOVERY_TASKS.discard)
         return True
 
 

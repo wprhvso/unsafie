@@ -271,10 +271,27 @@ class TurnRepository:
         )
         await self.session.commit()
 
+    async def find_resumable(self, stale_after: float, limit: int = 50) -> list[Turn]:
+        cutoff = datetime.now(UTC) - timedelta(seconds=stale_after)
+        rows = await self.session.scalars(
+            select(Turn)
+            .where(
+                Turn.status == TurnStatus.RUNNING,
+                Turn.is_subagent.is_(False),
+                or_(
+                    Turn.heartbeat_at.is_(None),
+                    Turn.heartbeat_at < cutoff,
+                ),
+            )
+            .order_by(Turn.created_at.asc())
+            .limit(limit),
+        )
+        return list(rows)
+
     async def find_running(self, limit: int = 50) -> list[Turn]:
         rows = await self.session.scalars(
             select(Turn)
-            .where(Turn.status == TurnStatus.RUNNING)
+            .where(Turn.status == TurnStatus.RUNNING, Turn.is_subagent.is_(False))
             .order_by(Turn.created_at.asc())
             .limit(limit),
         )
@@ -286,6 +303,7 @@ class TurnRepository:
             select(Turn)
             .where(
                 Turn.status == TurnStatus.RUNNING,
+                Turn.is_subagent.is_(False),
                 func.coalesce(Turn.heartbeat_at, Turn.created_at) < cutoff,
             )
             .order_by(Turn.created_at.asc())
@@ -294,15 +312,24 @@ class TurnRepository:
         return list(rows)
 
     async def claim_for_recovery(
-        self, turn_id: UUID, instance_id: str, max_recoveries: int = 3,
+        self,
+        turn_id: UUID,
+        instance_id: str,
+        max_recoveries: int = 3,
+        stale_after: float | None = None,
     ) -> Turn | None:
         turn = await self.session.scalar(
             select(Turn)
             .where(Turn.id == turn_id, Turn.status == TurnStatus.RUNNING)
             .with_for_update(skip_locked=True),
         )
-        if turn is None:
+        if turn is None or turn.is_subagent:
             return None
+
+        if stale_after is not None and turn.heartbeat_at is not None and turn.instance_id != instance_id:
+            cutoff = datetime.now(UTC) - timedelta(seconds=stale_after)
+            if turn.heartbeat_at >= cutoff:
+                return None
 
         if turn.recovery_attempts >= max_recoveries:
             turn.status = TurnStatus.FAILED
