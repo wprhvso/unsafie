@@ -165,14 +165,12 @@ def busy() -> list[UUID]:
 
 
 async def stop(turn_id: UUID) -> None:
-    """Stop a turn: instantly if it runs here, through redis if it runs elsewhere."""
     await queue.clear(turn_id)
+    await cancel.ask(turn_id)
     task = _here.get(turn_id)
     if task is not None:
         logger.info("turn=%s stopped on this instance", turn_id)
         task.cancel()
-        return
-    await cancel.ask(turn_id)
 
 
 async def drain(grace: float) -> list[UUID]:
