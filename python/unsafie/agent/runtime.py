@@ -315,7 +315,16 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
     ) as turn_span:
         base = len(messages)
         try:
-            async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
+            async with (
+                cluster.lock(
+                    turns.chat_lock(turn.bot_id, turn.chat_id),
+                    ttl=settings.chat_lock_ttl,
+                    wait=settings.chat_lock_wait,
+                    renew=True,
+                ),
+                turns.alive(turn.id),
+                typing(bot, turn.chat_id, prefix),
+            ):
                 with telemetry.span("agent.context"):
                     async with SessionLocal() as session:
                         context = await build_context(session, ctx)

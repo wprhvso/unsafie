@@ -34,7 +34,15 @@ def normalize(segment: list) -> list:
     kept = tidy(segment)
     if not any(message.get("role") == "assistant" for message in kept):
         return []
-    return kept
+    deduped = []
+    prev_key = None
+    for m in kept:
+        key = json.dumps(m, sort_keys=True)
+        if key == prev_key:
+            continue
+        prev_key = key
+        deduped.append(m)
+    return deduped
 
 
 def _decode(body: bytes) -> list:
@@ -56,8 +64,14 @@ async def load(turn: Turn) -> History:
             budget=settings.history_max_bytes,
         )
     messages: list = []
+    prev_key = None
     for body in found.bodies:
-        messages.extend(_decode(body))
+        for m in _decode(body):
+            key = json.dumps(m, sort_keys=True)
+            if key == prev_key:
+                continue
+            prev_key = key
+            messages.append(m)
     logger.info(
         "turn=%s resumed %s message(s) from %s segment(s), %s",
         turn.id,
