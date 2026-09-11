@@ -129,7 +129,6 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
             idx_b += 1
             continue
 
-        conflicted = True
         c_start = min(a.start, b.start)
         c_end = max(a.end, b.end)
         a_cluster = [a]
@@ -161,6 +160,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
         if ours_content == theirs_content:
             out.extend(ours_content)
         else:
+            conflicted = True
             out.append(MARK_OURS + "\n")
             out.extend(ours_content)
             out.append(MARK_SPLIT + "\n")

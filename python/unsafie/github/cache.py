@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -43,14 +44,20 @@ def _read(path: Path) -> bytes | None:
 
 
 def _write(path: Path, data: bytes) -> None:
+    temporary = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as tmp:
-            tmp.write(data)
             temporary = Path(tmp.name)
+            tmp.write(data)
         os.replace(temporary, path)
+        temporary = None
     except OSError as e:
         logger.warning("github cache: cannot write %s: %s", path, e)
+    finally:
+        if temporary is not None and temporary.exists():
+            with contextlib.suppress(OSError):
+                temporary.unlink()
 
 
 def _sweep(root: Path, cap: int) -> tuple[int, int]:
