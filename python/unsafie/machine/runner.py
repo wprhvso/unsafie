@@ -1,6 +1,9 @@
 import contextlib
+import hashlib
+import json
 import os
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -43,22 +46,61 @@ def _version() -> str:
     return tag
 
 
+def _expected_sha256(version: str, arch: str) -> str | None:
+    headers = {"User-Agent": "unsafie"}
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = f"https://api.github.com/repos/actions/runner/releases/tags/v{version}"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as answer:
+            data = json.loads(answer.read().decode())
+        body = data.get("body", "")
+        m = re.search(rf"<!-- BEGIN SHA linux-{arch} -->([a-f0-9]{{64}})<!-- END SHA linux-{arch} -->", body, re.IGNORECASE)
+        if m:
+            return m.group(1).lower()
+        filename = f"actions-runner-linux-{arch}-{version}.tar.gz"
+        m2 = re.search(rf"{re.escape(filename)}.*?([a-f0-9]{{64}})", body, re.IGNORECASE | re.DOTALL)
+        if m2:
+            return m2.group(1).lower()
+    except Exception:
+        pass
+    return None
+
+
+def _verify_sha256(path: Path, expected: str) -> None:
+    hasher = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(1 << 20):
+            hasher.update(chunk)
+    got = hasher.hexdigest().lower()
+    if got != expected.lower():
+        msg = f"runner archive checksum mismatch: expected {expected}, got {got}"
+        raise RuntimeError(msg)
+
+
 def _tarball(version: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     target = CACHE / f"actions-runner-linux-{_arch()}-{version}.tar.gz"
+    expected = _expected_sha256(version, _arch())
     if target.exists() and target.stat().st_size >= SMALL:
+        if expected:
+            _verify_sha256(target, expected)
         return target
     part = target.with_suffix(".part")
     url = DOWNLOAD.format(version=version, arch=_arch())
     with urllib.request.urlopen(url, timeout=300) as answer, part.open("wb") as out:
         shutil.copyfileobj(answer, out, 1 << 20)
+    if expected:
+        _verify_sha256(part, expected)
     part.replace(target)
     return target
 
 
 def _unpack(archive: Path, root: Path) -> Path:
     with tarfile.open(archive) as tar:
-        tar.extractall(root, filter="tar")
+        tar.extractall(root, filter="data")
     listener = root / LISTENER
     listener.chmod(0o755)
     for sub in (root / "bin", root / "externals"):
