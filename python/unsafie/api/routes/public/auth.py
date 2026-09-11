@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from unsafie import cluster
 from unsafie.api.dependencies.auth import COOKIE, check_token, issue, verify
 from unsafie.api.schemas.common import Ok
 from unsafie.api.schemas.models import LoginWrite
@@ -13,12 +14,34 @@ router = APIRouter(prefix="/api", tags=["auth"])
 
 
 @router.post("/login", response_model=Ok)
-async def login(body: LoginWrite, response: Response):
+async def login(body: LoginWrite, response: Response, request: Request):
     if not settings.admin_token:
         raise HTTPException(503, "ADMIN_TOKEN is not configured on the server")
+    client_ip = (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    rl_key = cluster.key("ratelimit", "login", client_ip)
+    try:
+        r = cluster.client()
+        attempts = await r.incr(rl_key)
+        if attempts == 1:
+            await r.expire(rl_key, 60)
+        if attempts > 5:
+            ttl = await r.ttl(rl_key)
+            raise HTTPException(429, f"too many login attempts, try again in {max(ttl, 1)} seconds")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("rate limiting error: %s", e)
     if not check_token(body.token):
         logger.warning("admin login failed")
         raise HTTPException(401, "wrong token")
+    try:
+        r = cluster.client()
+        await r.delete(rl_key)
+    except Exception:
+        pass
     response.set_cookie(
         COOKIE,
         issue(),
