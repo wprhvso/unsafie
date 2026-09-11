@@ -51,6 +51,7 @@ async def route(
     is_inline: bool = False,
     inline_message_id: str | None = None,
     turn_reply_to: int | None = None,
+    parent_turn_id: UUID | None = None,
 ) -> Plan:
     prefix = f"bot={bot_id} chat={chat_id}"
     async with cluster.lock(
@@ -61,7 +62,11 @@ async def route(
     ), SessionLocal() as session:
         turns = TurnRepository(session)
         updates = UpdateRepository(session)
-        owner = await turns.owner(bot_id, chat_id, reply_to) if reply_to is not None else None
+        owner = None
+        if parent_turn_id is not None:
+            owner = await turns.get(parent_turn_id)
+        elif reply_to is not None:
+            owner = await turns.owner(bot_id, chat_id, reply_to)
 
         if owner is not None and accepting(owner):
             if update_db_id is not None:
@@ -80,7 +85,7 @@ async def route(
             chat_id=chat_id,
             user_id=user_id,
             parent=owner,
-            reply_to=turn_reply_to if turn_reply_to is not None else reply_to,
+            reply_to=turn_reply_to if turn_reply_to is not None else (reply_to or (owner.reply_to if owner else None)),
             is_inline=is_inline,
             inline_message_id=inline_message_id,
         )

@@ -11,6 +11,7 @@ from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.fluent import t
 from unsafie.telegram.group import is_admin
+from unsafie.telegram.handlers.commands.pipe import cancel_pipeline
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
@@ -42,6 +43,14 @@ def build_stop_router() -> Router:
         locale = await locale_for(user_id, message.from_user)
         reply = message.reply_to_message
         reply_to = reply.message_id if reply else None
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
+            admin = await is_admin(message.bot, message.chat.id, user_id)
+            if not admin:
+                cancel_pipeline(bot_id, message.chat.id, user_id=user_id)
+            else:
+                cancel_pipeline(bot_id, message.chat.id)
+        else:
+            cancel_pipeline(bot_id, message.chat.id)
         targets = await _targets(bot_id, message.chat.id, reply_to)
         if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot:
             admin = await is_admin(message.bot, message.chat.id, user_id)

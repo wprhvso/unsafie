@@ -3,6 +3,7 @@ commands-start =
     Hi. Just write — every message without a reply starts a new conversation with a clean context, and a reply to any message (mine or yours) continues the conversation it belongs to. React to your own message to get a link to the turn it started, where everything I do is visible.
 
     /stop — stop: as a reply, whatever that message started; without a reply, everything
+    /pipe — sequential execution of lines as separate turns
     /effort — thinking effort
     /gh — GitHub token and repositories
     /ssh — servers over SSH
