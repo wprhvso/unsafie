@@ -41,7 +41,8 @@ def use(login: str | None) -> dict:
         ["git", "config", "--global", "credential.helper", "store"], check=False, capture_output=True,
     )
     subprocess.run(["gh", "auth", "setup-git"], check=False, capture_output=True)
-    return {"login": login, "name": name, "email": email}
+    actual_login = str(answer.get("login") or login or "")
+    return {"login": actual_login, "name": name, "email": email}
 
 
 def token(repo: str | None = None, *, login: str | None = None) -> dict:
