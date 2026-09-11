@@ -121,6 +121,10 @@ async def run(
         result.steps = sum(1 for m in messages if m.get("role") == "assistant")
 
     while result.steps < settings.agent_max_steps:
+        if turns.is_shutting_down():
+            logger.info("%s pausing turn before step=%s due to graceful shutdown", ctx.prefix, result.steps + 1)
+            result.status = "paused"
+            return result
         turns.touch(ctx.turn_id)
         await checkpoints.save(
             ctx.turn_id,
@@ -279,6 +283,10 @@ async def run(
             injected=injected_payload,
             credential_id=credential_id,
         )
+        if turns.is_shutting_down():
+            logger.info("%s pausing turn after step=%s due to graceful shutdown", ctx.prefix, result.steps)
+            result.status = "paused"
+            return result
         continue
 
     logger.warning("%s hit the %s step ceiling", ctx.prefix, settings.agent_max_steps)
