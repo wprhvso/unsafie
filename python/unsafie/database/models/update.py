@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import UUID as SQL_UUID
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,7 @@ class Update(Base):
         Index("ix_updates_message", "bot_id", "chat_id", "message_id"),
         Index("ix_updates_turn", "turn_id", "ordinal"),
         Index("ix_updates_chat_created", "bot_id", "chat_id", "created_at"),
+        Index("ix_updates_pending", "id", postgresql_where=text("status = 'pending'")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -29,4 +30,6 @@ class Update(Base):
     )
     ordinal: Mapped[int] = mapped_column(default=0, server_default="0")
     payload: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending")
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

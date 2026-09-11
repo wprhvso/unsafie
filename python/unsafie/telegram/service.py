@@ -29,7 +29,7 @@ async def create(session: AsyncSession, token: str) -> Bot:
     except IntegrityError:
         await session.rollback()
         raise BotTokenTaken from None
-    await webhook.ensure_webhook(bot.id, token, force=True)
+    await webhook.reconcile()
     return bot
 
 
@@ -43,7 +43,7 @@ async def update_token(session: AsyncSession, bot_id: int, token: str) -> Bot:
     if bot is None:
         raise BotNotFound
     await bots.forget(bot_id)
-    await webhook.ensure_webhook(bot_id, token, force=True)
+    await webhook.reconcile()
     return bot
 
 
@@ -56,11 +56,12 @@ async def delete(session: AsyncSession, bot_id: int) -> None:
         raise BotNotFound
     await bots.forget(bot_id)
     await webhook.delete_webhook(bot_id, token)
+    await webhook.reconcile()
 
 
 async def restart(session: AsyncSession, bot_id: int) -> Bot:
     bot = await BotRepository(session).get(bot_id)
     if bot is None:
         raise BotNotFound
-    await webhook.ensure_webhook(bot_id, bot.token, force=True)
+    await webhook.reconcile()
     return bot

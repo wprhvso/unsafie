@@ -50,23 +50,55 @@ class UpdateMiddleware(BaseMiddleware):
                 attrs.TG_UPDATE_TYPE: event.event_type,
             },
         ):
-            logger.info(
-                "bot=%s update=%s type=%s received", bot_id, event.update_id, event.event_type,
-            )
+            logger.info("bot=%s update=%s type=%s received", bot_id, event.update_id, event.event_type)
             payload = dump(event)
-            logger.debug(
-                "bot=%s update=%s payload=%s", bot_id, event.update_id, short(payload),
+            logger.debug("bot=%s update=%s payload=%s", bot_id, event.update_id, short(payload))
+            chat, message_id, user_id = self._extract_info(event)
+            telemetry.annotate(
+                **{
+                    attrs.CHAT_ID: chat.id if chat else None,
+                    attrs.USER_ID: user_id,
+                    attrs.MESSAGE_ID: message_id,
+                    attrs.PROMPT: telemetry.content(payload),
+                },
             )
-            stored, fresh = await self._store(event, payload, bot_id)
-            if not fresh:
-                telemetry.annotate(**{attrs.DUPLICATE: True})
-                logger.warning(
-                    "bot=%s update=%s was already processed, skipped",
-                    bot_id,
-                    event.update_id,
+            if chat is not None:
+                try:
+                    async with SessionLocal() as session:
+                        await ChatRepository(session).touch(
+                            bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username,
+                        )
+                except Exception:
+                    logger.warning("bot=%s chat=%s touch failed", bot_id, chat.id, exc_info=True)
+
+            if UPDATE_DB_ID_KEY not in data:
+                try:
+                    async with SessionLocal() as session:
+                        stored, fresh = await UpdateRepository(session).save(
+                            bot_id=bot_id,
+                            update_id=event.update_id,
+                            chat_id=chat.id if chat else None,
+                            message_id=message_id,
+                            user_id=user_id,
+                            payload=payload,
+                        )
+                    if not fresh:
+                        telemetry.annotate(**{attrs.DUPLICATE: True})
+                        logger.warning("bot=%s update=%s was already processed, skipped", bot_id, event.update_id)
+                        return None
+                    data[UPDATE_DB_ID_KEY] = stored
+                except Exception:
+                    logger.exception("bot=%s update=%s fallback storage failed", bot_id, event.update_id)
+
+            if event.message is not None and chat is not None:
+                events.publish(
+                    "message.in",
+                    bot_id=bot_id,
+                    chat_id=chat.id,
+                    message_id=message_id,
+                    user_id=user_id,
+                    text=_preview(event.message.text or event.message.caption),
                 )
-                return None
-            data[UPDATE_DB_ID_KEY] = stored
             try:
                 return await handler(event, data)
             except Exception:
@@ -85,7 +117,7 @@ class UpdateMiddleware(BaseMiddleware):
                     (time.perf_counter() - started) * 1000,
                 )
 
-    async def _store(self, event: Update, payload: Any, bot_id: int) -> tuple[int | None, bool]:
+    def _extract_info(self, event: Update) -> tuple[Chat | None, int | None, int | None]:
         chat: Chat | None = None
         message_id: int | None = None
         user_id: int | None = None
@@ -107,40 +139,4 @@ class UpdateMiddleware(BaseMiddleware):
             user_id = event.chosen_inline_result.from_user.id if event.chosen_inline_result.from_user else None
         elif event.inline_query is not None:
             user_id = event.inline_query.from_user.id if event.inline_query.from_user else None
-        telemetry.annotate(
-            **{
-                attrs.CHAT_ID: chat.id if chat else None,
-                attrs.USER_ID: user_id,
-                attrs.MESSAGE_ID: message_id,
-                attrs.PROMPT: telemetry.content(payload),
-            },
-        )
-        try:
-            async with SessionLocal() as session:
-                if chat is not None:
-                    await ChatRepository(session).touch(
-                        bot_id, chat.id, chat.type, chat.title or chat.full_name, chat.username,
-                    )
-                stored, fresh = await UpdateRepository(session).save(
-                    bot_id=bot_id,
-                    update_id=event.update_id,
-                    chat_id=chat.id if chat else None,
-                    message_id=message_id,
-                    user_id=user_id,
-                    payload=payload,
-                )
-        except Exception:
-            logger.exception("bot=%s update=%s not persisted", bot_id, event.update_id)
-            return None, True
-        if not fresh:
-            return stored, False
-        if event.message is not None and chat is not None:
-            events.publish(
-                "message.in",
-                bot_id=bot_id,
-                chat_id=chat.id,
-                message_id=message_id,
-                user_id=user_id,
-                text=_preview(event.message.text or event.message.caption),
-            )
-        return stored, True
+        return chat, message_id, user_id
