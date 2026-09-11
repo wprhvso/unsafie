@@ -315,7 +315,16 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
     ) as turn_span:
         base = len(messages)
         try:
-            async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
+            async with (
+                cluster.lock(
+                    turns.chat_lock(turn.bot_id, turn.chat_id),
+                    ttl=settings.chat_lock_ttl,
+                    wait=settings.chat_lock_wait,
+                    renew=True,
+                ),
+                turns.alive(turn.id),
+                typing(bot, turn.chat_id, prefix),
+            ):
                 with telemetry.span("agent.context"):
                     async with SessionLocal() as session:
                         context = await build_context(session, ctx)
@@ -401,24 +410,42 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                     attrs.REFUSAL: note,
                 },
             )
-            events.publish(
-                "turn.finished",
-                turn_id=str(turn.id),
-                root_id=str(turn.root_id),
-                bot_id=turn.bot_id,
-                chat_id=turn.chat_id,
-                user_id=turn.user_id,
-                status=str(status),
-                note=note,
-            )
-            live.emit(
-                turn.id,
-                "turn.end",
-                status=str(status),
-                steps=fresh.num_turns if fresh else 0,
-                note=note,
-            )
-            await live.end(turn.id)
+            if status == TurnStatus.RUNNING:
+                events.publish(
+                    "turn.paused",
+                    turn_id=str(turn.id),
+                    root_id=str(turn.root_id),
+                    bot_id=turn.bot_id,
+                    chat_id=turn.chat_id,
+                    user_id=turn.user_id,
+                    note=note,
+                )
+                live.emit(
+                    turn.id,
+                    "turn.pause",
+                    status="paused",
+                    steps=fresh.num_turns if fresh else 0,
+                    note=note,
+                )
+            else:
+                events.publish(
+                    "turn.finished",
+                    turn_id=str(turn.id),
+                    root_id=str(turn.root_id),
+                    bot_id=turn.bot_id,
+                    chat_id=turn.chat_id,
+                    user_id=turn.user_id,
+                    status=str(status),
+                    note=note,
+                )
+                live.emit(
+                    turn.id,
+                    "turn.end",
+                    status=str(status),
+                    steps=fresh.num_turns if fresh else 0,
+                    note=note,
+                )
+                await live.end(turn.id)
 
 
 async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) -> None:
@@ -561,14 +588,23 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                 is_subagent=True,
                 note=note,
             )
-            live.emit(
-                turn.id,
-                "turn.end",
-                status=str(status),
-                steps=fresh.num_turns if fresh else 0,
-                note=note,
-            )
-            await live.end(turn.id)
+            if status == TurnStatus.RUNNING:
+                live.emit(
+                    turn.id,
+                    "turn.pause",
+                    status="paused",
+                    steps=fresh.num_turns if fresh else 0,
+                    note=note,
+                )
+            else:
+                live.emit(
+                    turn.id,
+                    "turn.end",
+                    status=str(status),
+                    steps=fresh.num_turns if fresh else 0,
+                    note=note,
+                )
+                await live.end(turn.id)
             await notify_subagent_done(turn.id)
 
 

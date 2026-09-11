@@ -163,6 +163,7 @@ class Supervisor(Loop):
         for bot_id, token in wanted.items():
             force = restarts.get(restart_name(bot_id)) is not None
             if not force and bot_id in self._synced:
+                await mark_active(bot_id)
                 active.add(bot_id)
                 continue
             try:

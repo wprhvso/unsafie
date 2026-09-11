@@ -10,7 +10,7 @@
 
   let { content = null, title = null } = $props();
 
-  const VIEWPORT = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+  const VIEWPORT = 'width=device-width, initial-scale=1';
 
   let view = $state('loading');
   let article = $state(null);

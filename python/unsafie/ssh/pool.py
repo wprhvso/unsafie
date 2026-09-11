@@ -150,7 +150,6 @@ class Pool:
             return connection
 
     async def _drop(self, key: tuple[int, int]) -> None:
-        self._locks.pop(key, None)
         held = self._held.pop(key, None)
         if held is not None:
             held.connection.close()
@@ -222,6 +221,7 @@ async def run(user_id: int, host: SshHost, command: str, timeout: float | None =
         try:
             completed = await asyncio.wait_for(connection.run(command, check=False), timeout=limit)
         except TimeoutError:
+            await pool.disconnect(user_id, host.id)
             msg = f"{host.alias}: command timed out after {limit:.0f}s: {command[:200]}"
             raise SshError(
                 msg,

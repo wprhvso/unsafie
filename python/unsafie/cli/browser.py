@@ -125,6 +125,8 @@ def shot(*, output: str | Path | None = None, full: bool = False) -> dict:
     data = _act(actions.screenshot, full)
     if output is not None:
         target = Path(output)
+        if target.is_dir():
+            target = target / f"shot_{int(time.time() * 1000)}.png"
     else:
         target = Path(f"/tmp/shots/shot_{int(time.time() * 1000)}.png")
     target.parent.mkdir(parents=True, exist_ok=True)

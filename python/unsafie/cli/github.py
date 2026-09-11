@@ -42,6 +42,11 @@ def use(login: str | None) -> dict:
     )
     subprocess.run(["gh", "auth", "setup-git"], check=False, capture_output=True)
     actual_login = str(answer.get("login") or login or "")
+    gh_cfg = home / ".config" / "gh"
+    gh_cfg.mkdir(parents=True, exist_ok=True)
+    hosts_file = gh_cfg / "hosts.yml"
+    hosts_file.write_text(f"github.com:\n    oauth_token: {secret}\n    user: {actual_login}\n    git_protocol: https\n", encoding="utf-8")
+    hosts_file.chmod(0o600)
     return {"login": actual_login, "name": name, "email": email}
 
 

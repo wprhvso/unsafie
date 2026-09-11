@@ -1,3 +1,4 @@
+import contextlib
 import json
 import resource
 import sys
@@ -11,7 +12,8 @@ from unsafie.bloat2md.domain import ConversionError, UnsupportedFile
 def _restrict() -> None:
     limits = settings()
     memory = limits.memory_limit_mb * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+    with contextlib.suppress(Exception):
+        resource.setrlimit(resource.RLIMIT_DATA, (memory, memory))
     resource.setrlimit(resource.RLIMIT_CPU, (limits.cpu_seconds, limits.cpu_seconds))
     output = limits.output_limit_mb * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_FSIZE, (output, output))

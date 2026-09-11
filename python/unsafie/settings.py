@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     db_name: str = "unsafie"
     db_user: str = "unsafie"
     db_password: str = ""
+    secret_key: str = Field(default="", validation_alias=AliasChoices("SECRET_KEY", "DATABASE_ENCRYPTION_KEY"))
     db_pool_size: int = 20
     db_max_overflow: int = 30
     db_pool_timeout: float = 30.0

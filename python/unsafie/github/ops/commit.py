@@ -75,11 +75,15 @@ async def _tree_entries(state: Session) -> Upload:
     return Upload(entries, len(pending), inlined, unchanged, size)
 
 
-async def _remote_files(state: Session, base_tree: str, head_tree: str) -> tuple[dict, dict]:
+async def _remote_files(state: Session, base_tree: str, head_tree: str) -> tuple[dict, dict, dict]:
     base, head = await asyncio.gather(state.client.tree(base_tree), state.client.tree(head_tree))
     base_map = {e["path"]: e["sha"] for e in base.get("tree", []) if e.get("type") == "blob"}
     head_map = {e["path"]: e["sha"] for e in head.get("tree", []) if e.get("type") == "blob"}
-    return base_map, head_map
+    modes = {e["path"]: e["mode"] for e in head.get("tree", []) if e.get("type") == "blob" and e.get("mode")}
+    for e in base.get("tree", []):
+        if e.get("type") == "blob" and e.get("mode") and e["path"] not in modes:
+            modes[e["path"]] = e["mode"]
+    return base_map, head_map, modes
 
 
 @telemetry.traced("github.rebase")
@@ -93,12 +97,15 @@ async def rebase_branch(state: Session, remote_sha: str) -> merge.Result:
     )
     worktree = await ensure_worktree(state)
     remote_commit = await state.client.commit(remote_sha)
-    base_map, head_map = await _remote_files(
+    base_map, head_map, modes = await _remote_files(
         state, worktree.base_tree_sha, remote_commit["tree"]["sha"],
     )
     ours: dict[str, bytes | None] = {}
+    existing_modes: dict[str, str] = {}
     for path in state.overlay.paths:
         entry = state.overlay.entry(path)
+        if entry and entry.mode:
+            existing_modes[path] = entry.mode
         ours[path] = None if entry is None or entry.deleted else entry.data
     touched = set(ours)
     blobs = await state.client.blobs(
@@ -117,7 +124,8 @@ async def rebase_branch(state: Session, remote_sha: str) -> merge.Result:
         if data is None:
             state.overlay.delete(path)
         else:
-            state.overlay.changes[path] = {"content": encode(data), "mode": "100644"}
+            mode = existing_modes.get(path) or modes.get(path) or "100644"
+            state.overlay.changes[path] = {"content": encode(data), "mode": mode}
     async with SessionLocal() as session:
         await WorktreeRepository(session).save(
             worktree.id,

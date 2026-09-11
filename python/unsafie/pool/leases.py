@@ -77,6 +77,7 @@ async def take(
     deadline = time.monotonic() + (settings.pool_take_wait if wait is None else wait)
     taken: list[PoolMachine] = []
     aliases = {m.alias for m in mine if m.alias}
+    ahead = 0
     await _queue_up(user_id)
     try:
         while len(taken) < wanted:
@@ -92,10 +93,11 @@ async def take(
                 continue
             aliases.add(alias)
             taken.append(machine)
+        if not taken:
+            ahead = await _ahead_of(user_id)
     finally:
         await _leave_queue(user_id)
     if not taken:
-        ahead = await _ahead_of(user_id)
         raise PoolError(
             "no free machine right now"
             + (f", {ahead} user(s) are waiting before you" if ahead else "")

@@ -24,7 +24,15 @@ async def _is_unknown_command(message: Message) -> bool:
     if not any(e.type == "bot_command" and e.offset == 0 for e in entities):
         return False
     command = text.split(maxsplit=1)[0]
-    if "@" in command and message.bot is not None:
+    if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
+        if "@" not in command:
+            return False
+        if message.bot is not None:
+            me = await message.bot.me()
+            mention = command.split("@", 1)[1]
+            if not me.username or mention.lower() != me.username.lower():
+                return False
+    elif "@" in command and message.bot is not None:
         me = await message.bot.me()
         mention = command.split("@", 1)[1]
         if me.username and mention.lower() != me.username.lower():
@@ -57,13 +65,13 @@ def build_messages_router() -> Router:
                 if not addressed_to_bot(message, tg_bot_id, username):
                     return
                 if message.text and username:
-                    cleaned = clean_mention(message.text, username)
+                    cleaned, new_entities = clean_mention(message.text, username, list(message.entities or []))
                     if cleaned != message.text:
-                        message = message.model_copy(update={"text": cleaned}).as_(message.bot)
+                        message = message.model_copy(update={"text": cleaned, "entities": new_entities}).as_(message.bot)
                 elif message.caption and username:
-                    cleaned = clean_mention(message.caption, username)
+                    cleaned, new_entities = clean_mention(message.caption, username, list(message.caption_entities or []))
                     if cleaned != message.caption:
-                        message = message.model_copy(update={"caption": cleaned}).as_(message.bot)
+                        message = message.model_copy(update={"caption": cleaned, "caption_entities": new_entities}).as_(message.bot)
 
         logger.info(
             "bot=%s chat=%s(%s) msg=%s from=%s content_type=%s reply_to=%s",

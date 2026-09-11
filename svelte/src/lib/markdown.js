@@ -6,6 +6,9 @@ const MATH = {
     { left: '$', right: '$', display: false }
   ],
   throwOnError: false,
+  trust: false,
+  strict: 'warn',
+  maxSize: 100,
   ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
 };
 

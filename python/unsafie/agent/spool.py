@@ -67,7 +67,11 @@ class BashSpool:
         with contextlib.suppress(OSError):
             self.dir.chmod(0o700)
 
-        script_body = ["#!/usr/bin/env bash"]
+        exit_file = shlex.quote(str(self.exit_code_file.resolve()))
+        script_body = [
+            "#!/usr/bin/env bash",
+            f"trap '''__ret=$?; echo $__ret > {exit_file}''' EXIT",
+        ]
         if cwd:
             script_body.append(f"cd {shlex.quote(str(Path(cwd).resolve()))}")
         script_body.append(code.strip())
@@ -127,7 +131,8 @@ class BashSpool:
 
     async def _watch_proc(self, proc: asyncio.subprocess.Process) -> None:
         exit_code = await proc.wait()
-        self.exit_code_file.write_text(f"{exit_code}\n", encoding="utf-8")
+        if not self.exit_code_file.is_file():
+            self.exit_code_file.write_text(f"{exit_code}\n", encoding="utf-8")
 
     def probe(self) -> SpoolProbeResult:
         if not self.meta_file.is_file():
@@ -177,6 +182,27 @@ class BashSpool:
                 alive = True
             except OSError:
                 alive = False
+
+        if not alive and not self.exit_code_file.is_file():
+            time.sleep(0.05)
+            if self.exit_code_file.is_file():
+                try:
+                    exit_code = int(self.exit_code_file.read_text(encoding="utf-8").strip())
+                except (ValueError, OSError):
+                    exit_code = 0
+                output = self.read_output()
+                mtime = self.exit_code_file.stat().st_mtime
+                duration = max(0.0, mtime - started_at) if started_at else 0.0
+                return SpoolProbeResult(
+                    status=SpoolStatus.FINISHED,
+                    pid=pid,
+                    pgid=pgid,
+                    exit_code=exit_code,
+                    output=output,
+                    started_at=started_at,
+                    duration=duration,
+                    interrupted=False,
+                )
 
         output = self.read_output()
         now = time.time()

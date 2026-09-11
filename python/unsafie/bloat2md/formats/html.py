@@ -65,6 +65,28 @@ def to_markdown(source: str) -> tuple[str, int]:
     return clean(body).text, dropped
 
 
+def _decode_html(raw: bytes) -> str:
+    meta_m = re.search(rb'''<meta[^>]+charset=["']?([-_a-zA-Z0-9]+)''', raw, re.IGNORECASE)
+    if meta_m:
+        encoding = meta_m.group(1).decode("ascii", "ignore").strip()
+        try:
+            return raw.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            pass
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    try:
+        import charset_normalizer
+        result = charset_normalizer.from_bytes(raw).best()
+        if result and result.encoding:
+            return str(result)
+    except Exception:
+        pass
+    return raw.decode("utf-8", "replace")
+
+
 def convert(raw: bytes) -> Payload:
-    markdown, dropped = to_markdown(raw.decode("utf-8", "replace"))
+    markdown, dropped = to_markdown(_decode_html(raw))
     return Payload(markdown=markdown, dropped={"hidden_nodes": dropped} if dropped else {})

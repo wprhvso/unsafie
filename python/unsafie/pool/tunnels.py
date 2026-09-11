@@ -194,6 +194,7 @@ class Bridge:
             for task in crew:
                 task.cancel()
             await asyncio.gather(*crew, return_exceptions=True)
+            await self.close()
 
 
 async def bridge(channel_id: str, side: str) -> Bridge:

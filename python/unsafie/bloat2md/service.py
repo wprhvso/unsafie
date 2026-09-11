@@ -31,9 +31,9 @@ _BY_KIND: Final[dict[Kind, Callable[[bytes], Payload]]] = {
 }
 
 
-def _fallback(kind: Kind, raw: bytes, error: ConversionError) -> Payload:
+def _fallback(kind: Kind, raw: bytes, error: ConversionError, name: str = "") -> Payload:
     if kind in {Kind.PPTX, Kind.ODT, Kind.ODP, Kind.RTF, Kind.DOCX} and legacy.available():
-        return legacy.convert(raw)
+        return legacy.convert(raw, name or "input.bin")
     raise error
 
 
@@ -53,9 +53,12 @@ def convert(raw: bytes, name: str) -> tuple[Kind, Payload]:
         raise UnsupportedFile(msg)
 
     try:
-        payload = handler(raw)
+        if kind is Kind.LEGACY:
+            payload = legacy.convert(raw, name)
+        else:
+            payload = handler(raw)
     except ConversionError as error:
-        payload = _fallback(kind, raw, error)
+        payload = _fallback(kind, raw, error, name)
 
     markdown, truncated = clip(payload.markdown, settings().max_markdown_chars)
     return kind, Payload(

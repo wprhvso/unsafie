@@ -187,12 +187,13 @@ async def run(
             result.text = reply.text
         messages.append(reply.as_message())
 
-        if reply.stop_reason and reply.stop_reason not in ("STOP", "MAX_TOKENS"):
+        if reply.stop_reason and reply.stop_reason != "STOP":
             recorder.note("unsafie.generation_stopped", {"reason": reply.stop_reason})
             logger.warning("%s step=%s stop_reason=%s", ctx.prefix, result.steps, reply.stop_reason)
+            reason_msg = "Generation was cut off due to token limit (MAX_TOKENS)" if reply.stop_reason == "MAX_TOKENS" else f"Generation stopped ({reply.stop_reason})"
             _ask(
                 messages,
-                f"Error: Generation stopped ({reply.stop_reason}). Please provide an executable bash block.",
+                f"Error: {reason_msg}. Please provide a complete, executable bash code block enclosed in ```bash ... ```.",
             )
             continue
 

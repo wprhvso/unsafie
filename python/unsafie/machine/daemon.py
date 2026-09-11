@@ -106,12 +106,14 @@ class Daemon:
         except Exception as e:
             sys.stderr.write(f"registration failed: {e}\n")
             return 0
-        threading.Thread(target=self._sender, daemon=True).start()
+        sender_thread = threading.Thread(target=self._sender)
+        sender_thread.start()
         threading.Thread(target=self._heartbeat, daemon=True).start()
         try:
             self._loop()
         finally:
             self.stop.set()
+            sender_thread.join(timeout=5.0)
         return 0
 
     def _loop(self) -> None:
@@ -129,14 +131,54 @@ class Daemon:
             for raw in (answer or {}).get("frames", []):
                 self._dispatch(raw)
 
+    def _kill_orphans(self) -> None:
+        my_pid = os.getpid()
+        ancestors = {my_pid, 1}
+        curr = my_pid
+        while curr > 1:
+            try:
+                with open(f"/proc/{curr}/stat") as f:
+                    ppid = int(f.read().split()[3])
+                ancestors.add(ppid)
+                curr = ppid
+            except Exception:
+                break
+        my_uid = os.getuid()
+        proc_dir = Path("/proc")
+        if not proc_dir.is_dir():
+            return
+        for entry in proc_dir.iterdir():
+            if entry.name.isdigit():
+                try:
+                    pid = int(entry.name)
+                    if pid in ancestors:
+                        continue
+                    if entry.stat().st_uid == my_uid:
+                        with contextlib.suppress(ProcessLookupError, PermissionError):
+                            os.kill(pid, signal.SIGKILL)
+                except Exception:
+                    pass
+
     def _cleanup_lease(self) -> None:
-        for k in ("UNSAFIE_TOKEN", "UNSAFIE_CHAT", "UNSAFIE_TURN"):
+        self._kill_orphans()
+        for k in ("UNSAFIE_TOKEN", "UNSAFIE_CHAT", "UNSAFIE_TURN", "GH_TOKEN", "GITHUB_TOKEN"):
             os.environ.pop(k, None)
         home = Path.home()
-        for cred in (home / ".git-credentials", home / ".ssh/id_ed25519", home / ".ssh/known_hosts"):
+        for cred in (
+            home / ".git-credentials",
+            home / ".gitconfig",
+            home / ".ssh/id_ed25519",
+            home / ".ssh/id_ed25519.pub",
+            home / ".ssh/known_hosts",
+            home / ".ssh/config",
+        ):
             with contextlib.suppress(OSError):
                 if cred.is_file():
                     cred.unlink()
+        with contextlib.suppress(Exception):
+            subprocess.run(["git", "config", "--global", "--unset-all", "user.name"], check=False)
+            subprocess.run(["git", "config", "--global", "--unset-all", "user.email"], check=False)
+            subprocess.run(["git", "config", "--global", "--unset-all", "credential.helper"], check=False)
         with contextlib.suppress(OSError):
             if self.workdir.is_dir():
                 shutil.rmtree(self.workdir)
@@ -205,10 +247,12 @@ class Daemon:
             started = time.monotonic()
             bash_bin = shutil.which("bash") or "/bin/bash"
             limit = float(raw.get("timeout") or 600.0)
+            kind = str(raw.get("kind") or "")
+            argv = [sys.executable, "-c", cmd] if kind == wire.FrameKind.PYTHON else [bash_bin, "-lc", cmd]
             proc = None
             try:
                 proc = subprocess.Popen(
-                    [bash_bin, "-lc", cmd],
+                    argv,
                     cwd=str(self.workdir),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -243,23 +287,25 @@ class Daemon:
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 
     def _sender(self) -> None:
-        while not self.stop.is_set():
+        while not self.stop.is_set() or not self.outbox.empty():
             batch = []
             try:
                 batch.append(self.outbox.get(timeout=FLUSH))
             except queue.Empty:
+                if self.stop.is_set():
+                    break
                 continue
             while len(batch) < 32:
                 try:
                     batch.append(self.outbox.get_nowait())
                 except queue.Empty:
                     break
-            while batch and not self.stop.is_set():
+            for _ in range(5):
                 try:
                     self.link.call("POST", f"/machines/{self.name}/output", body={"frames": batch})
                     break
                 except Exception:
-                    time.sleep(1.0)
+                    time.sleep(0.5)
 
     def _heartbeat(self) -> None:
         while not self.stop.wait(self.beat):
