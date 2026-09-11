@@ -143,7 +143,7 @@ class Settings(BaseSettings):
 
     opal_refresh_url: str = "https://opal.google/connection/refresh"
     opal_access_ttl: int = 2700
-    opal_pick_attempts: int = 3
+    opal_pick_attempts: int = 30
 
     cache_ttl: str = "1h"
     agent_max_steps: int = 6400
