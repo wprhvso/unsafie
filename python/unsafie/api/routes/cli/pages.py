@@ -82,6 +82,8 @@ async def replace(slug: str, body: Page, who: Pages) -> dict:
         artifact = await repo.by_slug(slug)
         if artifact is None or artifact.chat_id != who.chat_id:
             raise HTTPException(404, "no such page")
+        if artifact.kind != ArtifactKind.MARKDOWN:
+            raise HTTPException(400, "only markdown pages can be modified")
         artifact.content = body.content
         if body.title is not None:
             artifact.title = body.title.strip()[:TITLE_LIMIT] or None
@@ -98,5 +100,7 @@ async def drop(slug: str, who: Pages) -> dict:
         artifact = await repo.by_slug(slug)
         if artifact is None or artifact.chat_id != who.chat_id:
             raise HTTPException(404, "no such page")
+        if artifact.kind != ArtifactKind.MARKDOWN:
+            raise HTTPException(400, "only markdown pages can be deleted")
         await repo.delete(slug)
     return {"deleted": slug}

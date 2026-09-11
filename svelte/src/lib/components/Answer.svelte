@@ -29,28 +29,31 @@
     const restoreViewport = viewport();
     const stopZoom = zoomable();
 
-    (async () => {
-      if (typeof content !== 'string' || !content) {
-        view = 'missing';
-        return;
-      }
-      let body;
-      try {
-        body = await render(content);
-      } catch (error) {
-        console.error('render failed', error);
-        body = plain(content);
-      }
-      view = 'answer';
-      await tick();
-      article?.replaceChildren(...body.childNodes);
-    })();
-
     return () => {
       stopZoom();
       restoreViewport();
       root.classList.remove('answer');
     };
+  });
+
+  $effect(() => {
+    const raw = content;
+    (async () => {
+      if (typeof raw !== 'string' || !raw) {
+        view = 'missing';
+        return;
+      }
+      let body;
+      try {
+        body = await render(raw);
+      } catch (error) {
+        console.error('render failed', error);
+        body = plain(raw);
+      }
+      view = 'answer';
+      await tick();
+      article?.replaceChildren(...body.childNodes);
+    })();
   });
 </script>
 

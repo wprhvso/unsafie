@@ -23,6 +23,21 @@ async def root():
     return HTMLResponse(static.render(None))
 
 
+@router.get("/api/pages/{slug}", include_in_schema=False)
+async def page_json(slug: str):
+    slug = slug.rstrip("/")
+    if not is_slug(slug):
+        raise HTTPException(404, "Not Found")
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).by_slug(slug)
+    if artifact is None:
+        raise HTTPException(404, "Not Found")
+    payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
+    if artifact.kind == ArtifactKind.MARKDOWN:
+        payload["content"] = artifact.content or ""
+    return JSONResponse(payload)
+
+
 @router.api_route("/{path:path}", methods=METHODS, include_in_schema=False)
 async def spa(path: str, request: Request):
     if path.startswith(MACHINERY):
@@ -49,4 +64,6 @@ async def spa(path: str, request: Request):
     payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
     if artifact.kind == ArtifactKind.MARKDOWN:
         payload["content"] = artifact.content or ""
+    if "application/json" in (request.headers.get("accept") or ""):
+        return JSONResponse(payload)
     return HTMLResponse(static.render(payload))
