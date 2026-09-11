@@ -54,12 +54,7 @@ async def route(
     parent_turn_id: UUID | None = None,
 ) -> Plan:
     prefix = f"bot={bot_id} chat={chat_id}"
-    async with cluster.lock(
-        chat_lock(bot_id, chat_id),
-        ttl=settings.chat_lock_ttl,
-        wait=settings.chat_lock_wait,
-        renew=True,
-    ), SessionLocal() as session:
+    async with SessionLocal() as session:
         turns = TurnRepository(session)
         updates = UpdateRepository(session)
         owner = None
@@ -67,18 +62,6 @@ async def route(
             owner = await turns.get(parent_turn_id)
         elif reply_to is not None:
             owner = await turns.owner(bot_id, chat_id, reply_to)
-
-        if owner is not None and accepting(owner):
-            if update_db_id is not None:
-                await updates.attach(update_db_id, owner.id)
-            logger.info(
-                "%s reply_to=%s -> inject into turn=%s running on %s",
-                prefix,
-                reply_to,
-                owner.id,
-                owner.instance_id,
-            )
-            return Plan(owner, inject=True, in_context=True)
 
         turn = await turns.create(
             bot_id=bot_id,
@@ -103,13 +86,10 @@ async def route(
 
 
 async def finish_or_continue(turn_id: UUID, bot_id: int, chat_id: int) -> str | None:
-    async with cluster.lock(
-        chat_lock(bot_id, chat_id), ttl=settings.chat_lock_ttl, wait=settings.chat_lock_wait,
-    ):
-        leftover, _ = await queue.drain(turn_id)
-        if leftover is None:
-            await seal(turn_id)
-        return leftover
+    leftover, _ = await queue.drain(turn_id)
+    if leftover is None:
+        await seal(turn_id)
+    return leftover
 
 
 _last_progress: dict[UUID, float] = {}

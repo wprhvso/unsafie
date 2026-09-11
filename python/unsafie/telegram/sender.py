@@ -34,6 +34,8 @@ CAPTION_LIMIT = 1024
 
 
 async def reply_target(turn: Turn) -> int | None:
+    if turn.reply_to is not None:
+        return turn.reply_to
     async with SessionLocal() as session:
         return await TurnRepository(session).reply_target(turn, settings.lineage_depth)
 
@@ -177,8 +179,8 @@ async def send(
         },
     ) as span:
         chunks = chunks_of(markdown)
-        if turn is not None and reply_to is None:
-            reply_to = await reply_target(turn)
+        if reply_to is None and turn is not None:
+            reply_to = turn.reply_to or (await reply_target(turn))
         ids = await _send_chunks(
             bot, prefix, chat_id, chunks, reply_to, reply_markup, silent, preview,
         )
@@ -225,8 +227,8 @@ async def send_file(
             attrs.FILE_MEDIA: media,
         },
     )
-    if turn is not None and reply_to is None:
-        reply_to = await reply_target(turn)
+    if reply_to is None and turn is not None:
+        reply_to = turn.reply_to or (await reply_target(turn))
     chunks = chunks_of(caption) if caption else []
     inline = len(chunks) == 1 and len(chunks[0]["text"]) <= CAPTION_LIMIT
     head = chunks[0] if inline else None

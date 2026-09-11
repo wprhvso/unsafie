@@ -11,7 +11,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, ChosenInlineResult, InlineKeyboardMarkup, Message
 
-from unsafie import cluster, events, telemetry
+from unsafie import events, telemetry
 from unsafie.agent import (
     cancel,
     checkpoints,
@@ -27,7 +27,6 @@ from unsafie.agent import (
 from unsafie.agent.prompt import SUBAGENT_SYSTEM_PROMPT, SYSTEM_PROMPT
 from unsafie.agent.prompt.context import build_context
 from unsafie.agent.session import Ctx
-from unsafie.agent.spool import cleanup_turn
 from unsafie.agent.subagents import (
     cancel_subagents_of,
     notify_subagent_done,
@@ -41,8 +40,10 @@ from unsafie.database.repositories.opal_session import OpalSessionRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.update import UpdateRepository
 from unsafie.database.repositories.user import UserRepository
+from unsafie.errors import OpsError
 from unsafie.fluent import t
 from unsafie.log import short
+from unsafie.pool import leases
 from unsafie.settings import settings
 from unsafie.telegram import bots, render, sender
 from unsafie.telegram.chat_action import typing
@@ -137,12 +138,13 @@ async def _execute(
         return Outcome("failed", error=str(e))
 
     logger.info(
-        "%s session=%s model=%s effort=%s messages=%s",
+        "%s session=%s model=%s effort=%s messages=%s machine=%s",
         prefix,
         session_row.id,
         model,
         effort,
         len(messages),
+        ctx.machine_name,
     )
 
     started = time.perf_counter()
@@ -257,6 +259,22 @@ def _failure_text(locale: str, outcome: Outcome) -> str:
 
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
+
+    try:
+        machine = await leases.ensure(
+            user_id=turn.user_id,
+            chat_id=turn.chat_id,
+            turn_id=turn.id,
+            bot_id=turn.bot_id,
+        )
+    except OpsError as e:
+        logger.warning("bot=%s chat=%s turn=%s pool exhausted: %s", turn.bot_id, turn.chat_id, turn.id, e)
+        msg = "⏳ Все раннеры сейчас заняты. Освободите машину через /pool release или повторите запрос позже."
+        await notify(bot, turn, msg)
+        async with SessionLocal() as session:
+            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "pool exhausted")
+        return
+
     ctx = Ctx(
         bot,
         turn.bot_id,
@@ -265,6 +283,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         turn.id,
         locale,
         inline_message_id=turn.inline_message_id,
+        machine_name=machine.name,
     )
     prefix = ctx.prefix
     history = await segments.load(turn)
@@ -316,12 +335,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         base = len(messages)
         try:
             async with (
-                cluster.lock(
-                    turns.chat_lock(turn.bot_id, turn.chat_id),
-                    ttl=settings.chat_lock_ttl,
-                    wait=settings.chat_lock_wait,
-                    renew=True,
-                ),
                 turns.alive(turn.id),
                 typing(bot, turn.chat_id, prefix),
             ):
@@ -401,8 +414,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                     await TurnRepository(session).finish(turn.id, status, note)
                     fresh = await TurnRepository(session).get(turn.id)
                 await checkpoints.clear(turn.id)
-                if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
-                    cleanup_turn(turn.id)
             telemetry.set_attrs(
                 turn_span,
                 {
@@ -464,7 +475,21 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
         logger.error("subagent turn=%s bot=%s not found", turn_id, turn.bot_id)
         return
 
-    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale)
+    try:
+        machine = await leases.ensure(
+            user_id=turn.user_id,
+            chat_id=turn.chat_id,
+            turn_id=turn.id,
+            bot_id=turn.bot_id,
+        )
+    except OpsError as e:
+        logger.warning("subagent turn=%s pool exhausted: %s", turn.id, e)
+        async with SessionLocal() as session:
+            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "pool exhausted")
+        await notify_subagent_done(turn.id)
+        return
+
+    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale, machine_name=machine.name)
     prefix = f"[subagent] {ctx.prefix}"
     system_prompt = SUBAGENT_SYSTEM_PROMPT
     messages = [request.user(prompt)]
@@ -565,9 +590,6 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                     await repo.finish(turn.id, status, final_result)
                     fresh = await repo.get(turn.id)
                 await checkpoints.clear(turn.id)
-
-            if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
-                cleanup_turn(turn.id)
 
             telemetry.set_attrs(
                 turn_span,
@@ -841,6 +863,19 @@ async def resume_turn(turn_id: UUID) -> None:
         logger.error("turn=%s bot=%s not found", turn.id, turn.bot_id)
         return
 
+    try:
+        machine = await leases.ensure(
+            user_id=turn.user_id,
+            chat_id=turn.chat_id,
+            turn_id=turn.id,
+            bot_id=turn.bot_id,
+        )
+    except OpsError as e:
+        logger.warning("resume turn=%s pool exhausted: %s", turn.id, e)
+        async with SessionLocal() as session:
+            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "pool exhausted")
+        return
+
     ctx = Ctx(
         bot,
         turn.bot_id,
@@ -849,142 +884,135 @@ async def resume_turn(turn_id: UUID) -> None:
         turn.id,
         locale,
         inline_message_id=turn.inline_message_id,
+        machine_name=machine.name,
     )
     prefix = ctx.prefix
 
-    async with cluster.lock(
-        turns.chat_lock(turn.bot_id, turn.chat_id),
-        ttl=settings.chat_lock_ttl,
-        wait=settings.chat_lock_wait,
-        renew=True,
-    ):
+    async with SessionLocal() as session:
+        fresh_turn = await TurnRepository(session).get(turn_id)
+    if fresh_turn is None or fresh_turn.status != TurnStatus.RUNNING:
+        return
+    turn = fresh_turn
+    checkpoint = await checkpoints.load(turn.id)
+    stream = await live.begin(turn)
+    if stream is not None:
+        step = checkpoint.step if checkpoint else 0
+        phase = checkpoint.phase if checkpoint else "init"
+        stream.emit(
+            "turn.resumed",
+            turn_id=str(turn.id),
+            root_id=str(turn.root_id),
+            chat_id=turn.chat_id,
+            step=step,
+            phase=phase,
+        )
+
+    history = await segments.load(turn)
+    system_prompt = history.system or SYSTEM_PROMPT
+    snapshot = None if history.system else system_prompt
+
+    if checkpoint:
+        messages = checkpoint.messages
+    else:
+        messages = list(history.messages)
         async with SessionLocal() as session:
-            fresh_turn = await TurnRepository(session).get(turn_id)
-        if fresh_turn is None or fresh_turn.status != TurnStatus.RUNNING:
-            return
-        turn = fresh_turn
-        checkpoint = await checkpoints.load(turn.id)
-        stream = await live.begin(turn)
-        if stream is not None:
-            step = checkpoint.step if checkpoint else 0
-            phase = checkpoint.phase if checkpoint else "init"
-            stream.emit(
-                "turn.resumed",
-                turn_id=str(turn.id),
-                root_id=str(turn.root_id),
-                chat_id=turn.chat_id,
-                step=step,
-                phase=phase,
-            )
-
-        history = await segments.load(turn)
-        system_prompt = history.system or SYSTEM_PROMPT
-        snapshot = None if history.system else system_prompt
-
-        if checkpoint:
-            messages = checkpoint.messages
+            update_repo = UpdateRepository(session)
+            update_row = await update_repo.first_for_turn(turn.id)
+        if update_row is not None and "message" in update_row.payload:
+            msg = Message.model_validate(update_row.payload["message"])
+            prompt = prompt_for(msg, False)
         else:
-            messages = list(history.messages)
-            async with SessionLocal() as session:
-                update_repo = UpdateRepository(session)
-                update_row = await update_repo.first_for_turn(turn.id)
-            if update_row is not None and "message" in update_row.payload:
-                msg = Message.model_validate(update_row.payload["message"])
-                prompt = prompt_for(msg, False)
-            else:
-                prompt = f"Resume turn {turn.id}"
-            async with SessionLocal() as session:
-                context = await build_context(session, ctx)
-            messages.append(request.user(prompt, context))
+            prompt = f"Resume turn {turn.id}"
+        async with SessionLocal() as session:
+            context = await build_context(session, ctx)
+        messages.append(request.user(prompt, context))
 
-        status = TurnStatus.FAILED
-        note: str | None = None
-        base = len(history.messages)
+    status = TurnStatus.FAILED
+    note: str | None = None
+    base = len(history.messages)
 
-        try:
-            async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
-                while True:
-                    outcome = await _execute(
-                        ctx,
-                        messages,
-                        system_prompt,
-                        initial_checkpoint=checkpoint,
+    try:
+        async with turns.alive(turn.id), typing(bot, turn.chat_id, prefix):
+            while True:
+                outcome = await _execute(
+                    ctx,
+                    messages,
+                    system_prompt,
+                    initial_checkpoint=checkpoint,
+                )
+                checkpoint = None
+                if outcome.status == "paused":
+                    status = TurnStatus.RUNNING
+                    note = "paused for shutdown"
+                    logger.info("%s resume turn paused for shutdown", prefix)
+                    return
+                if outcome.status != "ok":
+                    await queue.clear(turn.id)
+                    note = (
+                        outcome.status if outcome.error is None else short(outcome.error, 1000)
                     )
-                    checkpoint = None
-                    if outcome.status == "paused":
-                        status = TurnStatus.RUNNING
-                        note = "paused for shutdown"
-                        logger.info("%s resume turn paused for shutdown", prefix)
-                        return
-                    if outcome.status != "ok":
-                        await queue.clear(turn.id)
-                        note = (
-                            outcome.status if outcome.error is None else short(outcome.error, 1000)
-                        )
-                        logger.info("%s resume finished with %s", prefix, outcome.status)
-                        await notify(
-                            bot,
-                            turn,
-                            _failure_text(locale, outcome),
-                            reply_markup=retry_markup(str(turn.id), locale),
-                        )
-                        return
-                    leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
-                    if leftover is None:
-                        status = TurnStatus.DONE
-                        return
-                    if turns.is_shutting_down():
-                        status = TurnStatus.RUNNING
-                        note = "paused for shutdown"
-                        logger.info("%s turn paused for shutdown with pending messages", prefix)
-                        return
-                    messages.append(request.user(leftover))
-                    logger.info("%s re-running with messages that arrived after the reply", prefix)
-        except asyncio.CancelledError:
-            current = asyncio.current_task()
-            if current is not None:
-                current.uncancel()
-            if turns.is_shutting_down() and not await cancel.asked(turn.id):
-                status = TurnStatus.RUNNING
-                note = "paused for shutdown"
-                logger.info("%s resume turn cancelled by shutdown, preserving RUNNING status", prefix)
-            else:
-                status = TurnStatus.CANCELLED
-                note = "stopped by the user"
-                await queue.clear(turn.id)
-                await notify(bot, turn, t("agent-stopped", locale))
-        except Exception:
-            logger.exception("%s resume turn crashed", prefix)
+                    logger.info("%s resume finished with %s", prefix, outcome.status)
+                    await notify(
+                        bot,
+                        turn,
+                        _failure_text(locale, outcome),
+                        reply_markup=retry_markup(str(turn.id), locale),
+                    )
+                    return
+                leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
+                if leftover is None:
+                    status = TurnStatus.DONE
+                    return
+                if turns.is_shutting_down():
+                    status = TurnStatus.RUNNING
+                    note = "paused for shutdown"
+                    logger.info("%s turn paused for shutdown with pending messages", prefix)
+                    return
+                messages.append(request.user(leftover))
+                logger.info("%s re-running with messages that arrived after the reply", prefix)
+    except asyncio.CancelledError:
+        current = asyncio.current_task()
+        if current is not None:
+            current.uncancel()
+        if turns.is_shutting_down() and not await cancel.asked(turn.id):
+            status = TurnStatus.RUNNING
+            note = "paused for shutdown"
+            logger.info("%s resume turn cancelled by shutdown, preserving RUNNING status", prefix)
+        else:
+            status = TurnStatus.CANCELLED
+            note = "stopped by the user"
             await queue.clear(turn.id)
-            note = "crashed"
-            await notify(
-                bot,
-                turn,
-                t("agent-failure", locale),
-                reply_markup=retry_markup(str(turn.id), locale),
-            )
-        finally:
-            await cancel_subagents_of(turn.id)
-            fresh: Turn | None = None
-            if status == TurnStatus.RUNNING:
-                await turns.seal(turn.id)
-                await segments.save(turn, messages[base:], snapshot)
-                logger.info("%s resume turn preserved in RUNNING status for recovery", prefix)
-            else:
-                await cancel.clear(turn.id)
-                await turns.seal(turn.id)
-                await segments.save(turn, messages[base:], snapshot)
-                async with SessionLocal() as session:
-                    await TurnRepository(session).finish(turn.id, status, note)
-                    fresh = await TurnRepository(session).get(turn.id)
-                await checkpoints.clear(turn.id)
-                if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
-                    cleanup_turn(turn.id)
-            live.emit(
-                turn.id,
-                "turn.end",
-                status=str(status),
-                steps=fresh.num_turns if fresh else 0,
-                note=note,
-            )
-            await live.end(turn.id)
+            await notify(bot, turn, t("agent-stopped", locale))
+    except Exception:
+        logger.exception("%s resume turn crashed", prefix)
+        await queue.clear(turn.id)
+        note = "crashed"
+        await notify(
+            bot,
+            turn,
+            t("agent-failure", locale),
+            reply_markup=retry_markup(str(turn.id), locale),
+        )
+    finally:
+        await cancel_subagents_of(turn.id)
+        fresh: Turn | None = None
+        if status == TurnStatus.RUNNING:
+            await turns.seal(turn.id)
+            await segments.save(turn, messages[base:], snapshot)
+            logger.info("%s resume turn preserved in RUNNING status for recovery", prefix)
+        else:
+            await cancel.clear(turn.id)
+            await turns.seal(turn.id)
+            await segments.save(turn, messages[base:], snapshot)
+            async with SessionLocal() as session:
+                await TurnRepository(session).finish(turn.id, status, note)
+                fresh = await TurnRepository(session).get(turn.id)
+            await checkpoints.clear(turn.id)
+        live.emit(
+            turn.id,
+            "turn.end",
+            status=str(status),
+            steps=fresh.num_turns if fresh else 0,
+            note=note,
+        )
+        await live.end(turn.id)

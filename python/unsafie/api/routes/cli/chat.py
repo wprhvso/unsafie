@@ -222,9 +222,13 @@ async def say(body: Message, who: Chat) -> dict:
     bot_id = who.bot_id or 0
     target_chat = await who.target_chat(body.chat_id)
 
+    reply_to = body.reply_to
+    if reply_to is None and turn is not None:
+        reply_to = turn.reply_to
+
     idemp_key = body.idempotency_key
     if not idemp_key and body.turn:
-        raw = f"{body.text}:{body.reply_to}:{body.buttons}"
+        raw = f"{body.text}:{reply_to}:{body.buttons}"
         idemp_key = f"{body.turn}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
 
     cache_k = cluster.key("idemp", "msg", bot_id, target_chat, idemp_key) if idemp_key else None
@@ -246,14 +250,12 @@ async def say(body: Message, who: Chat) -> dict:
             markdown=body.text,
             kind=ResponseKind.AGENT,
             turn=turn,
-            reply_to=body.reply_to,
+            reply_to=reply_to,
             reply_markup=_markup(body.buttons),
             silent=body.silent,
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
-
-
 
     result = {"message_ids": response.message_ids, "reply_to": response.reply_to}
     if cache_k:
@@ -283,6 +285,8 @@ async def upload(body: Upload, who: Chat) -> dict:
     bot_id = who.bot_id or 0
     target_chat = await who.target_chat(body.chat_id)
 
+    reply_to = turn.reply_to if turn is not None else None
+
     idemp_key = body.idempotency_key
     if not idemp_key and body.turn:
         raw = f"{body.name}:{len(data)}:{body.caption}"
@@ -309,6 +313,7 @@ async def upload(body: Upload, who: Chat) -> dict:
             caption=body.caption,
             kind=ResponseKind.AGENT,
             turn=turn,
+            reply_to=reply_to,
             media=body.media,
             silent=body.silent,
         )
