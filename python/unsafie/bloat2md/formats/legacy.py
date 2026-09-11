@@ -68,7 +68,7 @@ def convert(raw: bytes, name: str = "input.bin") -> Payload:
         outdir = root / "out"
         profile.mkdir()
         outdir.mkdir()
-        suffix = Path(name).suffix if Path(name).suffix else ".bin"
+        suffix = Path(name).suffix or ".bin"
         source = root / f"input{suffix}"
         _ = source.write_bytes(raw)
 

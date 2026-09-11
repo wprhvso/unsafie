@@ -90,7 +90,7 @@ def send_photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs
 
 
 def edit(message_id: int, text: str, *, buttons: Any = None, chat: int | str | None = None) -> dict:
-    body = {
+    body: dict[str, Any] = {
         "text": text,
         "buttons": json.dumps(buttons, ensure_ascii=False) if buttons is not None else None,
     }
@@ -120,7 +120,7 @@ def react(message_id: int, emoji: str = "👍", *, big: bool = False, chat: int 
 
 
 def pin(message_id: int, *, unpin: bool = False, silent: bool = False, chat: int | str | None = None) -> dict:
-    body = {"silent": silent, "unpin": unpin}
+    body: dict[str, Any] = {"silent": silent, "unpin": unpin}
     chat_id = _chat(chat)
     if chat_id is not None:
         body["chat_id"] = chat_id

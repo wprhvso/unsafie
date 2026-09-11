@@ -98,7 +98,6 @@ class WebSocket:
 
     def recv_bytes(self) -> bytes | None:
         fragments = bytearray()
-        first_opcode = None
         while True:
             frame = self._frame()
             if frame is None:
@@ -111,12 +110,7 @@ class WebSocket:
                 continue
             if opcode == CLOSE:
                 return None
-            if opcode in (TEXT, BINARY):
-                first_opcode = opcode
-                fragments += payload
-                if fin:
-                    return bytes(fragments)
-            elif opcode == 0x0:
+            if opcode in (TEXT, BINARY, 0x0):
                 fragments += payload
                 if fin:
                     return bytes(fragments)

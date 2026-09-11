@@ -24,7 +24,7 @@ async def edit_inline(body: EditInline, who: Chat) -> dict:
     try:
         await bot.edit_message_text(
             inline_message_id=body.inline_message_id,
-            text=chunk["text"],
+            text=str(chunk["text"]),
             entities=_entities(chunk),
             reply_markup=markup,
         )

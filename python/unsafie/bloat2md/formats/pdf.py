@@ -1,6 +1,6 @@
 import io
 from collections.abc import Iterator
-from typing import Final, cast
+from typing import Final
 
 import pypdfium2 as pdfium
 
@@ -69,7 +69,7 @@ def _render(page: pdfium.PdfPage) -> bytes:
     limits = settings()
     width, height = page.get_size()
     scale = min(limits.render_edge / max(width, height, 1), 4.0)
-    bitmap = page.render(scale=float(scale))
+    bitmap = page.render(scale=round(scale))
     try:
         image = bitmap.to_pil().convert("RGB")
     finally:

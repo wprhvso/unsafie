@@ -28,7 +28,6 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.update import Update
 from unsafie.database.repositories.chat import ChatRepository
-from unsafie.database.repositories.response import ResponseRepository
 from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
@@ -661,9 +660,9 @@ async def history_get(
     async with SessionLocal() as session:
         repository = HistoryRepository(session)
         if message_id:
-            hits = await repository.around(who.bot_id, chat_id, message_id, max(1, min(around, 30)))
+            hits = await repository.around(who.bot_id, target_chat, message_id, max(1, min(around, 30)))
         else:
-            hits = await repository.recent(who.bot_id, chat_id, max(1, min(limit, 100)), before)
+            hits = await repository.recent(who.bot_id, target_chat, max(1, min(limit, 100)), before)
     return {"hits": [_hit(hit) for hit in hits]}
 
 

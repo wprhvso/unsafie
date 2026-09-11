@@ -5,8 +5,8 @@ from aiogram.types import Message
 from unsafie import artifacts
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.turn import TurnRepository
-from unsafie.settings import settings
 from unsafie.fluent import t
+from unsafie.settings import settings
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 

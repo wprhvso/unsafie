@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import sys
 from typing import Final
 
 from charset_normalizer import from_bytes
@@ -53,7 +54,8 @@ def delimited(raw: bytes) -> Payload:
     try:
         rows = list(csv.reader(io.StringIO(text), dialect))
     except csv.Error as e:
-        raise ConversionError(f"csv parsing failed: {e}") from e
+        msg = f"csv parsing failed: {e}"
+        raise ConversionError(msg) from e
     kept = trim(rows[:MAX_CSV_ROWS])
     return Payload(markdown=table(kept), truncated=len(rows) > MAX_CSV_ROWS)
 

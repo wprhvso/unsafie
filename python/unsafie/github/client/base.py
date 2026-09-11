@@ -150,7 +150,8 @@ class GithubHTTP:
             parsed = urlsplit(path)
             api_parsed = urlsplit(settings.github_api_url)
             if parsed.netloc != api_parsed.netloc:
-                raise GithubError(f"refusing request to non-GitHub host: {parsed.netloc}")
+                msg = f"refusing request to non-GitHub host: {parsed.netloc}"
+                raise GithubError(msg)
             url = path
         else:
             url = f"{settings.github_api_url}{path if path.startswith('/') else '/' + path}"
@@ -222,7 +223,8 @@ class GithubHTTP:
             parsed = urlsplit(path)
             api_parsed = urlsplit(settings.github_api_url)
             if parsed.netloc != api_parsed.netloc:
-                raise GithubError(f"refusing request to non-GitHub host: {parsed.netloc}")
+                msg = f"refusing request to non-GitHub host: {parsed.netloc}"
+                raise GithubError(msg)
             url = path
         else:
             url = f"{settings.github_api_url}{path if path.startswith('/') else '/' + path}"

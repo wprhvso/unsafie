@@ -2,7 +2,6 @@ import logging
 
 from aiogram import Router
 from aiogram.enums import ChatType
-from unsafie.telegram.group import is_admin
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
@@ -10,6 +9,7 @@ from unsafie.errors import OpsError
 from unsafie.fluent import t
 from unsafie.pool import leases, registry
 from unsafie.pool.ci import repos
+from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
@@ -81,10 +81,14 @@ def build_pool_router() -> Router:
             await answer(message, bot_id, await _status(user_id, locale))
             return
 
-        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot and not await is_admin(message.bot, message.chat.id, user_id):
-            if action in ("take", "release", "ci"):
-                await answer(message, bot_id, t("commands-group-admin-only", locale))
-                return
+        if (
+            message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
+            and message.bot
+            and not await is_admin(message.bot, message.chat.id, user_id)
+            and action in ("take", "release", "ci")
+        ):
+            await answer(message, bot_id, t("commands-group-admin-only", locale))
+            return
 
         if action == "take":
             count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
