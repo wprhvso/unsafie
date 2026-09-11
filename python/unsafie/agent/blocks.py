@@ -297,14 +297,16 @@ class Runner:
 
         spool = BashSpool(self.ctx.turn_id, block.index)
         block.spool_dir = str(spool.dir)
-        spool.prepare(block.code)
+        workdir = Path(os.environ.get("UNSAFIE_WORKDIR") or (Path.home() / "work"))
+        workdir.mkdir(parents=True, exist_ok=True)
+        spool.prepare(block.code, cwd=workdir)
 
         watch = asyncio.create_task(
             self._nag(block), name=f"bash-slow:{self.ctx.turn_id}:{block.index}",
         )
         started = time.monotonic()
         try:
-            await spool.launch(bash_bin=bash_bin, env=env)
+            await spool.launch(bash_bin=bash_bin, env=env, cwd=workdir)
             await spool.wait(timeout=settings.agent_block_timeout)
         except TimeoutError:
             await spool.terminate(grace=2.0)
