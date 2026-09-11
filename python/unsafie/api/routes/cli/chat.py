@@ -215,86 +215,6 @@ def _markup(raw: str | None):
         raise HTTPException(400, str(bad)) from None
 
 
-def _trigger_bot_reply_turn(
-    *,
-    bot: Bot,
-    bot_id: int,
-    chat_id: int,
-    user_id: int,
-    reply_to: int,
-    text: str,
-    sent_message_id: int | None,
-    target_content: str,
-    target_created_at: datetime | None,
-) -> None:
-    async def _runner() -> None:
-        from unsafie.agent.runtime import dispatch
-
-        async with SessionLocal() as session:
-            chat_row = await ChatRepository(session).get(bot_id, chat_id)
-            latest_update = await session.scalar(
-                select(Update)
-                .where(Update.bot_id == bot_id, Update.user_id == user_id)
-                .order_by(Update.id.desc())
-                .limit(1),
-            )
-
-        chat_data: dict[str, Any] = {"id": chat_id}
-        if chat_row:
-            if chat_row.type:
-                chat_data["type"] = chat_row.type
-            if chat_row.title:
-                chat_data["title"] = chat_row.title
-            if chat_row.username:
-                chat_data["username"] = chat_row.username
-
-        from_data = None
-        if latest_update and "message" in latest_update.payload and "from" in latest_update.payload["message"]:
-            from_data = latest_update.payload["message"]["from"]
-        if not from_data:
-            from_data = {"id": user_id}
-
-        def _prompt(in_context: bool) -> str:
-            data: dict[str, Any] = {
-                "message_id": sent_message_id,
-                "date": datetime.now(UTC).isoformat(),
-                "from": from_data,
-                "text": text,
-                "chat": chat_data,
-                "reply_to": {
-                    "message_id": reply_to,
-                    "date": target_created_at.isoformat() if target_created_at else None,
-                    "from": {"is_bot": True},
-                    "text": target_content,
-                    "in_context": in_context,
-                },
-            }
-            return json.dumps(data, ensure_ascii=False)
-
-        try:
-            await dispatch(
-                bot,
-                bot_id=bot_id,
-                chat_id=chat_id,
-                user_id=user_id,
-                reply_to=reply_to,
-                update_db_id=None,
-                build_prompt=_prompt,
-                turn_reply_to=sent_message_id,
-                what=f"bot-reply={sent_message_id or reply_to}",
-            )
-        except Exception:
-            logger.exception(
-                "bot=%s chat=%s failed to dispatch turn for reply_to=%s",
-                bot_id,
-                chat_id,
-                reply_to,
-            )
-
-    task = asyncio.create_task(_runner(), name=f"bot-reply:{sent_message_id or reply_to}")
-    _ = task
-
-
 @router.post("/messages")
 async def say(body: Message, who: Chat) -> dict:
     bot = await who.bot()
@@ -660,7 +580,7 @@ async def history_search(
 
 @router.get("/history")
 async def history_get(
-    who: Chat, chat_id: int | None = None, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None,
+    who: Chat, chat_id: int | None = None, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None, since: float | None = None,
 ) -> dict:
     from unsafie.database import SessionLocal
     from unsafie.database.repositories.history import HistoryRepository
@@ -674,6 +594,8 @@ async def history_get(
             hits = await repository.around(who.bot_id, target_chat, message_id, max(1, min(around, 30)))
         else:
             hits = await repository.recent(who.bot_id, target_chat, max(1, min(limit, 100)), before)
+        if since is not None:
+            hits = [h for h in hits if h.ts >= since]
     return {"hits": [_hit(hit) for hit in hits]}
 
 

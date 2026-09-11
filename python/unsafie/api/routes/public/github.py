@@ -23,7 +23,7 @@ a{color:#06c}code{background:#f2f2f2;padding:.1em .3em;border-radius:3px}</style
 <h1>{title}</h1><p>{body}</p>"""
 
 
-def page(title: str, body: str, status: int = 200, escape_body: bool = False) -> HTMLResponse:
+def page(title: str, body: str, status: int = 200, escape_body: bool = True) -> HTMLResponse:
     t = html.escape(title)
     b = html.escape(body) if escape_body else body
     return HTMLResponse(PAGE.replace("{title}", t).replace("{body}", b), status_code=status)
@@ -88,4 +88,5 @@ async def app_created(request: Request, code: str = "", _=Depends(admin_required
         f"App {name} created",
         f'Now install it on your repositories: <a href="{manifest.install_url(slug)}">'
         f"github.com/apps/{slug}</a>.",
+        escape_body=False,
     )

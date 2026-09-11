@@ -250,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
             return _out(stop())
 
         if args.cmd == "chat":
+            if not getattr(args, "subcmd", None):
+                return _out({"error": "missing subcommand for unsafie chat"}, ok=False)
             from unsafie.cli import chat
 
             if args.subcmd == "send":
@@ -310,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(chat.download(args.file_id, output=args.output, chat=args.chat))
 
         if args.cmd in ("pages", "page"):
+            if not getattr(args, "subcmd", None):
+                return _out({"error": "missing subcommand for unsafie pages"}, ok=False)
             from unsafie.cli import pages
 
             if args.subcmd == "create":
@@ -322,6 +326,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(pages.delete(args.slug))
 
         if args.cmd == "github":
+            if not getattr(args, "subcmd", None):
+                return _out({"error": "missing subcommand for unsafie github"}, ok=False)
             from unsafie.cli import github
 
             if args.subcmd == "logins":
@@ -334,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(github.identity(login=args.login))
 
         if args.cmd == "browser":
+            if not getattr(args, "subcmd", None):
+                return _out({"error": "missing subcommand for unsafie browser"}, ok=False)
             from unsafie.cli import browser
 
             if args.subcmd == "start":
@@ -396,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
             return _out(vision.attach(args.paths, caption=args.caption))
 
         if args.cmd == "inline":
+            if not getattr(args, "subcmd", None):
+                return _out({"error": "missing subcommand for unsafie inline"}, ok=False)
             from unsafie.cli import inline
 
             if args.subcmd == "edit":
