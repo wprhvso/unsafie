@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from unsafie import events, telemetry
 from unsafie.database import SessionLocal
@@ -72,8 +72,14 @@ class Runner(Loop):
     async def _fire(self, task) -> None:
         bot = await bots.bot_for(task.bot_id)
         if bot is None:
-            logger.warning("task=%s: bot %s is not running", task.id, task.bot_id)
-            await self._advance(task)
+            logger.warning("task=%s: bot %s is not running, retrying in 15s", task.id, task.bot_id)
+            async with SessionLocal() as session:
+                repo = ScheduleRepository(session)
+                row = await repo.get_any(task.id)
+                if row is not None:
+                    row.next_run_at = datetime.now(UTC) + timedelta(seconds=15)
+                    row.active_turn_id = None
+                    await session.commit()
             return
         events.publish(
             "task.fired",

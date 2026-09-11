@@ -103,10 +103,13 @@ def absolute(raw: str, tz: ZoneInfo, now: datetime) -> datetime:
     s = raw.strip().lower()
     local_now = now.astimezone(tz)
     day_shift = 0
+    explicit_today = False
     for word, shift in DAY_WORDS:
         if s.startswith(word):
             s = s[len(word) :].strip(" ,в")
             day_shift = shift
+            if word in ("сегодня", "today"):
+                explicit_today = True
             break
     if not s:
         msg = "time is required, e.g. 'tomorrow 09:00'"
@@ -129,7 +132,7 @@ def absolute(raw: str, tz: ZoneInfo, now: datetime) -> datetime:
             parsed = local_now.replace(
                 hour=t.hour, minute=t.minute, second=t.second, microsecond=0, tzinfo=None,
             )
-            if day_shift == 0 and parsed <= local_now.replace(tzinfo=None):
+            if not explicit_today and day_shift == 0 and parsed <= local_now.replace(tzinfo=None):
                 day_shift = 1
             break
     if parsed is None:

@@ -83,6 +83,12 @@ class ScheduleRepository:
                     row.active_turn_id = None
                     row.runs += 1
                     row.last_run_at = now
+                    from unsafie.scheduler import service
+                    next_at = await service.advance(row)
+                    if next_at is None:
+                        await self.session.delete(row)
+                    else:
+                        row.next_run_at = next_at
                     continue
                 row.active_turn_id = None
 
