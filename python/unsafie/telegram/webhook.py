@@ -166,6 +166,9 @@ class Supervisor(Loop):
         active = set()
         for bot_id, token in wanted.items():
             force = restarts.get(restart_name(bot_id)) is not None
+            if not force and bot_id in self._synced:
+                active.add(bot_id)
+                continue
             try:
                 await ensure_webhook(bot_id, token, force=force)
                 if force:
