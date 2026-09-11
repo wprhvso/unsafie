@@ -26,4 +26,5 @@ def main() -> None:
         reload=settings.reload,
         log_config=None,
         access_log=False,
+        timeout_graceful_shutdown=int(settings.shutdown_grace + 10),
     )
