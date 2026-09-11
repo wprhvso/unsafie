@@ -58,6 +58,8 @@ class Cdp:
                 continue
             if "id" in message:
                 self._answers[int(message["id"])] = message
+                if len(self._answers) > 200:
+                    self._answers.pop(next(iter(self._answers)), None)
             else:
                 self._events.append(message)
                 del self._events[:-200]
@@ -84,6 +86,8 @@ class Cdp:
                     continue
                 if "id" in message:
                     self._answers[int(message["id"])] = message
+                    if len(self._answers) > 200:
+                        self._answers.pop(next(iter(self._answers)), None)
                 else:
                     self._events.append(message)
         finally:
