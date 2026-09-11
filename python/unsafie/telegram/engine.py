@@ -219,6 +219,10 @@ class TelegramEngine(Loop):
                 logger.exception("inbox worker unhandled exception")
                 await asyncio.sleep(0.5)
 
+    async def pause(self) -> None:
+        for bot_id in list(self._poller_tasks):
+            await self._stop_bot_poller(bot_id)
+
     def ids(self) -> list[int]:
         return sorted(self._poller_tasks)
 
