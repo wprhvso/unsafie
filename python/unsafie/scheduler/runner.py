@@ -7,6 +7,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.scheduled_task import TaskKind
 from unsafie.database.repositories.schedule import ScheduleRepository
+from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
 from unsafie.loop import Loop
 from unsafie.scheduler import service
@@ -84,11 +85,16 @@ class Runner(Loop):
         )
         logger.info("task=%s firing kind=%s chat=%s", task.id, task.kind, task.chat_id)
         if task.kind == TaskKind.REMIND:
+            locale = None
+            if getattr(task, "user_id", None):
+                async with SessionLocal() as session:
+                    user = await UserRepository(session).get(task.user_id)
+                    locale = user.locale if user and user.locale else None
             await sender.send(
                 bot,
                 bot_id=task.bot_id,
                 chat_id=task.chat_id,
-                markdown=t("tasks-reminder", None, text=task.text),
+                markdown=t("tasks-reminder", locale, text=task.text),
                 kind=ResponseKind.SYSTEM,
                 reply_to=task.origin_message_id,
             )
