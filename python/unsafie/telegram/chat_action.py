@@ -19,6 +19,7 @@ async def _loop(bot: Bot, chat_id: int, prefix: str) -> None:
             raise
         except Exception as e:
             logger.warning("%s typing failed: %s", prefix, e)
+            break
         await asyncio.sleep(INTERVAL)
 
 

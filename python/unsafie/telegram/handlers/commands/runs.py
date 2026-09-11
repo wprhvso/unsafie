@@ -5,7 +5,9 @@ from aiogram.types import Message
 from unsafie import artifacts
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.fluent import t
 from unsafie.settings import settings
+from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
 
@@ -18,6 +20,9 @@ def build_runs_router() -> Router:
             repo = TurnRepository(session)
             running = await repo.running(bot_id, message.chat.id)
         if not running:
+            user_id = message.from_user.id if message.from_user else 0
+            locale = await locale_for(user_id, message.from_user)
+            await answer(message, bot_id, t("cmd-runs-empty", locale))
             return
         links: list[str] = []
         for turn in running:

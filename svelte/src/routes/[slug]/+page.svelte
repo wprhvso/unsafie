@@ -23,7 +23,7 @@
     if (initial && initial.slug === currentSlug) {
       data = initial;
     } else if (currentSlug) {
-      fetch(`/api/v1/pages/${currentSlug}`)
+      fetch(`/api/pages/${currentSlug}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((json) => {
           if (json) data = json;

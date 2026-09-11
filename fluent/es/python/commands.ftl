@@ -68,8 +68,8 @@ cmd-system-help =
     Instrucciones para el modelo que lo orientan hacia un mejor rendimiento.
 
     Ejemplos:
-    <code>/system Responde de la forma más concisa posible</code>
-    <code>/system No uses términos técnicos en tu respuesta</code>
+    `/system Responde de la forma más concisa posible`
+    `/system No uses términos técnicos en tu respuesta`
 
     Volver a lo predeterminado: /system_clear
 cmd-system-ok = Prompt del sistema establecido
@@ -81,3 +81,5 @@ cmd-long-reset = Cancelar
 cmd-long-reset-ok = Cancelado
 cmd-long-empty = Todavía no hay nada que enviar
 cmd-long-expired = Se agotó el tiempo: no se envió nada
+
+cmd-runs-empty = No hay tareas activas en este chat

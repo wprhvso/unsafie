@@ -55,6 +55,19 @@ class Caller:
             raise HTTPException(400, "no chat: pass chat_id or use a token bound to a chat")
         return chat_id
 
+    async def ensure_admin(self, target_chat: int) -> None:
+        if target_chat == self.user_id:
+            return
+        bot = await self.bot()
+        try:
+            member = await bot.get_chat_member(target_chat, self.user_id)
+            if member.status not in ("creator", "administrator"):
+                raise HTTPException(403, "admin privileges required in the target chat")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(403, f"cannot verify admin status: {e}") from None
+
     async def target_chat(self, override: int | None = None) -> int:
         if self.chat_id is not None:
             if override is not None and override != self.chat_id:

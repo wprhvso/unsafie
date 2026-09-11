@@ -97,22 +97,29 @@ class WebSocket:
         return None if payload is None else payload.decode(errors="replace")
 
     def recv_bytes(self) -> bytes | None:
+        fragments = bytearray()
         while True:
             frame = self._frame()
             if frame is None:
                 return None
-            opcode, payload = frame
-            if opcode in (TEXT, BINARY):
-                return payload
+            opcode, payload, fin = frame
             if opcode == PING:
                 self._pong(payload)
-            elif opcode == CLOSE:
+                continue
+            if opcode == PONG:
+                continue
+            if opcode == CLOSE:
                 return None
+            if opcode in (TEXT, BINARY, 0x0):
+                fragments += payload
+                if fin:
+                    return bytes(fragments)
 
-    def _frame(self) -> tuple[int, bytes] | None:
+    def _frame(self) -> tuple[int, bytes, bool] | None:
         head = self._read(2)
         if head is None:
             return None
+        fin = bool(head[0] & FIN)
         opcode = head[0] & 0x0F
         size = head[1] & 0x7F
         if size == 126:
@@ -128,7 +135,7 @@ class WebSocket:
         payload = self._read(size) if size else b""
         if payload is None:
             return None
-        return opcode, payload
+        return opcode, payload, fin
 
     def _pong(self, payload: bytes) -> None:
         header = bytearray([FIN | PONG, MASK | len(payload)])

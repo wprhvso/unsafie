@@ -129,6 +129,20 @@ class Daemon:
             for raw in (answer or {}).get("frames", []):
                 self._dispatch(raw)
 
+    def _cleanup_lease(self) -> None:
+        for k in ("UNSAFIE_TOKEN", "UNSAFIE_CHAT", "UNSAFIE_TURN"):
+            os.environ.pop(k, None)
+        home = Path.home()
+        for cred in (home / ".git-credentials", home / ".ssh/id_ed25519", home / ".ssh/known_hosts"):
+            with contextlib.suppress(OSError):
+                if cred.is_file():
+                    cred.unlink()
+        with contextlib.suppress(OSError):
+            if self.workdir.is_dir():
+                shutil.rmtree(self.workdir)
+        with contextlib.suppress(OSError):
+            self.workdir.mkdir(parents=True, exist_ok=True)
+
     def _dispatch(self, raw: dict) -> None:
         kind = str(raw.get("kind") or "")
         if kind in (wire.FrameKind.COMMAND, wire.FrameKind.PYTHON):
@@ -151,6 +165,7 @@ class Daemon:
                 return
             threading.Thread(target=self._execute, args=(raw,), daemon=True).start()
         elif kind == wire.FrameKind.ASSIGN:
+            self._cleanup_lease()
             self.lease = {
                 "token": str(raw.get("token") or ""),
                 "chat": raw.get("chat"),
@@ -178,6 +193,7 @@ class Daemon:
                 except Exception:
                     pass
         elif kind == wire.FrameKind.SHUTDOWN:
+            self._cleanup_lease()
             self.stop.set()
 
     def _execute(self, raw: dict) -> None:

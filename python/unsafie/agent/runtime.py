@@ -376,6 +376,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             )
         finally:
             await cancel_subagents_of(turn.id)
+            fresh: Turn | None = None
             if status == TurnStatus.RUNNING:
                 await turns.seal(turn.id)
                 await segments.save(turn, messages[base:], snapshot)
@@ -512,6 +513,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
             status = TurnStatus.FAILED
             note = f"crashed: {e}"
         finally:
+            fresh: Turn | None = None
             if status == TurnStatus.RUNNING:
                 await turns.seal(turn.id)
                 await segments.save(turn, messages, system=system_prompt)
@@ -532,6 +534,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                     )
                     await repo.finish(turn.id, status, final_result)
                     fresh = await repo.get(turn.id)
+                await checkpoints.clear(turn.id)
 
             if status in (TurnStatus.DONE, TurnStatus.CANCELLED):
                 cleanup_turn(turn.id)
@@ -666,20 +669,24 @@ async def handle(message: Message, bot_id: int, update_db_id: int | None = None)
 
 
 async def handle_callback(
-    query: CallbackQuery, message: Message, bot_id: int, update_db_id: int | None,
+    query: CallbackQuery, message: Message | None, bot_id: int, update_db_id: int | None,
 ) -> None:
     if query.bot is None or update_db_id is None:
         return
     prompt = json.dumps(render.describe_callback(query), ensure_ascii=False)
+    chat_id = message.chat.id if message else query.from_user.id
+    reply_to = message.message_id if message else None
     await dispatch(
         query.bot,
         bot_id=bot_id,
-        chat_id=message.chat.id,
+        chat_id=chat_id,
         user_id=query.from_user.id,
-        reply_to=message.message_id,
+        reply_to=reply_to,
         update_db_id=update_db_id,
         build_prompt=lambda _: prompt,
         locale=await _user_locale(query.from_user.id, query.from_user),
+        is_inline=query.inline_message_id is not None,
+        inline_message_id=query.inline_message_id,
         what=f"callback={query.id}",
     )
 
@@ -757,9 +764,11 @@ async def handle_inline(chosen: ChosenInlineResult, bot_id: int) -> None:
     user_id = chosen.from_user.id
     locale = await _user_locale(user_id, chosen.from_user)
     query = chosen.query.strip()
+    variant = chosen.result_id.split(":")[0] if chosen.result_id else "text"
     data = {
         "inline_query": query,
         "inline_message_id": chosen.inline_message_id,
+        "variant": variant,
         "from": render.user_info(chosen.from_user),
     }
     prompt = json.dumps(data, ensure_ascii=False)
@@ -833,8 +842,10 @@ async def resume_turn(turn_id: UUID) -> None:
         system_prompt = history.system or SYSTEM_PROMPT
         snapshot = None if history.system else system_prompt
 
-        messages = checkpoint.messages if checkpoint else list(history.messages)
-        if not messages:
+        if checkpoint:
+            messages = checkpoint.messages
+        else:
+            messages = list(history.messages)
             async with SessionLocal() as session:
                 update_repo = UpdateRepository(session)
                 update_row = await update_repo.first_for_turn(turn.id)
@@ -845,7 +856,7 @@ async def resume_turn(turn_id: UUID) -> None:
                 prompt = f"Resume turn {turn.id}"
             async with SessionLocal() as session:
                 context = await build_context(session, ctx)
-            messages = [request.user(prompt, context)]
+            messages.append(request.user(prompt, context))
 
         status = TurnStatus.FAILED
         note: str | None = None
@@ -915,6 +926,7 @@ async def resume_turn(turn_id: UUID) -> None:
             )
         finally:
             await cancel_subagents_of(turn.id)
+            fresh: Turn | None = None
             if status == TurnStatus.RUNNING:
                 await turns.seal(turn.id)
                 await segments.save(turn, messages[base:], snapshot)

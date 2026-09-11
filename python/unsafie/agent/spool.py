@@ -3,6 +3,7 @@ import contextlib
 import json
 import logging
 import os
+import shlex
 import shutil
 import signal
 import time
@@ -68,7 +69,7 @@ class BashSpool:
 
         script_body = ["#!/usr/bin/env bash"]
         if cwd:
-            script_body.append(f"cd {Path(cwd).resolve()}")
+            script_body.append(f"cd {shlex.quote(str(Path(cwd).resolve()))}")
         script_body.append(code.strip())
         script_body.append("")
 

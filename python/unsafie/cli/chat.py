@@ -89,34 +89,55 @@ def send_photo(path: str | Path | bytes, *, caption: str | None = None, **kwargs
     return send_file(path, caption=caption, kind="photo", **kwargs)
 
 
-def edit(message_id: int, text: str, *, buttons: Any = None) -> dict:
-    body = {
+def edit(message_id: int, text: str, *, buttons: Any = None, chat: int | str | None = None) -> dict:
+    body: dict[str, Any] = {
         "text": text,
         "buttons": json.dumps(buttons, ensure_ascii=False) if buttons is not None else None,
     }
+    chat_id = _chat(chat)
+    if chat_id is not None:
+        body["chat_id"] = chat_id
     return client().call("POST", f"/chat/messages/{message_id}", body)
 
 
-def delete(*message_ids: int) -> dict:
+def delete(*message_ids: int, chat: int | str | None = None) -> dict:
     last: dict = {}
+    params = {}
+    chat_id = _chat(chat)
+    if chat_id is not None:
+        params["chat_id"] = chat_id
     for message_id in message_ids:
-        last = client().call("DELETE", f"/chat/messages/{message_id}")
+        last = client().call("DELETE", f"/chat/messages/{message_id}", params=params or None)
     return last or {"deleted": list(message_ids)}
 
 
-def react(message_id: int, emoji: str = "👍", *, big: bool = False) -> dict:
-    return client().call("POST", f"/chat/reactions/{message_id}", {"emoji": emoji, "big": big})
+def react(message_id: int, emoji: str = "👍", *, big: bool = False, chat: int | str | None = None) -> dict:
+    body: dict[str, Any] = {"emoji": emoji, "big": big}
+    chat_id = _chat(chat)
+    if chat_id is not None:
+        body["chat_id"] = chat_id
+    return client().call("POST", f"/chat/reactions/{message_id}", body)
 
 
-def pin(message_id: int, *, unpin: bool = False, silent: bool = False) -> dict:
-    return client().call("POST", f"/chat/pins/{message_id}", {"silent": silent, "unpin": unpin})
+def pin(message_id: int, *, unpin: bool = False, silent: bool = False, chat: int | str | None = None) -> dict:
+    body: dict[str, Any] = {"silent": silent, "unpin": unpin}
+    chat_id = _chat(chat)
+    if chat_id is not None:
+        body["chat_id"] = chat_id
+    return client().call("POST", f"/chat/pins/{message_id}", body)
 
 
-def history(query: str | None = None, *, limit: int = 20, since: str | None = None, **kwargs) -> dict:
+def history(query: str | None = None, *, limit: int = 20, since: str | None = None, chat: int | str | None = None, **kwargs) -> dict:
+    chat_id = _chat(chat)
+    params = {"limit": limit, **kwargs}
+    if chat_id is not None:
+        params["chat_id"] = chat_id
+    if since is not None:
+        params["since"] = since
     if query:
-        params = {"query": query, "limit": limit, "since": since, **kwargs}
+        params["query"] = query
         return client().call("GET", "/chat/history/search", params=params)
-    return client().call("GET", "/chat/history", params={"limit": limit, **kwargs})
+    return client().call("GET", "/chat/history", params=params)
 
 
 def info(chat: int | str | None = None) -> dict:
@@ -133,6 +154,9 @@ def download(
     raw = base64.b64decode(res["data"])
     if output is not None:
         target = Path(output)
+        if target.is_dir():
+            name = Path(res.get("file_path") or file_id).name
+            target = target / name
     else:
         name = Path(res.get("file_path") or file_id).name
         target = Path(name)

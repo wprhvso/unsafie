@@ -68,8 +68,8 @@ cmd-system-help =
     Des instructions qui orientent le modèle vers de meilleures réponses.
 
     Exemples :
-    <code>/system Réponds le plus brièvement possible</code>
-    <code>/system N'emploie pas de termes techniques dans ta réponse</code>
+    `/system Réponds le plus brièvement possible`
+    `/system N'emploie pas de termes techniques dans ta réponse`
 
     Revenir au réglage par défaut : /system_clear
 cmd-system-ok = Prompt système enregistré
@@ -81,3 +81,5 @@ cmd-long-reset = Annuler
 cmd-long-reset-ok = Annulé
 cmd-long-empty = Rien à envoyer pour l'instant
 cmd-long-expired = Délai dépassé — rien n'a été envoyé
+
+cmd-runs-empty = Aucune tâche active dans cette discussion

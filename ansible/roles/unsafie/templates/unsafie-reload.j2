@@ -39,7 +39,12 @@ do_reload() {
     local target=""
     local target_port=""
 
-    if is_active unsafie@green; then
+    local active_port=""
+    if [ -f "$UPSTREAM_FILE" ]; then
+        active_port=$(grep -oE '[0-9]+' "$UPSTREAM_FILE" | head -n 1 || true)
+    fi
+
+    if [ "$active_port" = "$GREEN_PORT" ] || { [ -z "$active_port" ] && is_active unsafie@green && ! is_active unsafie@blue; }; then
         current="green"
         target="blue"
         target_port="$BLUE_PORT"

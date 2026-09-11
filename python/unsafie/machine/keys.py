@@ -43,9 +43,25 @@ def write_keys(
     (root / "id_ed25519.pub").write_text(material["public"] + "\n", encoding="utf-8")
     known = material.get("known_hosts") or []
     if known:
-        (root / "known_hosts").write_text("\n".join(known) + "\n", encoding="utf-8")
+        kh_file = root / "known_hosts"
+        existing_kh = kh_file.read_text(encoding="utf-8").splitlines() if kh_file.exists() else []
+        merged_kh = list(dict.fromkeys(existing_kh + known))
+        kh_file.write_text("\n".join(merged_kh) + "\n", encoding="utf-8")
+        kh_file.chmod(0o644)
     config = root / "config"
-    config.write_text(_config(hosts), encoding="utf-8")
+    unsafie_conf = _config(hosts)
+    existing_conf = config.read_text(encoding="utf-8") if config.exists() else ""
+    marker_start = "# BEGIN UNSAFIE HOSTS"
+    marker_end = "# END UNSAFIE HOSTS"
+    if marker_start in existing_conf and marker_end in existing_conf:
+        before = existing_conf.split(marker_start)[0]
+        after = existing_conf.split(marker_end)[1]
+        new_conf = f"{before}{marker_start}\n{unsafie_conf}\n{marker_end}{after}"
+    elif existing_conf.strip():
+        new_conf = f"{existing_conf.rstrip()}\n\n{marker_start}\n{unsafie_conf}\n{marker_end}\n"
+    else:
+        new_conf = f"{marker_start}\n{unsafie_conf}\n{marker_end}\n"
+    config.write_text(new_conf, encoding="utf-8")
     config.chmod(0o600)
     return [str(row["alias"]) for row in hosts if row.get("alias")]
 

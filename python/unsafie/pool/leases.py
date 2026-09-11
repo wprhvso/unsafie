@@ -78,20 +78,22 @@ async def take(
     taken: list[PoolMachine] = []
     aliases = {m.alias for m in mine if m.alias}
     await _queue_up(user_id)
-    while len(taken) < wanted:
-        name = await registry.grab_idle() if await _my_turn(user_id) else None
-        if name is None:
-            if time.monotonic() >= deadline:
-                break
-            await asyncio.sleep(POLL)
-            continue
-        alias = _alias({a for a in aliases if a})
-        machine = await _bind(name, user_id, chat_id, alias, turn_id, bot_id)
-        if machine is None:
-            continue
-        aliases.add(alias)
-        taken.append(machine)
-    await _leave_queue(user_id)
+    try:
+        while len(taken) < wanted:
+            name = await registry.grab_idle() if await _my_turn(user_id) else None
+            if name is None:
+                if time.monotonic() >= deadline:
+                    break
+                await asyncio.sleep(POLL)
+                continue
+            alias = _alias({a for a in aliases if a})
+            machine = await _bind(name, user_id, chat_id, alias, turn_id, bot_id)
+            if machine is None:
+                continue
+            aliases.add(alias)
+            taken.append(machine)
+    finally:
+        await _leave_queue(user_id)
     if not taken:
         ahead = await _ahead_of(user_id)
         raise PoolError(

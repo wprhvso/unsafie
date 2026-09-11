@@ -53,12 +53,17 @@ def build_messages_router() -> Router:
             if mode == GroupMode.MENTIONS.value:
                 me = await message.bot.me() if message.bot else None
                 username = me.username if me else None
-                if not addressed_to_bot(message, bot_id, username):
+                tg_bot_id = me.id if me else bot_id
+                if not addressed_to_bot(message, tg_bot_id, username):
                     return
                 if message.text and username:
                     cleaned = clean_mention(message.text, username)
                     if cleaned != message.text:
                         message = message.model_copy(update={"text": cleaned}).as_(message.bot)
+                elif message.caption and username:
+                    cleaned = clean_mention(message.caption, username)
+                    if cleaned != message.caption:
+                        message = message.model_copy(update={"caption": cleaned}).as_(message.bot)
 
         logger.info(
             "bot=%s chat=%s(%s) msg=%s from=%s content_type=%s reply_to=%s",

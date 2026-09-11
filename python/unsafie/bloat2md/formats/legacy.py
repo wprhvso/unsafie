@@ -9,11 +9,21 @@ from unsafie.bloat2md.domain import ConversionError, Payload, UnsupportedFile
 from unsafie.bloat2md.formats import pdf
 
 SOFFICE: Final = "soffice"
-_FILTER: Final = "pdf:writer_pdf_Export"
 
 
 def available() -> bool:
     return settings().libreoffice and shutil.which(SOFFICE) is not None
+
+
+def _filter_for(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in (".xls", ".xlsx", ".ods", ".csv"):
+        return "pdf:calc_pdf_Export"
+    if suffix in (".ppt", ".pptx", ".odp"):
+        return "pdf:impress_pdf_Export"
+    if suffix in (".doc", ".docx", ".odt", ".rtf"):
+        return "pdf:writer_pdf_Export"
+    return "pdf"
 
 
 def _run(source: Path, outdir: Path, profile: Path, timeout: float) -> None:
@@ -21,6 +31,7 @@ def _run(source: Path, outdir: Path, profile: Path, timeout: float) -> None:
     if binary is None:
         msg = "libreoffice is not installed"
         raise UnsupportedFile(msg)
+    filt = _filter_for(source)
     completed = subprocess.run(
         [
             binary,
@@ -31,7 +42,7 @@ def _run(source: Path, outdir: Path, profile: Path, timeout: float) -> None:
             "--nodefault",
             "--nologo",
             "--convert-to",
-            _FILTER,
+            filt,
             "--outdir",
             str(outdir),
             str(source),
@@ -46,7 +57,7 @@ def _run(source: Path, outdir: Path, profile: Path, timeout: float) -> None:
         raise ConversionError(msg)
 
 
-def convert(raw: bytes) -> Payload:
+def convert(raw: bytes, name: str = "input.bin") -> Payload:
     if not available():
         msg = "this format needs libreoffice"
         raise UnsupportedFile(msg)
@@ -57,7 +68,8 @@ def convert(raw: bytes) -> Payload:
         outdir = root / "out"
         profile.mkdir()
         outdir.mkdir()
-        source = root / "input.bin"
+        suffix = Path(name).suffix or ".bin"
+        source = root / f"input{suffix}"
         _ = source.write_bytes(raw)
 
         try:

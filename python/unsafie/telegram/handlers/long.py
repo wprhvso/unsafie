@@ -24,7 +24,8 @@ def _without_command(message: Message) -> Message:
     text = (message.text or message.caption or "").strip()
     parts = text.split(maxsplit=1)
     cleaned = parts[1] if len(parts) > 1 else ""
-    return message.model_copy(update={"text": cleaned}).as_(message.bot)
+    update = {"text": cleaned} if message.text is not None else {"caption": cleaned, "text": cleaned}
+    return message.model_copy(update=update).as_(message.bot)
 
 
 def is_collecting(message: Message, bot_id: int) -> bool:

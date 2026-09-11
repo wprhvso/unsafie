@@ -30,11 +30,11 @@ def build_inline_router() -> Router:
         )
 
     @router.chosen_inline_result()
-    async def handle_chosen_inline_result(chosen: ChosenInlineResult, bot: Bot) -> None:
+    async def handle_chosen_inline_result(chosen: ChosenInlineResult, bot_id: int) -> None:
         if not chosen.inline_message_id or not chosen.query.strip():
             return
         from unsafie.agent.runtime import handle_inline
 
-        await handle_inline(chosen, bot.id)
+        await handle_inline(chosen, bot_id)
 
     return router

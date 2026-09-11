@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import sys
 from typing import Final
 
 from charset_normalizer import from_bytes
@@ -43,10 +44,18 @@ def rtf(raw: bytes) -> Payload:
 def delimited(raw: bytes) -> Payload:
     text = decode(raw)
     try:
+        csv.field_size_limit(sys.maxsize)
+    except OverflowError:
+        csv.field_size_limit(2147483647)
+    try:
         dialect = csv.Sniffer().sniff(text[:SNIFF_BYTES], delimiters=_DELIMITERS)
     except csv.Error:
         dialect = csv.excel
-    rows = list(csv.reader(io.StringIO(text), dialect))
+    try:
+        rows = list(csv.reader(io.StringIO(text), dialect))
+    except csv.Error as e:
+        msg = f"csv parsing failed: {e}"
+        raise ConversionError(msg) from e
     kept = trim(rows[:MAX_CSV_ROWS])
     return Payload(markdown=table(kept), truncated=len(rows) > MAX_CSV_ROWS)
 

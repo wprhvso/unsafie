@@ -1,4 +1,4 @@
-import asyncio
+import contextlib
 import hashlib
 import logging
 import time
@@ -46,17 +46,13 @@ def webhook_url(bot_id: int) -> str:
 
 
 async def mark_active(bot_id: int) -> None:
-    try:
+    with contextlib.suppress(Exception):
         await cluster.mark(mark_name(bot_id), "1", settings.telegram_webhook_sync_interval * 3)
-    except Exception:
-        pass
 
 
 async def unmark_active(bot_id: int) -> None:
-    try:
+    with contextlib.suppress(Exception):
         await cluster.client().delete(cluster.key("mark", mark_name(bot_id)))
-    except Exception:
-        pass
 
 
 async def ensure_webhook(bot_id: int, token: str, *, force: bool = False) -> None:
@@ -68,7 +64,7 @@ async def ensure_webhook(bot_id: int, token: str, *, force: bool = False) -> Non
         try:
             info = await bot.get_webhook_info()
             if force or info.url != url:
-                allowed = sorted(set(dispatcher.resolve_used_update_types() + ["edited_message"]))
+                allowed = sorted({*dispatcher.resolve_used_update_types(), "edited_message"})
                 await bot.set_webhook(
                     url=url,
                     secret_token=secret,
@@ -131,7 +127,7 @@ async def polled_by(bot_ids: list[int]) -> dict[int, str | None]:
         marks = await cluster.marks([mark_name(b) for b in bot_ids])
         return {b: ("webhook" if marks.get(mark_name(b)) else None) for b in bot_ids}
     except Exception:
-        return {b: None for b in bot_ids}
+        return dict.fromkeys(bot_ids)
 
 
 class Supervisor(Loop):
@@ -166,13 +162,14 @@ class Supervisor(Loop):
         active = set()
         for bot_id, token in wanted.items():
             force = restarts.get(restart_name(bot_id)) is not None
+            if not force and bot_id in self._synced:
+                active.add(bot_id)
+                continue
             try:
                 await ensure_webhook(bot_id, token, force=force)
                 if force:
-                    try:
+                    with contextlib.suppress(Exception):
                         await cluster.client().delete(cluster.key("mark", restart_name(bot_id)))
-                    except Exception:
-                        pass
                 active.add(bot_id)
             except Exception as e:
                 logger.warning("bot=%s sync webhook failed: %s", bot_id, e)

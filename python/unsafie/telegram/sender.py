@@ -251,8 +251,15 @@ async def send_file(
         except TelegramBadRequest as e:
             logger.info("%s %s %s rejected (%s), sending as document", prefix, media, filename, e)
             media = "document"
-            kwargs.setdefault("caption", head["text"] if head else None)
-            kwargs.setdefault("caption_entities", _entities(head) if head else None)
+            if inline:
+                kwargs["caption"] = head["text"] if head else None
+                kwargs["caption_entities"] = _entities(head) if head else None
+                tail = []
+                kwargs["reply_markup"] = reply_markup
+            else:
+                kwargs["caption"] = None
+                kwargs["caption_entities"] = None
+                tail = chunks
     if msg is None:
         media = "document"
         msg = await retry(
@@ -388,5 +395,6 @@ async def answer(
         chat_id=message.chat.id,
         markdown=text,
         kind=ResponseKind.SYSTEM,
+        reply_to=message.message_id,
         reply_markup=reply_markup,
     )

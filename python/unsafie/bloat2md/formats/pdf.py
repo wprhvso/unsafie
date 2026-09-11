@@ -1,6 +1,6 @@
 import io
 from collections.abc import Iterator
-from typing import Final, cast
+from typing import Final
 
 import pypdfium2 as pdfium
 
@@ -37,7 +37,7 @@ def _hidden_text(page: pdfium.PdfPage, textpage: pdfium.PdfTextPage) -> Iterator
 def _overlaps(line: str, hidden: str) -> bool:
     s_line = line.strip()
     s_hidden = hidden.strip()
-    return len(s_line) >= MIN_HIDDEN_CHARS and s_line == s_hidden
+    return len(s_hidden) >= MIN_HIDDEN_CHARS and s_hidden in s_line
 
 
 def _visible_text(page: pdfium.PdfPage) -> tuple[str, int]:
@@ -69,7 +69,7 @@ def _render(page: pdfium.PdfPage) -> bytes:
     limits = settings()
     width, height = page.get_size()
     scale = min(limits.render_edge / max(width, height, 1), 4.0)
-    bitmap = page.render(scale=cast("int", scale))
+    bitmap = page.render(scale=round(scale))
     try:
         image = bitmap.to_pil().convert("RGB")
     finally:

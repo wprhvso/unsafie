@@ -28,7 +28,6 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.update import Update
 from unsafie.database.repositories.chat import ChatRepository
-from unsafie.database.repositories.response import ResponseRepository
 from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
@@ -332,21 +331,7 @@ async def say(body: Message, who: Chat) -> dict:
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
 
-    if body.reply_to is not None:
-        async with SessionLocal() as session:
-            bot_target = await ResponseRepository(session).by_message(bot_id, target_chat, body.reply_to)
-        if bot_target is not None:
-            _trigger_bot_reply_turn(
-                bot=bot,
-                bot_id=bot_id,
-                chat_id=target_chat,
-                user_id=who.user_id,
-                reply_to=body.reply_to,
-                text=body.text,
-                sent_message_id=response.message_ids[0] if response.message_ids else None,
-                target_content=bot_target.content,
-                target_created_at=bot_target.created_at,
-            )
+
 
     result = {"message_ids": response.message_ids, "reply_to": response.reply_to}
     if cache_k:
@@ -448,6 +433,7 @@ async def edit(message_id: int, body: Edit, who: Chat) -> dict:
 async def drop(message_id: int, who: Chat, chat_id: int | None = None) -> dict:
     bot = await who.bot()
     target_chat = await who.target_chat(chat_id)
+    await who.ensure_admin(target_chat)
     try:
         await sender.delete(
             bot, bot_id=who.bot_id or 0, chat_id=target_chat, message_id=message_id,
@@ -513,6 +499,7 @@ async def react(message_id: int, body: Reaction, who: Chat) -> dict:
 async def pin(message_id: int, body: Pin, who: Chat) -> dict:
     bot = await who.bot()
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         if body.unpin:
             await bot.unpin_chat_message(chat_id, message_id=message_id or None)
@@ -635,6 +622,7 @@ async def contact(body: Contact, who: Chat) -> dict:
 async def history_search(
     who: Chat,
     query: str,
+    chat_id: int | None = None,
     kind: str = "any",
     since: int | None = None,
     until: int | None = None,
@@ -645,11 +633,11 @@ async def history_search(
 
     if who.bot_id is None:
         raise HTTPException(400, "this token is not bound to a bot")
-    chat_id = await who.target_chat()
+    target_chat = await who.target_chat(chat_id)
     async with SessionLocal() as session:
         hits, how = await HistoryRepository(session).search(
             who.bot_id,
-            chat_id,
+            target_chat,
             query,
             who=kind,
             since=since,
@@ -661,20 +649,20 @@ async def history_search(
 
 @router.get("/history")
 async def history_get(
-    who: Chat, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None,
+    who: Chat, chat_id: int | None = None, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None,
 ) -> dict:
     from unsafie.database import SessionLocal
     from unsafie.database.repositories.history import HistoryRepository
 
     if who.bot_id is None:
         raise HTTPException(400, "this token is not bound to a bot")
-    chat_id = await who.target_chat()
+    target_chat = await who.target_chat(chat_id)
     async with SessionLocal() as session:
         repository = HistoryRepository(session)
         if message_id:
-            hits = await repository.around(who.bot_id, chat_id, message_id, max(1, min(around, 30)))
+            hits = await repository.around(who.bot_id, target_chat, message_id, max(1, min(around, 30)))
         else:
-            hits = await repository.recent(who.bot_id, chat_id, max(1, min(limit, 100)), before)
+            hits = await repository.recent(who.bot_id, target_chat, max(1, min(limit, 100)), before)
     return {"hits": [_hit(hit) for hit in hits]}
 
 
@@ -713,6 +701,7 @@ async def chat_member(user_id: int, who: Chat, chat_id: int | None = None) -> di
 async def chat_ban(user_id: int, who: Chat, body: Moderation) -> dict:
     bot = await who.bot()
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         if body.undo:
             await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
@@ -743,6 +732,7 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
         can_add_web_page_previews=bool(body.undo),
     )
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         await bot.restrict_chat_member(
             chat_id, user_id, permissions=allowed, until_date=_until(body.until),
@@ -756,6 +746,7 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
 async def chat_invite(who: Chat, body: Invite) -> dict:
     bot = await who.bot()
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         link = await bot.create_chat_invite_link(
             chat_id,

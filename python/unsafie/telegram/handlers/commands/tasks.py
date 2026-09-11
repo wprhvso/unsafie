@@ -31,8 +31,8 @@ def build_tasks_router() -> Router:
         arg = (command.args or "").strip().lower()
         if arg in ("clear", "rm all"):
             if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot and not await is_admin(message.bot, message.chat.id, user_id):
-                    await answer(message, bot_id, t("commands-group-admin-only", locale))
-                    return
+                await answer(message, bot_id, t("commands-group-admin-only", locale))
+                return
             async with SessionLocal() as session:
                 schedule = ScheduleRepository(session)
                 watchdog = WatchRepository(session)

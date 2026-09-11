@@ -19,8 +19,8 @@ def build_system_router() -> Router:
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
         if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot and not await is_admin(message.bot, message.chat.id, user_id):
-                await answer(message, bot_id, t("commands-group-admin-only", locale))
-                return
+            await answer(message, bot_id, t("commands-group-admin-only", locale))
+            return
 
         prompt = (command.args or "").strip()
 
@@ -28,7 +28,7 @@ def build_system_router() -> Router:
             async with SessionLocal() as session:
                 chat = await ChatRepository(session).get(bot_id, message.chat.id)
             if chat and chat.system:
-                text = f"{t('cmd-system-ok', locale)}:\n\n<code>{chat.system}</code>\n\n{t('cmd-system-help', locale)}"
+                text = f"{t('cmd-system-ok', locale)}:\n\n```{chat.system}```\n\n{t('cmd-system-help', locale)}"
             else:
                 text = t("cmd-system-help", locale)
             await answer(message, bot_id, text)
@@ -44,8 +44,8 @@ def build_system_router() -> Router:
         locale = await locale_for(user_id, message.from_user)
 
         if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and message.bot and not await is_admin(message.bot, message.chat.id, user_id):
-                await answer(message, bot_id, t("commands-group-admin-only", locale))
-                return
+            await answer(message, bot_id, t("commands-group-admin-only", locale))
+            return
 
         async with SessionLocal() as session:
             repo = ChatRepository(session)
