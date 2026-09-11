@@ -189,10 +189,11 @@ async def _execute(
                 query_span, RuntimeError(short(result.error or result.status, 300)),
             )
 
+    used_cred_id = result.credential_id or session_row.id
     async with SessionLocal() as session:
         await TurnRepository(session).record(
             ctx.turn_id,
-            credential_id=session_row.id,
+            credential_id=used_cred_id,
             num_turns=result.steps,
             result=result.text,
         )
@@ -207,7 +208,7 @@ async def _execute(
 
     if result.status == "ok":
         async with SessionLocal() as session:
-            await OpalSessionRepository(session).succeeded(session_row.id)
+            await OpalSessionRepository(session).succeeded(used_cred_id)
         return Outcome("ok")
     if result.status == "paused":
         return Outcome("paused")
@@ -215,11 +216,13 @@ async def _execute(
         logger.warning(
             "%s session=%s failed (%s): %s",
             prefix,
-            session_row.id,
+            used_cred_id,
             result.failure,
             short(result.error, 600),
         )
-        await _punish(session_row, result)
+        async with SessionLocal() as session:
+            cred_row = await OpalSessionRepository(session).get(used_cred_id)
+        await _punish(cred_row or session_row, result)
     return Outcome("failed", error=result.error)
 
 

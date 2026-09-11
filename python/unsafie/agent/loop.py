@@ -26,6 +26,7 @@ class Result:
     replied: bool = False
     stop_reason: str | None = None
     ran: int = 0
+    credential_id: int | None = None
 
 
 def _ask(messages: list[dict], value: str) -> None:
@@ -50,7 +51,7 @@ async def run(
     initial_checkpoint: checkpoints.CheckpointData | None = None,
     credential_id: int | None = None,
 ) -> Result:
-    result = Result()
+    result = Result(credential_id=credential_id)
 
     if initial_checkpoint is not None:
         result.steps = initial_checkpoint.step
@@ -143,7 +144,18 @@ async def run(
         result.steps += 1
         recorder.request(result.steps, len(messages), 0)
         try:
-            reply = await client.send(access_token, model, body, on_event=recorder.raw)
+            reply = await client.send(
+                access_token,
+                model,
+                body,
+                credential_id=credential_id,
+                on_event=recorder.raw,
+            )
+            if reply.credential_id is not None:
+                credential_id = reply.credential_id
+                result.credential_id = credential_id
+            if reply.access_token is not None:
+                access_token = reply.access_token
         except ApiError as e:
             failure = credentials.classify_api(e.status, e.kind, e.message)
             if credentials.blames_credential(failure):

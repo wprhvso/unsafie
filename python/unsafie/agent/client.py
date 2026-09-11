@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 import aiohttp
 
 from unsafie import telemetry
+from unsafie.agent import opal
 from unsafie.log import short
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
@@ -60,6 +61,8 @@ class Reply:
     stop_reason: str | None = None
     usage: dict = field(default_factory=dict)
     raw: list[dict] = field(default_factory=list)
+    credential_id: int | None = None
+    access_token: str | None = None
 
     @property
     def content(self) -> list[dict]:
@@ -315,21 +318,28 @@ async def send(
     model: str,
     body: dict,
     *,
+    credential_id: int | None = None,
     on_event: Callable[[str, dict], None] | None = None,
 ) -> Reply:
-    delay = settings.gemini_retry_base
+    token = access_token
+    current_cred_id = credential_id
+    tried_cred_ids: set[int] = {credential_id} if credential_id is not None else set()
     for attempt in range(1, settings.gemini_retries + 1):
         try:
-            return await _once(access_token, model, body, attempt, on_event)
+            reply = await _once(token, model, body, attempt, on_event)
+            reply.credential_id = current_cred_id
+            reply.access_token = token
+            return reply
         except ApiError as e:
             if not e.retryable or attempt >= settings.gemini_retries:
                 raise
-            wait = min(e.retry_after or delay, settings.gemini_retry_max)
             telemetry.event(
                 "gemini.retry",
-                {"attempt": attempt, "status": e.status, "kind": e.kind, "sleep_sec": wait},
+                {"attempt": attempt, "status": e.status, "kind": e.kind},
             )
-            logger.warning("gemini %s, retrying in %.1fs", e.describe(), wait)
-            await asyncio.sleep(wait)
-            delay = 1.0 if delay <= 0.0 else delay * 2
+            logger.warning("gemini %s, retrying immediately", e.describe())
+            picked = await opal.get_random_access_token(exclude=tried_cred_ids)
+            if picked is not None:
+                current_cred_id, token = picked
+                tried_cred_ids.add(current_cred_id)
     raise ApiError(0, "INTERNAL", "retries exhausted")

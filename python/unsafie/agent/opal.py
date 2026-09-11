@@ -1,3 +1,5 @@
+import logging
+
 import aiohttp
 
 from unsafie import cluster
@@ -50,5 +52,33 @@ async def get_access_token(session_id: int, refresh_token: str) -> str:
     return fresh
 
 
+logger = logging.getLogger(__name__)
+
+
 async def invalidate(session_id: int) -> None:
     await cluster.client().delete(token_key(session_id))
+
+
+async def get_random_access_token(exclude: set[int] | None = None) -> tuple[int, str] | None:
+    try:
+        from unsafie.database import SessionLocal
+        from unsafie.database.repositories.opal_session import OpalSessionRepository
+
+        excluded = set(exclude) if exclude else set()
+        for _ in range(settings.opal_pick_attempts):
+            async with SessionLocal() as db_session:
+                creds = OpalSessionRepository(db_session)
+                session_row = await creds.pick_random(exclude=excluded or None)
+                if session_row is None and excluded:
+                    session_row = await creds.pick_random()
+                if session_row is None:
+                    return None
+                try:
+                    token = await get_access_token(session_row.id, session_row.refresh_token)
+                    return session_row.id, token
+                except OpalRefreshFailed:
+                    excluded.add(session_row.id)
+    except Exception:
+        logger.exception("failed to get random opal access token")
+        return None
+    return None

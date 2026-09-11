@@ -84,6 +84,30 @@ class OpalSessionRepository:
             await self.session.commit()
         return row
 
+    async def pick_random(self, exclude: set[int] | None = None) -> OpalSession | None:
+        now = datetime.now(UTC)
+        stmt = (
+            select(OpalSession)
+            .where(
+                OpalSession.enabled.is_(True),
+                or_(
+                    OpalSession.cooldown_until.is_(None),
+                    OpalSession.cooldown_until <= now,
+                ),
+            )
+            .order_by(func.random())
+        )
+        if exclude:
+            stmt = stmt.where(OpalSession.id.not_in(exclude))
+        row = await self.session.scalar(stmt.limit(1).with_for_update(skip_locked=True))
+        if row is None and not exclude:
+            row = await self.session.scalar(stmt.limit(1))
+        if row is not None:
+            row.last_used_at = now
+            row.uses += 1
+            await self.session.commit()
+        return row
+
     async def next_cooldown(self) -> datetime | None:
         return await self.session.scalar(
             select(func.min(OpalSession.cooldown_until)).where(
