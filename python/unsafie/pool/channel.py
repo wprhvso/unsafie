@@ -19,8 +19,6 @@ from unsafie_wire import channel as wire
 logger = logging.getLogger(__name__)
 
 CHUNK_WAIT = 5.0
-# A blocking pop must come back before the socket timeout of the shared client does,
-# otherwise redis-py raises a TimeoutError instead of handing over an empty answer.
 BLOCK = max(1, int(min(CHUNK_WAIT, settings.redis_timeout - 1)))
 
 
@@ -36,7 +34,7 @@ class Result:
 
     @property
     def timed_out(self) -> bool:
-        return self.exit_code is None
+        return self.exit_code == 124
 
 
 async def send(
@@ -163,9 +161,10 @@ async def collect(
             popped = await redis.blpop([keys.outbox(command_id)], timeout=BLOCK)
             if popped is None:
                 if not await registry.alive(machine):
-                    result.output = "".join(pieces)
+                    result.output = "".join(pieces) or f"[runner {machine} disconnected or died]"
                     result.seconds = time.monotonic() - started
-                    await _finish(command_id, None, size, CommandStatus.LOST)
+                    result.exit_code = 137
+                    await _finish(command_id, 137, size, CommandStatus.LOST)
                     return result
                 continue
             frame = json.loads(popped[1])
@@ -188,11 +187,13 @@ async def collect(
                 return result
         result.output = "".join(pieces)
         result.seconds = time.monotonic() - started
-        await _finish(command_id, None, size, CommandStatus.FAILED)
+        result.exit_code = 124
+        await _finish(command_id, 124, size, CommandStatus.FAILED)
     except asyncio.CancelledError:
         result.output = "".join(pieces)
         result.seconds = time.monotonic() - started
-        await _finish(command_id, None, size, CommandStatus.CANCELLED)
+        result.exit_code = 130
+        await _finish(command_id, 130, size, CommandStatus.CANCELLED)
         raise
     return result
 

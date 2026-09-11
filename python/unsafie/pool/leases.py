@@ -43,6 +43,17 @@ async def _limits(user_id: int) -> User:
         return user
 
 
+async def _clean_ghosts(user_id: int) -> list[PoolMachine]:
+    raw_mine = await registry.of_user(user_id)
+    alive_mine = []
+    for m in raw_mine:
+        if await registry.alive(m.name):
+            alive_mine.append(m)
+        else:
+            await destroy(m.name, "ghost cleanup")
+    return alive_mine
+
+
 async def take(
     user_id: int,
     chat_id: int | None,
@@ -58,21 +69,20 @@ async def take(
     if user.pool_blocked:
         msg = "your access to the pool is blocked"
         raise PoolError(msg)
-    mine = await registry.of_user(user_id)
+
+    mine = await _clean_ghosts(user_id)
     room = user.pool_max_machines - len(mine)
     if room <= 0:
         msg = (
             f"you already hold {len(mine)} machine(s), the limit is {user.pool_max_machines}. "
-            "Release one: unsafie release box-N"
+            "Release one: /pool release"
         )
-        raise PoolError(
-            msg,
-        )
+        raise PoolError(msg)
+
     if await spent_today(user_id) >= user.pool_max_machines_day:
         msg = f"you have used {user.pool_max_machines_day} machines today, which is the daily limit"
-        raise PoolError(
-            msg,
-        )
+        raise PoolError(msg)
+
     wanted = min(count, room)
     deadline = time.monotonic() + (settings.pool_take_wait if wait is None else wait)
     taken: list[PoolMachine] = []
@@ -276,7 +286,7 @@ async def rename(name: str, alias: str) -> None:
 
 
 async def resolve(user_id: int, ref: str | None) -> PoolMachine:
-    mine = await registry.of_user(user_id)
+    mine = await _clean_ghosts(user_id)
     if ref:
         for machine in mine:
             if ref in (machine.alias, machine.name):
@@ -294,8 +304,6 @@ async def _pick(mine: list[PoolMachine], chat_id: int | None) -> PoolMachine:
     here = [m for m in mine if chat_id is not None and m.chat_id == chat_id] or mine
     ranked = [(await registry.held(m.name), m) for m in here]
     left, machine = max(ranked, key=lambda row: row[0])
-    if left:
-        logger.info("pool %s reused for the next turn, %.0fs of hold left", machine.name, left)
     return machine
 
 
@@ -305,9 +313,21 @@ async def ensure(
     turn_id: UUID | None = None,
     bot_id: int | None = None,
 ) -> PoolMachine:
-    mine = await registry.of_user(user_id)
+    mine = await _clean_ghosts(user_id)
     if mine:
-        return await _pick(mine, chat_id)
+        chosen = await _pick(mine, chat_id)
+        if turn_id:
+            await channel.tell(
+                chosen.name,
+                wire.assign(
+                    token="",
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    alias=chosen.alias,
+                    turn=str(turn_id),
+                ),
+            )
+        return chosen
     taken = await take(user_id, chat_id, 1, turn_id=turn_id, bot_id=bot_id)
     return taken[0]
 

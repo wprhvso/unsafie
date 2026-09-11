@@ -115,9 +115,11 @@ class Runner:
             block.exit_code = result.exit_code
             block.seconds = result.seconds
             block.truncated = result.truncated
-            if result.timed_out:
+
+            if result.exit_code == 124:
                 block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
-                block.exit_code = 124
+            elif result.exit_code == 137:
+                block.error = f"runner {self.ctx.machine_name} disconnected"
 
             combined = result.output or ""
             body, found = markers.split(combined)
