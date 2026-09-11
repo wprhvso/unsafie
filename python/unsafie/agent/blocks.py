@@ -109,32 +109,6 @@ class Runner:
         except Exception as e:
             logger.warning("%s failed to install ssh keys: %s", self.ctx.prefix, e)
 
-    async def _install_git_credentials(self) -> None:
-        try:
-            from unsafie.github import pat
-
-            account = await pat.account_of(self.ctx.user_id)
-            if account and account.token:
-                name, email = await pat.identity(self.ctx.user_id, account.login)
-                home = Path(os.environ.get("HOME") or Path.home())
-                store = home / ".git-credentials"
-                line = f"https://x-access-token:{account.token}@github.com\n"
-                body = store.read_text(encoding="utf-8") if store.is_file() else ""
-                kept = [row for row in body.splitlines(keepends=True) if "@github.com" not in row]
-                store.write_text("".join(kept) + line, encoding="utf-8")
-                store.chmod(0o600)
-                cmd = ["git", "config", "--global", "credential.helper", "store"]
-                proc = await asyncio.create_subprocess_exec(*cmd)
-                await proc.wait()
-                if name:
-                    proc = await asyncio.create_subprocess_exec("git", "config", "--global", "user.name", name)
-                    await proc.wait()
-                if email:
-                    proc = await asyncio.create_subprocess_exec("git", "config", "--global", "user.email", email)
-                    await proc.wait()
-        except Exception as e:
-            logger.warning("%s failed to install git credentials: %s", self.ctx.prefix, e)
-
     async def _resolve_github_env(self) -> dict[str, str]:
         env: dict[str, str] = {}
         try:

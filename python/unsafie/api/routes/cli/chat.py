@@ -448,6 +448,7 @@ async def edit(message_id: int, body: Edit, who: Chat) -> dict:
 async def drop(message_id: int, who: Chat, chat_id: int | None = None) -> dict:
     bot = await who.bot()
     target_chat = await who.target_chat(chat_id)
+    await who.ensure_admin(target_chat)
     try:
         await sender.delete(
             bot, bot_id=who.bot_id or 0, chat_id=target_chat, message_id=message_id,
@@ -513,6 +514,7 @@ async def react(message_id: int, body: Reaction, who: Chat) -> dict:
 async def pin(message_id: int, body: Pin, who: Chat) -> dict:
     bot = await who.bot()
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         if body.unpin:
             await bot.unpin_chat_message(chat_id, message_id=message_id or None)
@@ -713,6 +715,7 @@ async def chat_member(user_id: int, who: Chat, chat_id: int | None = None) -> di
 async def chat_ban(user_id: int, who: Chat, body: Moderation) -> dict:
     bot = await who.bot()
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         if body.undo:
             await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
@@ -743,6 +746,7 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
         can_add_web_page_previews=bool(body.undo),
     )
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         await bot.restrict_chat_member(
             chat_id, user_id, permissions=allowed, until_date=_until(body.until),
@@ -756,6 +760,7 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
 async def chat_invite(who: Chat, body: Invite) -> dict:
     bot = await who.bot()
     chat_id = await who.target_chat(body.chat_id)
+    await who.ensure_admin(chat_id)
     try:
         link = await bot.create_chat_invite_link(
             chat_id,
