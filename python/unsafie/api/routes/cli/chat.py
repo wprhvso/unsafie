@@ -19,15 +19,17 @@ from aiogram.types import (
 )
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import Text, select
 
 from unsafie import cluster
 from unsafie.agent import live
 from unsafie.api.routes.cli.deps import Chat
 from unsafie.database import SessionLocal
-from unsafie.database.models.response import ResponseKind
+from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.update import Update
 from unsafie.database.repositories.chat import ChatRepository
+from unsafie.database.repositories.response import ResponseRepository
+from unsafie.database.repositories.turn import TurnRepository
 from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
@@ -433,10 +435,19 @@ async def edit(message_id: int, body: Edit, who: Chat) -> dict:
 async def drop(message_id: int, who: Chat, chat_id: int | None = None) -> dict:
     bot = await who.bot()
     target_chat = await who.target_chat(chat_id)
-    await who.ensure_admin(target_chat)
+    bot_id = who.bot_id or 0
+    async with SessionLocal() as session:
+        resp = await ResponseRepository(session).by_message(bot_id, target_chat, message_id)
+        if resp is not None and resp.turn_id is not None:
+            turn = await TurnRepository(session).get(resp.turn_id)
+            is_own_turn = turn is not None and turn.user_id == who.user_id
+        else:
+            is_own_turn = resp is not None and target_chat == who.user_id
+    if not is_own_turn:
+        await who.ensure_admin(target_chat)
     try:
         await sender.delete(
-            bot, bot_id=who.bot_id or 0, chat_id=target_chat, message_id=message_id,
+            bot, bot_id=bot_id, chat_id=target_chat, message_id=message_id,
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -806,9 +817,33 @@ async def album(body: Album, who: Chat) -> dict:
 
 
 @router.get("/files/{file_id}")
-async def download_file(file_id: str, who: Chat) -> dict:
+async def download_file(file_id: str, who: Chat, chat_id: int | None = None) -> dict:
     from io import BytesIO
+    target_chat = await who.target_chat(chat_id)
     bot = await who.bot()
+    bot_id = who.bot_id or 0
+    async with SessionLocal() as session:
+        has_update = await session.scalar(
+            select(Update.id)
+            .where(
+                Update.bot_id == bot_id,
+                Update.chat_id == target_chat,
+                Update.payload.cast(Text).contains(file_id),
+            )
+            .limit(1)
+        )
+        if not has_update:
+            has_response = await session.scalar(
+                select(Response.id)
+                .where(
+                    Response.bot_id == bot_id,
+                    Response.chat_id == target_chat,
+                    Response.content.contains(file_id),
+                )
+                .limit(1)
+            )
+            if not has_response:
+                raise HTTPException(404, "file not found or access denied in the target chat")
     try:
         tg_file = await bot.get_file(file_id)
         if not tg_file.file_path:
