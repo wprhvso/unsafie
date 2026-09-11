@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 NUMBER_RE = re.compile(r"-?\d+(?:[.,]\d+)?")
 OPERATORS = ("==", "!=", ">=", "<=", "=", ">", "<")
+NESTED_QUANTIFIER_RE1 = re.compile(r"(\+|\*|\{[0-9]+,?[0-9]*\})\s*(\+|\*|\{[0-9]+,?[0-9]*\})")
+NESTED_QUANTIFIER_RE2 = re.compile(r"\([^)]*(\+|\*)[^)]*\)\s*(\+|\*|\{[0-9]+,?[0-9]*\})")
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ def parse(raw: str) -> Condition:
                 except re.error as e:
                     msg = f"bad regular expression: {e}"
                     raise SshError(msg) from None
+                if NESTED_QUANTIFIER_RE1.search(needle) or NESTED_QUANTIFIER_RE2.search(needle):
+                    msg = f"'{needle}': nested quantifiers are not allowed"
+                    raise SshError(msg)
             return Condition(text, kind, needle=needle)
     for op in OPERATORS:
         if text.startswith(op):
@@ -106,7 +112,13 @@ def evaluate(
         case "changed":
             if previous is None:
                 return False, "first run, nothing to compare with"
-            changed = text != previous.strip()
+            current_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            prev_hash = (
+                previous[7:]
+                if previous.startswith("sha256:")
+                else hashlib.sha256(previous.strip().encode("utf-8")).hexdigest()
+            )
+            changed = current_hash != prev_hash
             return changed, "the output has changed" if changed else "the output is the same"
         case "empty":
             return not text, "the output is empty" if not text else "there is output"
@@ -122,7 +134,8 @@ def evaluate(
             fires = condition.needle.lower() not in text.lower()
             return fires, f"'{condition.needle}' is {'absent' if fires else 'present'}"
         case "matches":
-            fires = re.search(condition.needle, text, re.MULTILINE) is not None
+            search_text = text[:50000]
+            fires = re.search(condition.needle, search_text, re.MULTILINE) is not None
             return fires, f"regex {'matched' if fires else 'did not match'}"
         case "number":
             value = first_number(text)

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -79,7 +80,8 @@ class Watchdog(Loop):
                 return
             row.last_run_at = datetime.now(UTC)
             if output is not None:
-                row.last_output = output[:20000]
+                h = hashlib.sha256(output.strip().encode("utf-8")).hexdigest()
+                row.last_output = f"sha256:{h}"
             if exit_code is not None:
                 row.last_exit = exit_code
             row.fails = row.fails + 1 if failed else 0
