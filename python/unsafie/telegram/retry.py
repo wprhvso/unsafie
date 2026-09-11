@@ -1,7 +1,8 @@
 import asyncio
 import logging
+import tempfile
 from collections.abc import Awaitable, Callable
-from io import BytesIO
+from pathlib import Path
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter
@@ -35,6 +36,8 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
         try:
             return await fn()
         except TelegramRetryAfter as e:
+            if attempt == attempts - 1:
+                raise
             telemetry.event(
                 "telegram.rate_limited", {"attempt": attempt + 1, "retry_after": e.retry_after},
             )
@@ -47,13 +50,14 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
             telemetry.event("telegram.network_error", {"attempt": attempt + 1, "retry_in": delay})
             logger.warning("%s network error=%s retry_in=%ss", what, e, delay)
             await asyncio.sleep(delay)
-    return await fn()
+    raise RuntimeError(f"{what} failed after {attempts} attempts")
 
 
 async def download(bot: Bot, file_id: str, what: str) -> bytes:
     async def _fetch() -> bytes:
-        buf = BytesIO()
-        await bot.download(file_id, destination=buf)
-        return buf.getvalue()
+        with tempfile.NamedTemporaryFile(prefix="tg_dl_") as tmp:
+            tmp_path = Path(tmp.name)
+            await bot.download(file_id, destination=tmp_path)
+            return tmp_path.read_bytes()
 
     return await retry(_fetch, what)

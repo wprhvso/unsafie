@@ -39,7 +39,16 @@ async def reply_target(turn: Turn) -> int | None:
 
 
 def chunks_of(markdown: str) -> list[Any]:
-    return list(process_markdown(markdown)) or [{"text": markdown, "entities": []}]
+    try:
+        return list(process_markdown(markdown)) or [{"text": markdown, "entities": []}]
+    except Exception:
+        logger.warning("markdown processing failed, falling back to plain text")
+        parts = []
+        limit = 4096
+        text = markdown or ""
+        for i in range(0, max(1, len(text)), limit):
+            parts.append({"text": text[i : i + limit], "entities": []})
+        return parts
 
 
 def _entities(chunk: dict) -> list[MessageEntity]:
@@ -321,15 +330,20 @@ async def edit(
         **{attrs.BOT_ID: bot_id, attrs.CHAT_ID: chat_id, attrs.MESSAGE_ID: message_id},
     )
     if markdown is None:
-        await retry(
-            functools.partial(
-                bot.edit_message_reply_markup,
-                chat_id=chat_id,
-                message_id=message_id,
-                reply_markup=reply_markup,
-            ),
-            f"{prefix} edit markup",
-        )
+        try:
+            await retry(
+                functools.partial(
+                    bot.edit_message_reply_markup,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=reply_markup,
+                ),
+                f"{prefix} edit markup",
+            )
+        except TelegramBadRequest as e:
+            if "message is not modified" in str(e).lower():
+                return "buttons"
+            raise
         return "buttons"
     chunks = chunks_of(markdown)
     if len(chunks) != 1:
@@ -350,22 +364,30 @@ async def edit(
         )
         what = "text"
     except TelegramBadRequest as e:
-        if "no text in the message" not in str(e).lower():
+        err = str(e).lower()
+        if "message is not modified" in err:
+            return "text"
+        if "no text in the message" not in err:
             raise
         if len(chunk["text"]) > CAPTION_LIMIT:
             msg = f"a caption cannot exceed {CAPTION_LIMIT} characters"
             raise ValueError(msg) from e
-        await retry(
-            functools.partial(
-                bot.edit_message_caption,
-                chat_id=chat_id,
-                message_id=message_id,
-                caption=chunk["text"],
-                caption_entities=_entities(chunk),
-                reply_markup=reply_markup,
-            ),
-            f"{prefix} edit caption",
-        )
+        try:
+            await retry(
+                functools.partial(
+                    bot.edit_message_caption,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=chunk["text"],
+                    caption_entities=_entities(chunk),
+                    reply_markup=reply_markup,
+                ),
+                f"{prefix} edit caption",
+            )
+        except TelegramBadRequest as cap_err:
+            if "message is not modified" in str(cap_err).lower():
+                return "caption"
+            raise
         what = "caption"
     async with SessionLocal() as session:
         await ResponseRepository(session).set_content(bot_id, chat_id, message_id, markdown)
