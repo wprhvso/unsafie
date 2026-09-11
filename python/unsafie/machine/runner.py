@@ -58,9 +58,14 @@ def _tarball(version: str) -> Path:
 
 def _unpack(archive: Path, root: Path) -> Path:
     with tarfile.open(archive) as tar:
-        tar.extractall(root, filter="data")
+        tar.extractall(root, filter="tar")
     listener = root / LISTENER
     listener.chmod(0o755)
+    for sub in (root / "bin", root / "externals"):
+        if sub.exists():
+            for p in sub.rglob("*"):
+                if p.is_file():
+                    p.chmod(p.stat().st_mode | 0o755)
     return listener
 
 

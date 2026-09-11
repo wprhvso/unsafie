@@ -150,6 +150,7 @@ class Pool:
             return connection
 
     async def _drop(self, key: tuple[int, int]) -> None:
+        self._locks.pop(key, None)
         held = self._held.pop(key, None)
         if held is not None:
             held.connection.close()

@@ -37,10 +37,15 @@ async def put(user_id: int, key: str, data: bytes, machine: str | None = None) -
         raise BlobError(
             msg,
         )
+    async with SessionLocal() as session:
+        existing = await session.scalar(
+            select(PoolBlob).where(PoolBlob.user_id == user_id, PoolBlob.key == key),
+        )
+        existing_size = existing.size if existing else 0
     held = await used(user_id)
-    if held + len(data) > settings.pool_max_blob_bytes:
+    if (held - existing_size) + len(data) > settings.pool_max_blob_bytes:
         msg = (
-            f"your blobs would take {held + len(data)} bytes, the limit is "
+            f"your blobs would take {(held - existing_size) + len(data)} bytes, the limit is "
             f"{settings.pool_max_blob_bytes}; delete something with `unsafie blob rm`"
         )
         raise BlobError(

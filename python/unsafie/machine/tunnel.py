@@ -115,6 +115,8 @@ def _terminal(link: WebSocket) -> None:
             os.close(master)
         with contextlib.suppress(OSError):
             os.kill(pid, 15)
+        with contextlib.suppress(OSError):
+            os.waitpid(pid, os.WNOHANG)
 
 
 def _resize(master: int, payload: bytes) -> None:

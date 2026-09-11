@@ -48,6 +48,8 @@ async def run_now(watch_id: int):
         if row is None:
             raise HTTPException(404, "no such check")
         host = await SshRepository(session).get(row.host_id)
+        if host is None:
+            raise HTTPException(404, "SSH host for this watch not found")
     try:
         fires, reason, result = await run_once(row, host)
     except SshError as e:
