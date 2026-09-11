@@ -106,12 +106,14 @@ class Daemon:
         except Exception as e:
             sys.stderr.write(f"registration failed: {e}\n")
             return 0
-        threading.Thread(target=self._sender, daemon=True).start()
+        sender_thread = threading.Thread(target=self._sender)
+        sender_thread.start()
         threading.Thread(target=self._heartbeat, daemon=True).start()
         try:
             self._loop()
         finally:
             self.stop.set()
+            sender_thread.join(timeout=5.0)
         return 0
 
     def _loop(self) -> None:
@@ -245,10 +247,12 @@ class Daemon:
             started = time.monotonic()
             bash_bin = shutil.which("bash") or "/bin/bash"
             limit = float(raw.get("timeout") or 600.0)
+            kind = str(raw.get("kind") or "")
+            argv = [sys.executable, "-c", cmd] if kind == wire.FrameKind.PYTHON else [bash_bin, "-lc", cmd]
             proc = None
             try:
                 proc = subprocess.Popen(
-                    [bash_bin, "-lc", cmd],
+                    argv,
                     cwd=str(self.workdir),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -283,23 +287,25 @@ class Daemon:
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 
     def _sender(self) -> None:
-        while not self.stop.is_set():
+        while not self.stop.is_set() or not self.outbox.empty():
             batch = []
             try:
                 batch.append(self.outbox.get(timeout=FLUSH))
             except queue.Empty:
+                if self.stop.is_set():
+                    break
                 continue
             while len(batch) < 32:
                 try:
                     batch.append(self.outbox.get_nowait())
                 except queue.Empty:
                     break
-            while batch and not self.stop.is_set():
+            for _ in range(5):
                 try:
                     self.link.call("POST", f"/machines/{self.name}/output", body={"frames": batch})
                     break
                 except Exception:
-                    time.sleep(1.0)
+                    time.sleep(0.5)
 
     def _heartbeat(self) -> None:
         while not self.stop.wait(self.beat):
