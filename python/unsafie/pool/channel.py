@@ -224,9 +224,13 @@ async def tail(command_id: str) -> str:
 
 
 async def _finish(command_id: str, code: int | None, size: int, status: CommandStatus) -> None:
+    try:
+        cmd_uuid = uuid.UUID(command_id)
+    except (ValueError, AttributeError):
+        return
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id)),
+            select(PoolCommand).where(PoolCommand.id == cmd_uuid),
         )
         if row is None:
             return
@@ -238,9 +242,13 @@ async def _finish(command_id: str, code: int | None, size: int, status: CommandS
 
 
 async def started(command_id: str) -> None:
+    try:
+        cmd_uuid = uuid.UUID(command_id)
+    except (ValueError, AttributeError):
+        return
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id)),
+            select(PoolCommand).where(PoolCommand.id == cmd_uuid),
         )
         if row is None:
             return
@@ -274,9 +282,13 @@ async def run(
 
 async def cancel(command_id: str, machine: str) -> None:
     await tell(machine, wire.cancel(command_id))
+    try:
+        cmd_uuid = uuid.UUID(command_id)
+    except (ValueError, AttributeError):
+        return
     async with SessionLocal() as session:
         row = await session.scalar(
-            select(PoolCommand).where(PoolCommand.id == uuid.UUID(command_id)),
+            select(PoolCommand).where(PoolCommand.id == cmd_uuid),
         )
         if row is None:
             return

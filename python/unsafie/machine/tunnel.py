@@ -4,6 +4,7 @@ import pty
 import socket
 import struct
 import threading
+import time
 
 from unsafie.chrome import vnc
 from unsafie.chrome.ws import WebSocket
@@ -115,8 +116,19 @@ def _terminal(link: WebSocket) -> None:
             os.close(master)
         with contextlib.suppress(OSError):
             os.kill(pid, 15)
-        with contextlib.suppress(OSError):
-            os.waitpid(pid, os.WNOHANG)
+        for _ in range(50):
+            try:
+                wpid, _ = os.waitpid(pid, os.WNOHANG)
+                if wpid != 0:
+                    break
+            except OSError:
+                break
+            time.sleep(0.05)
+        else:
+            with contextlib.suppress(OSError):
+                os.kill(pid, 9)
+            with contextlib.suppress(OSError):
+                os.waitpid(pid, 0)
 
 
 def _resize(master: int, payload: bytes) -> None:
