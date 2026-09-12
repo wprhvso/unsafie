@@ -33,9 +33,24 @@ async def page_json(slug: str):
     if artifact is None:
         raise HTTPException(404, "Not Found")
     payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
+    if artifact.turn_id:
+        payload["turn_id"] = str(artifact.turn_id)
     if artifact.kind == ArtifactKind.MARKDOWN:
         payload["content"] = artifact.content or ""
     return JSONResponse(payload)
+
+
+@router.get("/api/pages/{slug}/trace", include_in_schema=False)
+async def page_trace(slug: str):
+    slug = slug.rstrip("/")
+    if not is_slug(slug):
+        raise HTTPException(404, "Not Found")
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).by_slug(slug)
+    if artifact is None or artifact.turn_id is None:
+        raise HTTPException(404, "Not Found")
+    from unsafie.api.routes.admin.turns import get_turn_trace
+    return await get_turn_trace(artifact.turn_id)
 
 
 @router.api_route("/{path:path}", methods=METHODS, include_in_schema=False)

@@ -40,7 +40,13 @@
       <tbody>
         {#each turns.data.items as t (t.id)}
           <tr>
-            <td class="mono"><a href="/admin/turns/{t.id}">{t.id.slice(0, 8)}</a></td>
+            <td class="mono">
+              {#if t.slug}
+                <a href="/{t.slug}" title="Open artifact">{t.id.slice(0, 8)}</a>
+              {:else}
+                <a href="/admin/turns/{t.id}">{t.id.slice(0, 8)}</a>
+              {/if}
+            </td>
             <td class="mono"><a href="/admin/chats/{t.bot_id}/{t.chat_id}">{t.chat_id}</a></td>
             <td class="mono">{t.user_id}</td>
             <td><Badge tone={tone(t.status)}>{t.status}</Badge></td>

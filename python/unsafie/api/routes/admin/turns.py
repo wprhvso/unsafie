@@ -33,7 +33,20 @@ async def list_turns(
         rows, total = await TurnRepository(session).page(
             params.offset, params.limit, bot_id, chat_id, user_id, status,
         )
-    return Page.of([TurnRead.model_validate(r) for r in rows], total, params)
+        turn_ids = [r.id for r in rows]
+        slug_map = {}
+        if turn_ids:
+            from sqlalchemy import select
+            from unsafie.database.models.artifact import Artifact
+            stmt = select(Artifact.turn_id, Artifact.slug).where(Artifact.turn_id.in_(turn_ids))
+            res = await session.execute(stmt)
+            slug_map = dict(res.all())
+    items = []
+    for r in rows:
+        item = TurnRead.model_validate(r)
+        item.slug = slug_map.get(r.id)
+        items.append(item)
+    return Page.of(items, total, params)
 
 
 @router.get("/{turn_id}/live")
@@ -157,13 +170,18 @@ async def get_turn(turn_id: UUID):
         turn = await repo.get(turn_id)
         if turn is None:
             raise HTTPException(404, "no such turn")
+        from sqlalchemy import select
+        from unsafie.database.models.artifact import Artifact
+        slug = await session.scalar(select(Artifact.slug).where(Artifact.turn_id == turn_id))
         parent = await repo.get(turn.parent_id) if turn.parent_id else None
         children = await repo.children(turn_id)
         conversation = await repo.conversation(turn.root_id)
         responses = await repo.responses(turn_id)
         segment = await session.get(TurnMessages, turn_id)
+    turn_read = TurnRead.model_validate(turn)
+    turn_read.slug = slug
     return TurnDetail(
-        turn=TurnRead.model_validate(turn),
+        turn=turn_read,
         parent=TurnRead.model_validate(parent) if parent else None,
         children=[TurnRead.model_validate(c) for c in children],
         conversation=[TurnRead.model_validate(c) for c in conversation],

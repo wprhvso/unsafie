@@ -62,6 +62,7 @@ class ChatRead(Base):
     chat_id: int
     type: str
     title: str | None = None
+    slug: str | None = None
     username: str | None = None
     first_seen: datetime
     last_seen: datetime

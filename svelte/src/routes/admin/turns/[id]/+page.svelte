@@ -29,7 +29,9 @@
         <span><span class="muted">key</span> {t.credential_id ?? '—'}</span>
         <span><span class="muted">started</span> {when(t.created_at)}</span>
         <span><span class="muted">finished</span> {when(t.finished_at)}</span>
-        {#if live.data?.url}
+        {#if t.slug}
+          <span><span class="muted">artifact</span> <a href="/{t.slug}">/{t.slug} →</a></span>
+        {:else if live.data?.url}
           <span><span class="muted">live</span> <a href={live.data.url}>{live.data.token}</a></span>
         {/if}
       </div>

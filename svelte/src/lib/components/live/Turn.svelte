@@ -8,6 +8,9 @@
   import Entry from '$lib/components/live/Entry.svelte';
   import Icon from '$lib/components/live/Icon.svelte';
   import ContextBar from '$lib/components/live/ContextBar.svelte';
+  import Waterfall from '$lib/components/Waterfall.svelte';
+  import Json from '$lib/components/Json.svelte';
+  import Badge from '$lib/components/Badge.svelte';
   import { watch } from '$lib/live/stream.js';
   import { timeline } from '$lib/live/timeline.svelte.js';
   import { zoomer } from '$lib/zoom.js';
@@ -28,6 +31,9 @@
   let overrides = $state({});
   let openByDefault = $state(false);
   let control = $state.raw(null);
+  let traceData = $state(null);
+  let showTrace = $state(false);
+  let showLogs = $state(false);
 
   const isOpen = (id) => overrides[id] ?? openByDefault;
 
@@ -84,6 +90,15 @@
   }
 
   onMount(() => {
+    fetch(`/api/pages/${token}/trace`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && (d.spans?.length || d.logs?.length)) {
+          traceData = d;
+        }
+      })
+      .catch(() => {});
+
     control = zoomer({
       key: 'live-zoom',
       variable: '--live-zoom',
@@ -141,6 +156,25 @@
   </div>
 
   <div class="side end">
+    {#if traceData?.spans?.length || traceData?.logs?.length}
+      <button
+        class="action-btn"
+        class:active={showTrace}
+        onclick={() => (showTrace = !showTrace)}
+        title="Toggle Waterfall Trace"
+      >
+        <span class="mono">⚡ Trace</span>
+      </button>
+      <button
+        class="action-btn"
+        class:active={showLogs}
+        onclick={() => (showLogs = !showLogs)}
+        title="Toggle Integrated System Logs"
+      >
+        <span class="mono">📋 Logs ({traceData?.logs?.length || 0})</span>
+      </button>
+      <span class="sep"></span>
+    {/if}
     <button onclick={collapseAll} title="Collapse everything" aria-label="Collapse everything">
       <Icon name="collapse" size={14} />
     </button>
@@ -161,6 +195,11 @@
 </header>
 
 <ContextBar context={feed.context} limit={feed.contextLimit} />
+{#if showTrace && traceData}
+  <div class="trace-box">
+    <Waterfall data={traceData} />
+  </div>
+{/if}
 </div>
 
 <main>
@@ -184,6 +223,31 @@
       {#each feed.items as item (item.id)}
         <Entry {item} open={isOpen(item.id)} ontoggle={toggle} />
       {/each}
+
+      {#if showLogs && traceData?.logs?.length}
+        <div class="sys-logs-box">
+          <div class="sys-logs-title mono bold small">System & Runtime Logs ({traceData.logs.length})</div>
+          <ul class="sys-logs-list">
+            {#each traceData.logs as l, idx (idx)}
+              {@const lvl = (l.level || 'info').toLowerCase()}
+              {@const tone = lvl === 'error' ? 'bad' : lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok'}
+              <li class="sys-log-line">
+                <div class="row spread">
+                  <div class="row gap">
+                    <Badge {tone}>{lvl}</Badge>
+                    <span class="mono event-txt">{l.event || l.message || '—'}</span>
+                    {#if l.logger}<span class="mono muted small">{l.logger}</span>{/if}
+                  </div>
+                  <span class="mono muted small">{l.timestamp || l._time || ''}</span>
+                </div>
+                <div class="sys-log-json">
+                  <Json value={l} />
+                </div>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
     </div>
     {#if running}
       <p class="tail muted small">
@@ -435,5 +499,62 @@
     .blip {
       animation: none;
     }
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.78rem;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .action-btn.active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .trace-box {
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  .sys-logs-box {
+    margin-top: 2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .sys-logs-title {
+    padding: 0.6rem 1rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .sys-logs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .sys-log-line {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .sys-log-line:last-child {
+    border-bottom: 0;
+  }
+  .gap {
+    gap: 0.5rem;
+  }
+  .event-txt {
+    font-size: 0.85rem;
+  }
+  .sys-log-json {
+    margin-top: 0.2rem;
   }
 </style>
