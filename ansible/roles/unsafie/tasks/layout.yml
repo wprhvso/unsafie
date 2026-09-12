@@ -46,3 +46,9 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+- name: Ensure chrome no sandbox profile script exists
+  ansible.builtin.copy:
+    dest: /etc/profile.d/chrome.sh
+    mode: "0644"
+    content: |
+      export UNSAFIE_CHROME_NO_SANDBOX=1

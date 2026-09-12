@@ -206,6 +206,19 @@
       export GOPATH="/opt/go"
       export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
 
+- name: set chrome no sandbox environment
+  ansible.builtin.copy:
+    dest: /etc/profile.d/chrome.sh
+    mode: "0644"
+    content: |
+      export UNSAFIE_CHROME_NO_SANDBOX=1
+
+- name: set chrome no sandbox in /etc/environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: '^UNSAFIE_CHROME_NO_SANDBOX='
+    line: "UNSAFIE_CHROME_NO_SANDBOX=1"
+
 - name: install golangci-lint
   ansible.builtin.unarchive:
     src: "https://github.com/golangci/golangci-lint/releases/download/v1.64.5/golangci-lint-1.64.5-linux-amd64.tar.gz"
