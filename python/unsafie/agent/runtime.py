@@ -123,9 +123,10 @@ async def _execute(
         effort = user.effort or settings.gemini_thinking_level
 
     try:
-        access_token = await opal.get_access_token(
-            session_row.id, session_row.refresh_token,
-        )
+        with telemetry.span("auth.opal_token", attributes={attrs.TURN_ID: str(ctx.turn_id)}):
+            access_token = await opal.get_access_token(
+                session_row.id, session_row.refresh_token,
+            )
     except opal.OpalRefreshFailed as e:
         logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
         await _punish(
@@ -267,40 +268,6 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         machine_name="sandbox",
     )
     prefix = ctx.prefix
-    history = await segments.load(turn)
-    system_prompt = history.system or SYSTEM_PROMPT
-    snapshot = None if history.system else system_prompt
-    messages = history.messages
-    if history.lost:
-        logger.warning("%s has a parent but no stored history, starting over", prefix)
-        prompt = LOST_CONTEXT + "\n\n" + prompt
-    status = TurnStatus.FAILED
-    note: str | None = None
-    async with SessionLocal() as session:
-        user = await UserRepository(session).get_or_create(turn.user_id)
-        model = settings.gemini_model
-        effort = user.effort or settings.gemini_thinking_level
-    stream = await live.begin(turn)
-    if stream is not None:
-        stream.emit(
-            "turn.start",
-            turn_id=str(turn.id),
-            root_id=str(turn.root_id),
-            chat_id=turn.chat_id,
-            resumed=len(messages),
-            prompt=live.clip(prompt)[0],
-            model=model,
-            effort=effort,
-        )
-    events.publish(
-        "turn.started",
-        turn_id=str(turn.id),
-        root_id=str(turn.root_id),
-        bot_id=turn.bot_id,
-        chat_id=turn.chat_id,
-        user_id=turn.user_id,
-        resumed=len(messages),
-    )
     with telemetry.span(
         "agent.turn",
         attributes={
@@ -313,6 +280,41 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             attrs.GEN_AI_CONVERSATION: str(turn.root_id),
         },
     ) as turn_span:
+        with telemetry.span("agent.setup", attributes={attrs.TURN_ID: str(turn.id)}):
+            history = await segments.load(turn)
+            system_prompt = history.system or SYSTEM_PROMPT
+            snapshot = None if history.system else system_prompt
+            messages = history.messages
+            if history.lost:
+                logger.warning("%s has a parent but no stored history, starting over", prefix)
+                prompt = LOST_CONTEXT + "\n\n" + prompt
+            status = TurnStatus.FAILED
+            note: str | None = None
+            async with SessionLocal() as session:
+                user = await UserRepository(session).get_or_create(turn.user_id)
+                model = settings.gemini_model
+                effort = user.effort or settings.gemini_thinking_level
+            stream = await live.begin(turn)
+            if stream is not None:
+                stream.emit(
+                    "turn.start",
+                    turn_id=str(turn.id),
+                    root_id=str(turn.root_id),
+                    chat_id=turn.chat_id,
+                    resumed=len(messages),
+                    prompt=live.clip(prompt)[0],
+                    model=model,
+                    effort=effort,
+                )
+            events.publish(
+                "turn.started",
+                turn_id=str(turn.id),
+                root_id=str(turn.root_id),
+                bot_id=turn.bot_id,
+                chat_id=turn.chat_id,
+                user_id=turn.user_id,
+                resumed=len(messages),
+            )
         base = len(messages)
         try:
             async with (
@@ -381,20 +383,21 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                 reply_markup=retry_markup(str(turn.id), locale),
             )
         finally:
-            await cancel_subagents_of(turn.id)
-            fresh: Turn | None = None
-            if status == TurnStatus.RUNNING:
-                await turns.seal(turn.id)
-                await segments.save(turn, messages[base:], snapshot)
-                logger.info("%s turn preserved in RUNNING status for recovery", prefix)
-            else:
-                await cancel.clear(turn.id)
-                await turns.seal(turn.id)
-                await segments.save(turn, messages[base:], snapshot)
-                async with SessionLocal() as session:
-                    await TurnRepository(session).finish(turn.id, status, note)
-                    fresh = await TurnRepository(session).get(turn.id)
-                await checkpoints.clear(turn.id)
+            with telemetry.span("agent.teardown", attributes={attrs.TURN_ID: str(turn.id)}):
+                await cancel_subagents_of(turn.id)
+                fresh: Turn | None = None
+                if status == TurnStatus.RUNNING:
+                    await turns.seal(turn.id)
+                    await segments.save(turn, messages[base:], snapshot)
+                    logger.info("%s turn preserved in RUNNING status for recovery", prefix)
+                else:
+                    await cancel.clear(turn.id)
+                    await turns.seal(turn.id)
+                    await segments.save(turn, messages[base:], snapshot)
+                    async with SessionLocal() as session:
+                        await TurnRepository(session).finish(turn.id, status, note)
+                        fresh = await TurnRepository(session).get(turn.id)
+                    await checkpoints.clear(turn.id)
             telemetry.set_attrs(
                 turn_span,
                 {

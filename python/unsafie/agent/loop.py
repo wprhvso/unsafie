@@ -1,7 +1,9 @@
 import json
 from dataclasses import dataclass, field
 
+from unsafie import telemetry
 from unsafie.agent import blocks, checkpoints, client, credentials, pricing, queue, request, turns
+from unsafie.telemetry import attrs
 from unsafie.agent.client import ApiError
 from unsafie.agent.parser import extract_code
 from unsafie.agent.session import Ctx
@@ -74,7 +76,8 @@ async def run(
             if runner.replied:
                 result.replied = True
 
-            extra, injected_raw = await queue.drain(ctx.turn_id)
+            with telemetry.span("queue.drain", attributes={attrs.TURN_ID: str(ctx.turn_id)}):
+                extra, injected_raw = await queue.drain(ctx.turn_id)
             if runner.stopped:
                 if extra is not None:
                     injected_data = []
@@ -135,13 +138,14 @@ async def run(
             result.status = "paused"
             return result
         turns.touch(ctx.turn_id)
-        await checkpoints.save(
-            ctx.turn_id,
-            result.steps + 1,
-            CheckpointPhase.LLM_QUERY,
-            messages,
-            credential_id=credential_id,
-        )
+        with telemetry.span("checkpoint.save", attributes={attrs.TURN_ID: str(ctx.turn_id), "phase": "llm_query"}):
+            await checkpoints.save(
+                ctx.turn_id,
+                result.steps + 1,
+                CheckpointPhase.LLM_QUERY,
+                messages,
+                credential_id=credential_id,
+            )
         body = request.build(
             model=model,
             prompt=prompt,
@@ -205,7 +209,8 @@ async def run(
             )
             continue
 
-        code = extract_code(reply.text)
+        with telemetry.span("agent.extract_code", attributes={attrs.TURN_ID: str(ctx.turn_id)}):
+            code = extract_code(reply.text)
         if not code:
             recorder.note("unsafie.no_code_block", reply.dump())
             logger.warning(
@@ -221,14 +226,15 @@ async def run(
 
         spool = BashSpool(ctx.turn_id, result.steps)
         active_block = {"index": result.steps, "code": code, "spool_dir": str(spool.dir)}
-        await checkpoints.save(
-            ctx.turn_id,
-            result.steps,
-            CheckpointPhase.TOOL_EXEC,
-            messages,
-            active_block=active_block,
-            credential_id=credential_id,
-        )
+        with telemetry.span("checkpoint.save", attributes={attrs.TURN_ID: str(ctx.turn_id), "phase": "tool_exec"}):
+            await checkpoints.save(
+                ctx.turn_id,
+                result.steps,
+                CheckpointPhase.TOOL_EXEC,
+                messages,
+                active_block=active_block,
+                credential_id=credential_id,
+            )
 
         runner = blocks.Runner(ctx, recorder)
         await runner.run(code, index=result.steps)
