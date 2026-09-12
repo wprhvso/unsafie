@@ -66,6 +66,20 @@ async def get_turn_trace(turn_id: UUID):
         except Exception as e:
             logger.warning("trace.fetch_failed", turn_id=str(turn_id), error=str(e))
 
+        distinct_trace_ids = {tr.get("traceID") for tr in all_traces if tr.get("traceID")}
+        full_traces = []
+        for tid in distinct_trace_ids:
+            try:
+                async with client.get(f"{settings.victoriatraces_url}/select/jaeger/api/traces/{tid}") as resp:
+                    if resp.status == 200:
+                        payload = await resp.json()
+                        full_traces.extend(payload.get("data", []))
+            except Exception:
+                pass
+
+        if full_traces:
+            all_traces = full_traces
+
         try:
             logsql = f'turn_id:"{turn_id}"'
             async with client.get(f"{settings.victorialogs_url}/select/logsql/query", params={"query": logsql}) as resp:
