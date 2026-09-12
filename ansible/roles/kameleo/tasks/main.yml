@@ -12,14 +12,18 @@
 
 - name: download kasmvnc deb
   ansible.builtin.get_url:
-    url: "https://github.com/kasmtech/KasmVNC/releases/download/v{{ kasmvnc_version }}/kasmvncserver_{{ ansible_distribution_release }}_{{ kasmvnc_version }}_{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}.deb"
+    url: "https://github.com/kasmtech/KasmVNC/releases/download/v{{ kasmvnc_version }}/kasmvncserver_{{ kasmvnc_codename }}_{{ kasmvnc_version }}_{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}.deb"
     dest: "/tmp/kasmvnc.deb"
     mode: "0644"
+  register: kasmvnc_download
+  ignore_errors: true
 
 - name: install kasmvnc
   ansible.builtin.apt:
     deb: "/tmp/kasmvnc.deb"
     state: present
+  when: kasmvnc_download is success
+  ignore_errors: true
 
 - name: ensure docker service is running
   ansible.builtin.systemd:
