@@ -59,29 +59,42 @@ do_reload() {
         return 0
     fi
 
-    systemctl start "unsafie@${target}"
+    echo "Reloading unsafie: switching from ${current} to ${target} (port ${target_port})..."
+    systemctl restart "unsafie@${target}"
 
+    echo "Waiting for health check on http://${HOST}:${target_port}/health..."
     if ! wait_for_health "$target_port"; then
+        echo "Health check failed on port ${target_port}" >&2
         systemctl stop "unsafie@${target}" 2>/dev/null || true
         exit 1
     fi
 
+    echo "Switching upstream to port ${target_port}..."
     switch_upstream "$target_port"
+    echo "Stopping previous slot unsafie@${current}..."
     systemctl stop "unsafie@${current}"
+    echo "Reload completed successfully on slot ${target}."
 }
 
 do_start() {
     if is_active unsafie@blue; then
+        echo "unsafie@blue is already active, switching upstream to ${BLUE_PORT}..."
         switch_upstream "$BLUE_PORT"
         return 0
     fi
     if is_active unsafie@green; then
+        echo "unsafie@green is already active, switching upstream to ${GREEN_PORT}..."
         switch_upstream "$GREEN_PORT"
         return 0
     fi
-    systemctl start unsafie@blue
+    echo "Starting unsafie@blue on port ${BLUE_PORT}..."
+    systemctl restart unsafie@blue
     if wait_for_health "$BLUE_PORT"; then
         switch_upstream "$BLUE_PORT"
+        echo "Started unsafie@blue successfully."
+    else
+        echo "Failed to start unsafie@blue" >&2
+        exit 1
     fi
 }
 
