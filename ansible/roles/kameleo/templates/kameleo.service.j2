@@ -1,0 +1,15 @@
+[Unit]
+Description=Kameleo Anti-Detect Browser Service
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+Restart=always
+ExecStartPre=-/usr/bin/docker stop kameleo
+ExecStartPre=-/usr/bin/docker rm kameleo
+ExecStart=/usr/bin/docker run --name kameleo --rm -p {{ kameleo_port }}:5050 --shm-size=2g -e PAT={{ kameleo_pat }} -v {{ kameleo_data_volume }}:/data {{ kameleo_docker_image }}
+ExecStop=/usr/bin/docker stop kameleo
+
+[Install]
+WantedBy=multi-user.target

@@ -2,11 +2,11 @@ import os
 import shutil
 import subprocess
 
-TOOLCHAINS = ("chrome", "xvfb", "kasmvnc", "nix", "rust", "tools", "libreoffice")
+TOOLCHAINS = ("kameleo", "xvfb", "kasmvnc", "nix", "rust", "tools", "libreoffice")
 KASMVNC = "1.5.0"
 
 PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
-    "chrome": (("google-chrome", "chromium", "chromium-browser"),),
+    "kameleo": (("docker",),),
     "xvfb": (("Xvfb",), ("x11vnc",), ("openbox",), ("xauth",)),
     "kasmvnc": (("Xkasmvnc", "kasmvncserver"),),
     "nix": (("nix",),),
@@ -36,8 +36,8 @@ def _toolchain(name: str, timeout: float) -> str:
     if not absent:
         return "already there"
     try:
-        if name == "chrome":
-            return _apt(["chromium-browser"], timeout)
+        if name == "kameleo":
+            return _apt(["docker.io"], timeout)
         if name == "xvfb":
             return _apt(["xvfb", "openbox", "x11-utils", "xauth", "xfonts-base", "x11vnc"], timeout)
         if name == "tools":
