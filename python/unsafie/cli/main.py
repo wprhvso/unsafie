@@ -106,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
     p_bloat.add_argument("--max-pages", type=int, default=50)
     p_bloat.add_argument("--no-sandbox", action="store_true")
 
+    p_email = subs.add_parser("email")
+    p_email.add_argument("email")
+    p_email.add_argument("--raw", action="store_true", default=False)
+
     p_pages = subs.add_parser("pages", aliases=["page"])
     s_pages = p_pages.add_subparsers(dest="subcmd")
 
@@ -310,6 +314,16 @@ def main(argv: list[str] | None = None) -> int:
                 return _out(chat.info(args.chat))
             if args.subcmd == "download":
                 return _out(chat.download(args.file_id, output=args.output, chat=args.chat))
+
+        if args.cmd == "email":
+            from unsafie.cli import email
+
+            code = email.get_code(args.email)
+            if getattr(args, "raw", False):
+                sys.stdout.write(f"{code}\n")
+                sys.stdout.flush()
+                return 0
+            return _out({"code": code, "result": code, "email": args.email})
 
         if args.cmd in ("pages", "page"):
             if not getattr(args, "subcmd", None):
