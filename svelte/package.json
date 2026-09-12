@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@fluent/bundle": "^0.19.1",
-    "@novnc/novnc": "^1.6.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "github-markdown-css": "^5.8.1",

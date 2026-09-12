@@ -1,10 +1,10 @@
-from unsafie.log import get_logger
 from uuid import UUID
 
 from unsafie.database import SessionLocal
 from unsafie.database.models.artifact import Artifact
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.artifact import ArtifactRepository
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -56,3 +56,31 @@ async def of_telemetry(turn_id: UUID) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).telemetry_of_turn(turn_id)
     return artifact.slug if artifact is not None else None
+
+
+def publish_desktop_sync(
+    *,
+    slug: str,
+    title: str | None = None,
+    bot_id: int | None = None,
+    chat_id: int | None = None,
+    turn_id: UUID | None = None,
+) -> str:
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from unsafie.database.models.artifact import Artifact, ArtifactKind
+
+    engine = create_engine(settings.database_url)
+    with Session(engine) as session:
+        artifact = Artifact(
+            slug=slug,
+            kind=ArtifactKind.DESKTOP,
+            title=title,
+            bot_id=bot_id,
+            chat_id=chat_id,
+            turn_id=turn_id,
+        )
+        session.add(artifact)
+        session.commit()
+    return slug

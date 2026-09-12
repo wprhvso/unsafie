@@ -14,6 +14,7 @@ class ArtifactKind(StrEnum):
     MARKDOWN = "markdown"
     TURN = "turn"
     TELEMETRY = "telemetry"
+    DESKTOP = "desktop"
 
 
 class Artifact(Base):

@@ -95,9 +95,32 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         profile_id = created.id
 
     vnc_port = None
+    vnc_slug = None
+    vnc_url = None
     if not headless:
         vnc.ensure(size, display=vnc.DISPLAY)
-        vnc_port = vnc.RFB_PORT if vnc.listening(vnc.RFB_PORT, 2.0) else None
+        if vnc.listening(vnc.RFB_PORT, 2.0):
+            vnc_port = vnc.RFB_PORT
+            with contextlib.suppress(Exception):
+                import uuid
+
+                from unsafie import artifacts
+                from unsafie.pool import tunnels
+                from unsafie.slugs import generate_slug
+
+                vnc_slug = generate_slug()
+                tunnels.publish_sync(0, "local", "vnc", vnc_port, slug=vnc_slug)
+                turn_env = os.environ.get("UNSAFIE_TURN")
+                chat_env = os.environ.get("UNSAFIE_CHAT")
+                turn_uuid = uuid.UUID(turn_env) if turn_env else None
+                chat_id = int(chat_env) if chat_env and chat_env.lstrip("-").isdigit() else None
+                artifacts.publish_desktop_sync(
+                    slug=vnc_slug,
+                    title=f"Desktop · {profile_name}",
+                    turn_id=turn_uuid,
+                    chat_id=chat_id,
+                )
+                vnc_url = artifacts.url(vnc_slug)
 
     endpoint = f"ws://{host}:{port}/playwright/{profile_id}"
     return {
@@ -108,6 +131,8 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         "headless": headless,
         "size": size,
         "vnc_port": vnc_port,
+        "vnc_slug": vnc_slug,
+        "vnc_url": vnc_url,
         "started_at": time.time(),
     }
 
