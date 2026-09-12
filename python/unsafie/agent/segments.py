@@ -1,6 +1,6 @@
 import gzip
 import json
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass
 
 from unsafie.database import SessionLocal
@@ -9,7 +9,7 @@ from unsafie.database.repositories.segment import SegmentRepository
 from unsafie.mime import human_size
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

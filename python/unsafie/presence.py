@@ -1,5 +1,5 @@
 import json
-import logging
+from unsafie.log import get_logger
 import os
 import socket
 import time
@@ -12,7 +12,7 @@ from unsafie.settings import settings
 from unsafie.ssh.pool import pool
 from unsafie.telegram.webhook import supervisor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 STARTED_AT = datetime.now(UTC)
 

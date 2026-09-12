@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from sqlalchemy import select
 
@@ -21,7 +21,7 @@ from unsafie.settings import settings
 from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LIFECYCLE = {"installation", "installation_repositories", "github_app_authorization"}
 

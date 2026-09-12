@@ -1,7 +1,7 @@
 import base64
 import binascii
 import json
-import logging
+from unsafie.log import get_logger
 import time
 import urllib.parse
 import uuid
@@ -14,7 +14,7 @@ from unsafie.errors import OpsError
 from unsafie.github.client.base import GithubHTTP, session
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 API_VERSION = "6.0-preview"
 CAPACITY_HEADER = "X-ScaleSetMaxCapacity"

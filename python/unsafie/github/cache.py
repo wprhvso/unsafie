@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import hashlib
 import json
-import logging
+from unsafie.log import get_logger
 import os
 import stat
 import tempfile
@@ -16,7 +16,7 @@ from unsafie.loop import Loop
 from unsafie.mime import human_size
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TOUCH_AFTER = 86_400.0
 SWEEP_TARGET = 0.8

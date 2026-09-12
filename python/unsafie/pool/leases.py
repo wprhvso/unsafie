@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 import time
 from datetime import UTC, datetime
 from uuid import UUID
@@ -16,7 +16,7 @@ from unsafie.pool import channel, keys, registry
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 POLL = 1.0
 

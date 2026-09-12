@@ -1,5 +1,5 @@
 import json
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -9,7 +9,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.repositories.checkpoint import CheckpointRepository
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

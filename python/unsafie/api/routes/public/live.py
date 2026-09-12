@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+from unsafie.log import get_logger
 import time
 from collections.abc import AsyncIterator
 from typing import Annotated
@@ -18,7 +18,7 @@ from unsafie.database.repositories.turn import TurnRepository
 from unsafie.settings import settings
 from unsafie.slugs import is_slug
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/live", tags=["live"])
 

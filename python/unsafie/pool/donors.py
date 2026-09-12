@@ -1,6 +1,6 @@
 import base64
 import hashlib
-import logging
+from unsafie.log import get_logger
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,7 +15,7 @@ from unsafie.github.errors import GithubError, NotFound
 from unsafie.github.sealed_box import seal
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "machine.yml"
 SECRET_URL = "UNSAFIE_URL"

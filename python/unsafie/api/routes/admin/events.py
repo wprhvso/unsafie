@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 from typing import Annotated
 
@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from unsafie import events as bus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/events", tags=["events"])
 

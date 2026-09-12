@@ -2,7 +2,7 @@ import asyncio
 import base64
 import contextlib
 import hashlib
-import logging
+from unsafie.log import get_logger
 import time
 from dataclasses import dataclass, field
 
@@ -17,7 +17,7 @@ from unsafie.ssh import keys
 from unsafie.ssh.errors import HostKeyChanged, NoKey, SshError
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def fingerprint(key: asyncssh.SSHKey) -> str:

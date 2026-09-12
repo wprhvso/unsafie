@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import time
 
 import jwt
@@ -11,7 +11,7 @@ from unsafie.github.client.base import session as http_session
 from unsafie.github.errors import AppNotInstalled, GithubError
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 JWT_TTL = 540
 

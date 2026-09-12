@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 import tempfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -12,7 +12,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from unsafie import telemetry
 from unsafie.fluent import t
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RetryCallback(CallbackData, prefix="retry"):

@@ -3,7 +3,7 @@ import base64
 import binascii
 import hashlib
 import json
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,7 +34,7 @@ from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["cli"])
 

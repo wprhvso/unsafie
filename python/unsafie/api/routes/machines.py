@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, WebSocket
@@ -9,7 +9,7 @@ from unsafie.database.models.api_token import TokenKind
 from unsafie.pool import channel, donors, registry, tunnels
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/machines", tags=["machines"])
 

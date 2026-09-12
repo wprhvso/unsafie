@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from uuid import UUID
 
 from unsafie.database import SessionLocal
@@ -7,7 +7,7 @@ from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.artifact import ArtifactRepository
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def url(slug: str) -> str:

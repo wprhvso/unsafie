@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.delivery import DeliveryRepository
@@ -6,7 +6,7 @@ from unsafie.github.webhooks import router
 from unsafie.loop import Loop
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Worker(Loop):

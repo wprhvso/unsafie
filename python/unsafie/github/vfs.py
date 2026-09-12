@@ -1,6 +1,6 @@
 import base64
 import fnmatch
-import logging
+from unsafie.log import get_logger
 import posixpath
 from dataclasses import dataclass
 from typing import Any
@@ -9,7 +9,7 @@ from unsafie.github.errors import GithubError
 from unsafie.mime import human_size, is_text
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DELETED = None
 SKIP_DIRS = (".git/", "node_modules/", ".venv/", "__pycache__/", "dist/", "build/", "target/")

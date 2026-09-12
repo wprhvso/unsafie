@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from pathlib import Path
@@ -12,11 +11,11 @@ import aiohttp
 from unsafie import telemetry
 from unsafie.github import metrics
 from unsafie.github.errors import Conflict, GithubError, NotFound, UserAuthRequired
-from unsafie.log import short
+from unsafie.log import get_logger, short
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TokenProvider = Callable[[], Awaitable[str]]
 ACCEPT = "application/vnd.github+json"

@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import re
 from datetime import UTC, datetime
 
@@ -12,7 +12,7 @@ from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError, NotFound, UserAuthRequired
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SLUG = re.compile(r"^[^/\s]+/[^/\s]+$")
 LABEL = re.compile(r"^[a-zA-Z0-9][\w.-]{0,31}$")

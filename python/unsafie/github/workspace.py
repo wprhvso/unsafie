@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -17,7 +17,7 @@ from unsafie.github.errors import GithubError, NotFound
 from unsafie.github.vfs import Overlay, Tree
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

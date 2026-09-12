@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from typing import Final
 
 from aiogram import Router
@@ -13,7 +13,7 @@ from unsafie.settings import settings
 from unsafie.telegram.handlers.locale import KNOWN, guess
 from unsafie.telegram.sender import answer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LANGUAGES: Final = ("en", "ru", "es", "fr", "ar", "fa")
 RESET: Final = {"default", "reset", "auto", "-"}

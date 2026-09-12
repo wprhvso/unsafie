@@ -1,11 +1,11 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 import time
 
 from unsafie import telemetry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Loop:

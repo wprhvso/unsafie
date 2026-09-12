@@ -1,11 +1,11 @@
-import logging
+from unsafie.log import get_logger
 
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.github import WorktreeRepository
 from unsafie.github.errors import Conflict, GithubError, NotFound
 from unsafie.github.workspace import Session, default_branch, ensure_worktree, lock_for
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def create_branch(state: Session, name: str, source: str | None) -> dict:

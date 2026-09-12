@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ from unsafie.errors import OpsError
 from unsafie.pool import blobs
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["cli"])
 

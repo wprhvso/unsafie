@@ -1,11 +1,11 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 
 from aiogram import Bot
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 INTERVAL = 4.5
 TIMEOUT = 8.0

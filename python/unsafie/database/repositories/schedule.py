@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unsafie.database.models.scheduled_task import ScheduledTask
 from unsafie.database.models.turn import Turn, TurnStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScheduleRepository:

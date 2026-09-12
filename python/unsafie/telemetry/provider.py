@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import os
 import socket
 
@@ -11,7 +11,7 @@ from opentelemetry.sdk.trace.sampling import ALWAYS_ON, ParentBased, Sampler, Tr
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MAX_ATTRIBUTES = 128
 MAX_EVENTS = 128

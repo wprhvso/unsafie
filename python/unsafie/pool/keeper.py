@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from unsafie import cluster
@@ -9,7 +9,7 @@ from unsafie.loop import Loop
 from unsafie.pool import donors, keys, leases, registry
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LIVE = ("in_progress", "queued", "waiting")
 

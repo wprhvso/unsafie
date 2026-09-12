@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WatchRepository:

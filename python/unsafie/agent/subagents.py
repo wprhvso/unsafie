@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 from uuid import UUID
 
 from unsafie import cluster
@@ -8,7 +8,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _tasks: dict[UUID, asyncio.Task] = {}
 _events: dict[UUID, asyncio.Event] = {}

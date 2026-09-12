@@ -1,10 +1,9 @@
-import logging
 
 from unsafie import telemetry
 from unsafie.agent.live import Live
-from unsafie.log import short
+from unsafie.log import get_logger, short
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def log_reply(reply, prefix: str) -> None:

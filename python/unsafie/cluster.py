@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 import secrets
 import time
 from collections.abc import AsyncIterator, Iterable
@@ -14,7 +14,7 @@ from unsafie import telemetry
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 RELEASE = """
 if redis.call('get', KEYS[1]) == ARGV[1] then

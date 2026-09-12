@@ -1,10 +1,10 @@
 import difflib
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass, field
 
 from unsafie.mime import is_text
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MARK_OURS = "<<<<<<< yours"
 MARK_SPLIT = "======="

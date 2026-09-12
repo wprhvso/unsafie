@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import json
-import logging
+from unsafie.log import get_logger
 import os
 import shlex
 import shutil
@@ -13,7 +13,7 @@ from enum import StrEnum
 from pathlib import Path
 from uuid import UUID
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_SPOOL_ROOT = Path("/run/unsafie/spool")
 FALLBACK_SPOOL_ROOT = Path("/tmp/unsafie-spool")

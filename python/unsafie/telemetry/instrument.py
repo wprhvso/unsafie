@@ -1,6 +1,6 @@
-import logging
+from unsafie.log import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 EXCLUDED_URLS = "health,api/admin/events"
 

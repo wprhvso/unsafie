@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 from uuid import UUID
 
 from aiogram import Bot, Router
@@ -13,7 +13,7 @@ from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.telegram.handlers.locale import locale_for
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ACTIVE_PIPELINES: dict[tuple[int, int], tuple[int, asyncio.Task]] = {}
 

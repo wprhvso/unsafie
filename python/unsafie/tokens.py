@@ -1,5 +1,5 @@
 import hashlib
-import logging
+from unsafie.log import get_logger
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -8,7 +8,7 @@ from unsafie.database.models.api_token import ApiToken, TokenKind
 from unsafie.database.repositories.token import TokenRepository
 from unsafie.database.repositories.user import UserRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 PREFIX = "uns_"
 

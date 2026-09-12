@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from aiogram import Router
 from aiogram.enums import ChatType
@@ -15,7 +15,7 @@ from unsafie.telegram.handlers.commands.pipe import cancel_pipeline
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _targets(bot_id: int, chat_id: int, reply_to: int | None) -> list[Turn]:

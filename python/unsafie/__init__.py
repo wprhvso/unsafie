@@ -1,16 +1,15 @@
-import logging
 
 import uvicorn
 
 from unsafie import telemetry
-from unsafie.log import setup
+from unsafie.log import get_logger, setup
 from unsafie.settings import settings
 
 
 def main() -> None:
     setup()
     telemetry.setup()
-    logging.getLogger(__name__).info(
+    get_logger(__name__).info(
         "starting uvicorn host=%s port=%s reload=%s model=%s instance=%s role=%s",
         settings.host,
         settings.port,

@@ -1,11 +1,11 @@
 import html
 import json
-import logging
+from unsafie.log import get_logger
 from pathlib import Path
 
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 PLACEHOLDER = "<!--PAYLOAD-->"
 SCRIPT_ID = "payload"

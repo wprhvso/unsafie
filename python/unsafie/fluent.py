@@ -1,11 +1,11 @@
-import logging
+from unsafie.log import get_logger
 from typing import Any
 
 from fluent.runtime import FluentBundle, FluentResource
 
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _bundles: dict[str, FluentBundle | None] = {}
 

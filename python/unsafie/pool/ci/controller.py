@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import json
-import logging
+from unsafie.log import get_logger
 import shlex
 from datetime import UTC, datetime
 
@@ -17,7 +17,7 @@ from unsafie.pool.ci.scaleset import ScaleSet, ScaleSetError, Session
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 JOB_MESSAGES = "RunnerScaleSetJobMessages"
 BACKOFF_MIN = 5.0

@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from unsafie import events, telemetry
 from unsafie.agent import live
@@ -10,7 +10,7 @@ from unsafie.database.repositories.turn import TurnRepository
 from unsafie.loop import Loop
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Janitor(Loop):

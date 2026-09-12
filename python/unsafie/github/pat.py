@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import string
 
 from unsafie.database import SessionLocal
@@ -17,7 +17,7 @@ from unsafie.github.client.user import UserClient
 from unsafie.github.errors import GithubError, UserAuthRequired
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 PREFIXES = ("ghp_", "github_pat_", "gho_", "ghu_", "ghs_", "ghr_")
 NEEDED_SCOPES = ("repo",)

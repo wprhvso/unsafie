@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -9,7 +9,7 @@ from unsafie.database.models.artifact import ArtifactKind
 from unsafie.database.repositories.artifact import ArtifactRepository
 from unsafie.slugs import is_slug
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["artifacts"])
 

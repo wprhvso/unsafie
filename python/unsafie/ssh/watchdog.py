@@ -1,5 +1,5 @@
 import hashlib
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from unsafie import events, telemetry
@@ -15,7 +15,7 @@ from unsafie.ssh.errors import SshError
 from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MAX_FAILS = 5
 BATCH = 20

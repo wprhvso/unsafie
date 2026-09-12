@@ -1,17 +1,16 @@
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
-from unsafie.log import short
+from unsafie.log import get_logger, short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
 from unsafie.pool import blobs, channel
 from unsafie.settings import settings
 from unsafie_wire import markers
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REASON_LIMIT = 300
 

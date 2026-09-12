@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import hmac
-import logging
+from unsafie.log import get_logger
 import secrets
 import time
 
@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request
 
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 COOKIE = "unsafie_admin"
 

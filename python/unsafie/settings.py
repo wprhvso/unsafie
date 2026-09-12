@@ -1,4 +1,4 @@
-import logging
+import structlog
 import socket
 import uuid
 from pathlib import Path
@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import AliasChoices, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS_DIR = Path("/run/secrets")
@@ -97,6 +97,7 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
     log_truncate: int = 2000
+    log_format: str = "json"
     sql_echo: bool = False
 
     service_name: str = Field(

@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from typing import Annotated
 from uuid import UUID
 
@@ -13,7 +13,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.turn_message import TurnMessages
 from unsafie.database.repositories.turn import TurnRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/turns", tags=["turns"])
 

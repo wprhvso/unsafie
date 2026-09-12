@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select
@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.opal_session import OpalSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OpalSessionRepository:

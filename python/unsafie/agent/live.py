@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import json
-import logging
+from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -15,7 +15,7 @@ from unsafie import artifacts, cluster
 from unsafie.database.models.turn import Turn
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 BODY = "b"
 STREAM = "live"

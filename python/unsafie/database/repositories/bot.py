@@ -1,11 +1,11 @@
-import logging
+from unsafie.log import get_logger
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.bot import Bot
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BotRepository:

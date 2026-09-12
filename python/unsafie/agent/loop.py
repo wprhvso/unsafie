@@ -1,5 +1,4 @@
 import json
-import logging
 from dataclasses import dataclass, field
 
 from unsafie.agent import blocks, checkpoints, client, credentials, pricing, queue, request, turns
@@ -9,10 +8,10 @@ from unsafie.agent.session import Ctx
 from unsafie.agent.spool import BashSpool
 from unsafie.agent.trace import Recorder
 from unsafie.database.models.turn_checkpoint import CheckpointPhase
-from unsafie.log import short
+from unsafie.log import bind_contextvars, clear_contextvars, get_logger, short
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -52,6 +51,17 @@ async def run(
     credential_id: int | None = None,
 ) -> Result:
     result = Result(credential_id=credential_id)
+    clear_contextvars()
+    bind_contextvars(
+        turn_id=ctx.turn_id,
+        session_id=ctx.session_id,
+        bot_id=ctx.bot_id,
+        chat_id=ctx.chat_id,
+        user_id=ctx.user_id,
+        agent_name=ctx.name,
+        model=model,
+    )
+    logger.info("agent.turn.started", step=initial_step, credential_id=credential_id)
 
     if initial_checkpoint is not None:
         result.steps = initial_checkpoint.step

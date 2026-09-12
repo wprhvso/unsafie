@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
@@ -13,7 +13,7 @@ from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.telegram import bots
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

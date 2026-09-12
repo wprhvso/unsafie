@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import json
-import logging
+from unsafie.log import get_logger
 import os
 import signal
 import sys
@@ -10,7 +10,7 @@ from typing import Any, Final
 from unsafie.bloat2md.config import settings
 from unsafie.bloat2md.domain import ConversionError, Image, Payload, UnsupportedFile
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 WORKER: Final = "unsafie.bloat2md.worker"
 _KILL_GRACE: Final = 2.0
