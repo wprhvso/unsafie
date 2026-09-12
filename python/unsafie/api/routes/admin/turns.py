@@ -57,14 +57,12 @@ async def get_turn_trace(turn_id: UUID):
             params = {
                 "service": settings.service_name,
                 "tags": json.dumps({"unsafie.turn_id": str(turn_id)}),
-                "limit": "1",
+                "limit": "20",
             }
             async with client.get(f"{settings.victoriatraces_url}/select/jaeger/api/traces", params=params) as resp:
                 if resp.status == 200:
                     payload = await resp.json()
-                    items = payload.get("data", [])
-                    if items:
-                        trace_data = items[0]
+                    all_traces = payload.get("data", [])
         except Exception as e:
             logger.warning("trace.fetch_failed", turn_id=str(turn_id), error=str(e))
 
@@ -85,14 +83,26 @@ async def get_turn_trace(turn_id: UUID):
 
     total_duration_ms = 0.0
     trace_id = None
-    if trace_data and trace_data.get("spans"):
-        raw_spans = trace_data["spans"]
-        trace_id = trace_data.get("traceID")
-        min_start = min(s.get("startTime", 0) for s in raw_spans)
-        max_end = max(s.get("startTime", 0) + s.get("duration", 0) for s in raw_spans)
+    all_raw_spans = []
+    for tr in all_traces:
+        if not trace_id:
+            trace_id = tr.get("traceID")
+        all_raw_spans.extend(tr.get("spans", []))
+
+    seen_span_ids = set()
+    unique_spans = []
+    for s in all_raw_spans:
+        sid = s.get("spanID")
+        if sid and sid not in seen_span_ids:
+            seen_span_ids.add(sid)
+            unique_spans.append(s)
+
+    if unique_spans:
+        min_start = min(s.get("startTime", 0) for s in unique_spans)
+        max_end = max(s.get("startTime", 0) + s.get("duration", 0) for s in unique_spans)
         total_duration_ms = max(0.1, (max_end - min_start) / 1000.0)
 
-        for s in raw_spans:
+        for s in unique_spans:
             s_start = s.get("startTime", 0)
             s_dur = s.get("duration", 0)
             parent_id = None
