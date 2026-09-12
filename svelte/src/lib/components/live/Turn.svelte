@@ -229,7 +229,7 @@
       {#if showLogs}
         {#each mergedItems as entity (entity.kind === 'entry' ? entity.data.id : entity.id)}
           {#if entity.kind === 'entry'}
-            <Entry item={entity.data} open={isOpen(entity.data.id)} ontoggle={toggle} />
+            <Entry item={entity.data} />
           {:else}
             {@const l = entity.data}
             {@const lvl = (l.level || 'info').toLowerCase()}
@@ -256,7 +256,7 @@
         {/each}
       {:else}
         {#each feed.items as item (item.id)}
-          <Entry {item} open={isOpen(item.id)} ontoggle={toggle} />
+          <Entry {item} />
         {/each}
       {/if}
     </div>
