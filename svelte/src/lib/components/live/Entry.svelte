@@ -51,7 +51,7 @@
   {#if item.output || item.error}
     {@const isBad = Boolean(item.error) || item.status === 'failed' || (item.exit_code !== null && item.exit_code !== 0)}
     <article class="entry code">
-      <div class="card output-card" class:ok-border={!isBad} class:bad-border={isBad}>
+      <div class="card output-card" class:bad-border={isBad}>
         {#if item.output}
           <div class="terminal-wrap">
             <div class="tools"><Copy text={item.output} label="Copy Output" /></div>
@@ -137,23 +137,20 @@
     min-width: 0;
   }
 
-  .ok-border {
-    border: 1.5px solid var(--ok) !important;
-  }
   .bad-border {
     border: 1.5px solid var(--bad) !important;
   }
 
   .thought-card {
-    border-left: 3px solid var(--live-think, #8250df);
-    background: color-mix(in srgb, var(--live-think, #8250df) 3%, var(--panel));
+    border-left: 3px solid var(--muted);
+    background: var(--panel);
   }
 
   .thought-body {
     padding: 0.6rem 0.85rem;
     font-size: 0.9rem;
     line-height: 1.6;
-    color: var(--text);
+    color: var(--muted);
   }
 
   .prompt-card {
