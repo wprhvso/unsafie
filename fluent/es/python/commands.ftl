@@ -2,6 +2,7 @@ commands-unknown = Comando desconocido: { $command }
 commands-start =
     Hola. Escribe cualquier mensaje: cada mensaje sin respuesta inicia una nueva conversación con contexto limpio, y una respuesta a cualquier mensaje continúa la conversación correspondiente. Reacciona a tu propio mensaje para obtener un enlace al turno iniciado, donde todo lo que hago es visible.
 
+    /wipe — eliminar todo el historial de conversaciones, archivos de sandbox y artefactos
     /stop — detener: como respuesta, lo que inició ese mensaje; sin respuesta, todo
     /effort — esfuerzo de pensamiento
     /gh — token y repositorios de GitHub
@@ -83,3 +84,5 @@ cmd-long-empty = Todavía no hay nada que enviar
 cmd-long-expired = Se agotó el tiempo: no se envió nada
 
 cmd-runs-empty = No hay tareas activas en este chat
+
+commands-wipe-success = Se ha eliminado permanentemente todo el historial de conversaciones, contexto, archivos de sandbox y artefactos de este chat.

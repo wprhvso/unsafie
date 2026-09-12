@@ -14,6 +14,7 @@ from unsafie.telegram.handlers.commands.stop import build_stop_router
 from unsafie.telegram.handlers.commands.system import build_system_router
 from unsafie.telegram.handlers.commands.tasks import build_tasks_router
 from unsafie.telegram.handlers.commands.tz import build_tz_router
+from unsafie.telegram.handlers.commands.wipe import build_wipe_router
 
 
 def build_commands_router() -> Router:
@@ -33,6 +34,7 @@ def build_commands_router() -> Router:
         build_system_router,
         build_tasks_router,
         build_tz_router,
+        build_wipe_router,
     ):
         router.include_router(build())
     return router

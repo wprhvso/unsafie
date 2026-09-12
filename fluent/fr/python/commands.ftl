@@ -2,6 +2,7 @@ commands-unknown = Commande inconnue : { $command }
 commands-start =
     Bonjour. Écrivez simplement : chaque message sans réponse démarre une nouvelle conversation avec un contexte propre, et une réponse à n'importe quel message poursuit la conversation correspondante. Réagissez à votre propre message pour obtenir un lien vers le tour initié, où tout ce que je fais est visible.
 
+    /wipe — supprimer tout l'historique des conversations, les fichiers du bac à sable et les artefacts
     /stop — arrêter : en réponse, ce que ce message a initié ; sans réponse, tout
     /effort — effort de réflexion
     /gh — token et dépôts GitHub
@@ -83,3 +84,5 @@ cmd-long-empty = Rien à envoyer pour l'instant
 cmd-long-expired = Délai dépassé — rien n'a été envoyé
 
 cmd-runs-empty = Aucune tâche active dans cette discussion
+
+commands-wipe-success = Tout l'historique des conversations, le contexte, les fichiers du bac à sable et les artefacts de ce chat ont été définitivement supprimés.
