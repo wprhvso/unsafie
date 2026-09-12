@@ -122,6 +122,14 @@ class Settings(BaseSettings):
         default="grpc",
         validation_alias=AliasChoices("OTEL_PROTOCOL", "OTEL_EXPORTER_OTLP_PROTOCOL"),
     )
+    victoriatraces_url: str = Field(
+        default="http://127.0.0.1:10428",
+        validation_alias=AliasChoices("VICTORIATRACES_URL", "TRACES_URL"),
+    )
+    victorialogs_url: str = Field(
+        default="http://127.0.0.1:9428",
+        validation_alias=AliasChoices("VICTORIALOGS_URL", "LOGS_URL"),
+    )
     otel_traces_path: str = "/insert/opentelemetry/v1/traces"
     otel_sample_ratio: float = 1.0
     otel_capture_content: bool = False
