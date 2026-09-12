@@ -1,4 +1,5 @@
-- name: upgrade
+---
+- name: upgrade system
   ansible.builtin.apt:
     upgrade: dist
     update_cache: true
@@ -8,19 +9,346 @@
     - never
     - upgrade
 
-- name: packages
+- name: ensure essential directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/apt/keyrings
+    - /opt
+    - /usr/local/bin
+
+- name: google chrome gpg key
+  ansible.builtin.get_url:
+    url: https://dl.google.com/linux/linux_signing_key.pub
+    dest: /etc/apt/keyrings/google-chrome.asc
+    mode: "0644"
+
+- name: google chrome repo
+  ansible.builtin.deb822_repository:
+    name: google-chrome
+    types: deb
+    uris: https://dl.google.com/linux/chrome/deb/
+    suites: stable
+    components: main
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/google-chrome.asc
+
+- name: github cli gpg key
+  ansible.builtin.get_url:
+    url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+    dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    mode: "0644"
+
+- name: github cli repo
+  ansible.builtin.deb822_repository:
+    name: github-cli
+    types: deb
+    uris: https://cli.github.com/packages
+    suites: stable
+    components: main
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+
+- name: trivy security scanner gpg key
+  ansible.builtin.get_url:
+    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+    dest: /etc/apt/keyrings/trivy.asc
+    mode: "0644"
+
+- name: trivy repo
+  ansible.builtin.deb822_repository:
+    name: trivy
+    types: deb
+    uris: https://aquasecurity.github.io/trivy-repo/deb
+    suites: generic
+    components: main
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/trivy.asc
+
+- name: nodesource gpg key
+  ansible.builtin.get_url:
+    url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+    dest: /etc/apt/keyrings/nodesource.asc
+    mode: "0644"
+
+- name: nodesource repo
+  ansible.builtin.deb822_repository:
+    name: nodesource
+    types: deb
+    uris: https://deb.nodesource.com/node_22.x
+    suites: nodistro
+    components: main
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/nodesource.asc
+
+- name: update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: install system packages
   ansible.builtin.apt:
     name:
       - curl
       - wget
+      - rsync
       - git
+      - git-lfs
+      - gh
       - htop
       - jq
       - tree
-      - unzip
+      - file
       - ripgrep
       - fd-find
       - bat
-      - gh
+      - fzf
+      - unzip
+      - tar
+      - gzip
+      - bzip2
+      - xz-utils
+      - zstd
+      - p7zip-full
+      - bubblewrap
+      - google-chrome-stable
+      - xvfb
+      - x11vnc
+      - openbox
+      - xauth
+      - x11-utils
+      - fonts-dejavu-core
+      - fonts-liberation2
+      - fonts-noto-color-emoji
+      - libreoffice-writer-nogui
+      - libreoffice-calc-nogui
+      - libreoffice-impress-nogui
+      - imagemagick
+      - ffmpeg
+      - poppler-utils
+      - build-essential
+      - pkg-config
+      - libpq-dev
+      - libssl-dev
+      - libffi-dev
+      - ca-certificates
+      - openjdk-21-jdk-headless
+      - python3-dev
+      - python3-pip
+      - python3-venv
+      - nodejs
+      - shellcheck
+      - yamllint
+      - trivy
     state: present
-    update_cache: true
+
+- name: imagemagick pdf policy
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: 'rights="none" pattern="PDF"'
+    replace: 'rights="read|write" pattern="PDF"'
+  loop:
+    - /etc/ImageMagick-6/policy.xml
+    - /etc/ImageMagick-7/policy.xml
+  failed_when: false
+
+- name: enable corepack
+  ansible.builtin.command:
+    cmd: corepack enable
+  changed_when: false
+
+- name: install global javascript tooling
+  ansible.builtin.command:
+    cmd: npm install -g typescript tsx prettier eslint @biomejs/biome
+  register: npm_install
+  changed_when: "'added' in npm_install.stdout or 'updated' in npm_install.stdout"
+
+- name: install bun
+  ansible.builtin.unarchive:
+    src: "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip"
+    dest: /opt
+    remote_src: true
+    creates: /opt/bun-linux-x64/bun
+
+- name: symlink bun binaries
+  ansible.builtin.file:
+    src: /opt/bun-linux-x64/bun
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - bun
+    - bunx
+
+- name: install official go binary
+  ansible.builtin.unarchive:
+    src: "https://go.dev/dl/go1.23.4.linux-amd64.tar.gz"
+    dest: /usr/local
+    remote_src: true
+    creates: /usr/local/go/bin/go
+
+- name: symlink go binaries to /usr/local/bin
+  ansible.builtin.file:
+    src: "/usr/local/go/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - go
+    - gofmt
+
+- name: set global GOPATH and PATH environment
+  ansible.builtin.copy:
+    dest: /etc/profile.d/golang.sh
+    mode: "0644"
+    content: |
+      export GOPATH="/opt/go"
+      export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
+
+- name: install golangci-lint
+  ansible.builtin.unarchive:
+    src: "https://github.com/golangci/golangci-lint/releases/download/v1.64.5/golangci-lint-1.64.5-linux-amd64.tar.gz"
+    dest: /opt
+    remote_src: true
+    creates: /opt/golangci-lint-1.64.5-linux-amd64/golangci-lint
+
+- name: symlink golangci-lint
+  ansible.builtin.file:
+    src: /opt/golangci-lint-1.64.5-linux-amd64/golangci-lint
+    dest: /usr/local/bin/golangci-lint
+    state: link
+    force: true
+
+- name: install go qa extra tools via go install
+  ansible.builtin.command:
+    cmd: "/usr/local/go/bin/go install {{ item }}"
+  environment:
+    GOPATH: /opt/go
+    GOBIN: /usr/local/bin
+  loop:
+    - "gotest.tools/gotestsum@latest"
+    - "golang.org/x/vuln/cmd/govulncheck@latest"
+    - "mvdan.cc/gofumpt@latest"
+    - "github.com/go-delve/delve/cmd/dlv@latest"
+  changed_when: false
+
+- name: install kotlin compiler
+  ansible.builtin.unarchive:
+    src: "https://github.com/JetBrains/kotlin/releases/download/v2.1.0/kotlin-compiler-2.1.0.zip"
+    dest: /opt
+    remote_src: true
+    creates: /opt/kotlinc/bin/kotlinc
+
+- name: symlink kotlin binaries
+  ansible.builtin.file:
+    src: "/opt/kotlinc/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - kotlin
+    - kotlinc
+
+- name: install ktlint
+  ansible.builtin.get_url:
+    url: https://github.com/pinterest/ktlint/releases/latest/download/ktlint
+    dest: /usr/local/bin/ktlint
+    mode: "0755"
+
+- name: install detekt cli
+  ansible.builtin.unarchive:
+    src: "https://github.com/detekt/detekt/releases/download/v1.23.7/detekt-cli-1.23.7.zip"
+    dest: /opt
+    remote_src: true
+    creates: /opt/detekt-cli-1.23.7/bin/detekt-cli
+
+- name: symlink detekt cli
+  ansible.builtin.file:
+    src: /opt/detekt-cli-1.23.7/bin/detekt-cli
+    dest: /usr/local/bin/detekt
+    state: link
+    force: true
+
+- name: install uv
+  ansible.builtin.shell: |
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
+  args:
+    creates: /usr/local/bin/uv
+
+- name: create system-wide python tools virtualenv using uv
+  ansible.builtin.command:
+    cmd: /usr/local/bin/uv venv /opt/pyqa --python python3
+  args:
+    creates: /opt/pyqa/bin/python
+
+- name: install python qa tools into /opt/pyqa
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/uv pip install --directory /opt/pyqa
+      ruff
+      basedpyright
+      pytest
+      pytest-cov
+      pytest-xdist
+      pytest-asyncio
+      pytest-mock
+      mypy
+      pre-commit
+      bandit
+      coverage
+  register: py_tools_install
+  changed_when: "'Installed' in py_tools_install.stdout"
+
+- name: symlink python qa tools to /usr/local/bin
+  ansible.builtin.file:
+    src: "/opt/pyqa/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - ruff
+    - basedpyright
+    - pytest
+    - mypy
+    - pre-commit
+    - bandit
+    - coverage
+
+- name: install hadolint
+  ansible.builtin.get_url:
+    url: https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+    dest: /usr/local/bin/hadolint
+    mode: "0755"
+
+- name: install actionlint
+  ansible.builtin.unarchive:
+    src: "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    extra_opts:
+      - actionlint
+    creates: /usr/local/bin/actionlint
+    mode: "0755"
+
+- name: install just
+  ansible.builtin.shell: |
+    curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+  args:
+    creates: /usr/local/bin/just
+
+- name: install hyperfine
+  ansible.builtin.unarchive:
+    src: "https://github.com/sharkdp/hyperfine/releases/download/v1.18.0/hyperfine-v1.18.0-x86_64-unknown-linux-gnu.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: /usr/local/bin/hyperfine
+  register: hyperfine_download
+
+- name: move hyperfine to /usr/local/bin
+  ansible.builtin.copy:
+    src: /tmp/hyperfine-v1.18.0-x86_64-unknown-linux-gnu/hyperfine
+    dest: /usr/local/bin/hyperfine
+    mode: "0755"
+    remote_src: true
+  when: hyperfine_download is changed

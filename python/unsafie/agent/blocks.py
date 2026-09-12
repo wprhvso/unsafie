@@ -1,12 +1,17 @@
 import asyncio
+import os
+import shutil
+import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from unsafie import tokens
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.log import get_logger, short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
-from unsafie.pool import blobs, channel
+from unsafie.pool import blobs
 from unsafie.settings import settings
 from unsafie_wire import markers
 
@@ -20,7 +25,7 @@ class Block:
     index: int
     code: str
     started_at: float = field(default_factory=time.monotonic)
-    machine: str = "pool"
+    machine: str = "sandbox"
     exit_code: int | None = None
     output: str = ""
     seconds: float = 0.0
@@ -46,7 +51,7 @@ class Block:
         return lines[-1][:REASON_LIMIT] if lines else ""
 
     def heading(self) -> str:
-        where = self.machine or "pool"
+        where = self.machine or "sandbox"
         if self.error:
             return f"[block {self.index}] {where}: {self.error}"
         if self.exit_code is None:
@@ -63,6 +68,7 @@ class Runner:
         self.ctx = ctx
         self.recorder = recorder
         self.blocks: list[Block] = []
+        self._cli_token: str | None = None
 
     @property
     def count(self) -> int:
@@ -76,10 +82,21 @@ class Runner:
     def replied(self) -> bool:
         return any(block.sent for block in self.blocks)
 
+    async def _ensure_token(self) -> str:
+        if self._cli_token is None:
+            _, self._cli_token = await tokens.issue(
+                user_id=self.ctx.user_id,
+                bot_id=self.ctx.bot_id,
+                chat_id=self.ctx.chat_id,
+                name=f"agent-{self.ctx.turn_id}",
+                hours=24.0,
+            )
+        return self._cli_token
+
     async def run(self, code: str, index: int | None = None) -> Block:
         if index is None:
             index = len(self.blocks) + 1
-        block = Block(index=index, code=code, machine=self.ctx.machine_name or "pool")
+        block = Block(index=index, code=code, machine="sandbox")
         self.blocks.append(block)
         self.recorder.code_started(index, code, block.machine)
         await self._run(block)
@@ -95,32 +112,107 @@ class Runner:
             self._finished(block)
             return
 
-        if not self.ctx.machine_name:
-            block.error = "no runner available for this chat"
-            block.exit_code = 1
-            block.seconds = time.monotonic() - block.started_at
+        token = await self._ensure_token()
+        started = time.monotonic()
+
+        chat_base = Path(settings.chats_dir) / str(self.ctx.chat_id)
+        workdir = chat_base / "work"
+        homedir = chat_base / "home"
+        workdir.mkdir(parents=True, exist_ok=True)
+        homedir.mkdir(parents=True, exist_ok=True)
+
+        argv: list[str] = []
+        if shutil.which("nice"):
+            argv.extend(["nice", "-n", "10"])
+        if shutil.which("prlimit"):
+            argv.extend(["prlimit", "--nproc=256"])
+
+        bwrap_bin = shutil.which("bwrap")
+        if not bwrap_bin:
+            block.error = "bwrap binary not found"
+            block.exit_code = 127
+            block.seconds = time.monotonic() - started
             self._finished(block)
             return
 
-        started = time.monotonic()
+        api_url = settings.public_base_url or f"http://127.0.0.1:{settings.port}"
+
+        venv_dir = str(Path(sys.prefix).resolve())
+        py_bin_dir = str(Path(sys.executable).resolve().parent)
+        base_py_dir = str(Path(sys.base_prefix).resolve())
+
+        py_module_dir = str(Path(__file__).resolve().parents[2])
+        repo_root_dir = str(Path(__file__).resolve().parents[3])
+        wire_module_dir = str(Path(py_module_dir) / "unsafie-wire" / "src")
+
+        path_elements = [
+            f"{venv_dir}/bin",
+            py_bin_dir,
+            str(Path.home() / ".local" / "bin"),
+            str(Path.home() / ".cargo" / "bin"),
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/opt/homebrew/bin",
+        ]
+        path_env = ":".join(dict.fromkeys(p for p in path_elements if p))
+
+        pythonpath_elements = [
+            py_module_dir,
+            wire_module_dir,
+            os.environ.get("PYTHONPATH", ""),
+        ]
+        pythonpath_env = ":".join(dict.fromkeys(p for p in pythonpath_elements if p))
+
+        resolv_path = Path("/etc/resolv.conf")
+        real_resolv = str(resolv_path.resolve()) if resolv_path.exists() else "/etc/resolv.conf"
+
+        argv.extend([
+            bwrap_bin,
+            "--ro-bind", "/usr", "/usr",
+            "--ro-bind", "/lib", "/lib",
+            "--ro-bind-try", "/lib64", "/lib64",
+            "--ro-bind", "/bin", "/bin",
+            "--ro-bind", "/sbin", "/sbin",
+            "--ro-bind", "/etc", "/etc",
+            "--ro-bind-try", "/run/systemd/resolve", "/run/systemd/resolve",
+            "--ro-bind-try", real_resolv, "/etc/resolv.conf",
+            "--ro-bind-try", "/opt", "/opt",
+            "--ro-bind-try", venv_dir, venv_dir,
+            "--ro-bind-try", base_py_dir, base_py_dir,
+            "--ro-bind-try", py_module_dir, py_module_dir,
+            "--ro-bind-try", repo_root_dir, repo_root_dir,
+            "--ro-bind-try", str(Path.home() / ".python"), str(Path.home() / ".python"),
+            "--ro-bind-try", str(Path.home() / ".local"), str(Path.home() / ".local"),
+            "--ro-bind", "/proc", "/proc",
+            "--dev-bind", "/dev", "/dev",
+            "--tmpfs", "/tmp",
+            "--bind", str(workdir), "/work",
+            "--bind", str(homedir), "/home/unsafie",
+            "--setenv", "HOME", "/home/unsafie",
+            "--setenv", "PATH", path_env,
+            "--setenv", "PYTHONPATH", pythonpath_env,
+            "--setenv", "UNSAFIE_API", api_url,
+            "--setenv", "UNSAFIE_TOKEN", token,
+            "--setenv", "UNSAFIE_CHAT", str(self.ctx.chat_id),
+            "--setenv", "UNSAFIE_TURN", str(self.ctx.turn_id),
+            "--die-with-parent",
+            "--chdir", "/work",
+            "bash", "-lc", block.code,
+        ])
+
         try:
-            result = await channel.run(
-                self.ctx.machine_name,
-                block.code,
-                user_id=self.ctx.user_id,
-                turn_id=self.ctx.turn_id,
-                timeout=settings.agent_block_timeout,
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
             )
-            block.exit_code = result.exit_code
-            block.seconds = result.seconds
-            block.truncated = result.truncated
+            out, _ = await proc.communicate()
+            block.exit_code = proc.returncode
+            block.seconds = time.monotonic() - started
 
-            if result.exit_code == 124:
-                block.error = f"command timed out after {settings.agent_block_timeout:.0f}s"
-            elif result.exit_code == 137:
-                block.error = f"runner {self.ctx.machine_name} disconnected"
-
-            combined = result.output or ""
+            combined = (out or b"").decode("utf-8", "replace")
             body, found = markers.split(combined)
             block.output = body
             await self._decorate(block, found)
@@ -132,7 +224,7 @@ class Runner:
         except Exception as e:
             block.error = f"{type(e).__name__}: {e}"
             block.seconds = time.monotonic() - started
-            logger.exception("%s runner error on %s", self.ctx.prefix, self.ctx.machine_name)
+            logger.exception("%s sandbox error", self.ctx.prefix)
         finally:
             self._finished(block)
 

@@ -3,10 +3,18 @@
     name: "{{ unsafie_group }}"
     system: true
 
+- name: Create the sandbox security group
+  ansible.builtin.group:
+    name: unsafie-sandbox
+    system: true
+
 - name: Create the unsafie user
   ansible.builtin.user:
     name: "{{ unsafie_user }}"
     group: "{{ unsafie_group }}"
+    groups:
+      - unsafie-sandbox
+    append: true
     home: "{{ unsafie_home }}"
     shell: /usr/sbin/nologin
     system: true
@@ -21,7 +29,7 @@
     mode: "{{ item.mode | default('0755') }}"
   loop:
     - { path: "{{ unsafie_home }}" }
-    - { path: "{{ unsafie_home }}/chats" }
+    - { path: "{{ unsafie_home }}/chats", mode: "0770" }
     - { path: "{{ unsafie_cache_dir }}", mode: "0700" }
     - { path: "{{ unsafie_home }}/pool-blobs", mode: "0750" }
     - { path: "{{ unsafie_config_dir }}", owner: root, group: "{{ unsafie_group }}", mode: "0750" }
@@ -34,6 +42,7 @@
       - ca-certificates
       - build-essential
       - libpq5
+      - bubblewrap
     state: present
     update_cache: true
     cache_valid_time: 3600

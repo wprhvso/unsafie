@@ -37,6 +37,26 @@
     - "8443"
     - "5000"
 
+- name: sandbox isolation rules
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/before.rules
+    insertbefore: "^COMMIT"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK SANDBOX ISOLATION"
+    block: |
+      -A ufw-before-output -m owner --gid-owner unsafie-sandbox -d 127.0.0.0/8 -j REJECT
+      -A ufw-before-output -m owner --gid-owner unsafie-sandbox -d 10.0.0.0/8 -j REJECT
+      -A ufw-before-output -m owner --gid-owner unsafie-sandbox -d 172.16.0.0/12 -j REJECT
+      -A ufw-before-output -m owner --gid-owner unsafie-sandbox -d 192.168.0.0/16 -j REJECT
+
+- name: sandbox ipv6 isolation rules
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/before6.rules
+    insertbefore: "^COMMIT"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK SANDBOX ISOLATION"
+    block: |
+      -A ufw6-before-output -m owner --gid-owner unsafie-sandbox -d ::1/128 -j REJECT
+      -A ufw6-before-output -m owner --gid-owner unsafie-sandbox -d fe80::/10 -j REJECT
+
 - name: enable
   community.general.ufw:
     state: enabled

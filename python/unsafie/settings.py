@@ -164,6 +164,8 @@ class Settings(BaseSettings):
     admin_token: str = ""
     admin_session_days: int = 30
 
+    chats_dir: Path = Field(default=ROOT / "chats", validation_alias=AliasChoices("CHATS_DIR"))
+
     github_api_url: str = "https://api.github.com"
     github_repo_sync_limit: int = 200
     github_prompt_repos: int = 60
@@ -192,7 +194,7 @@ class Settings(BaseSettings):
     ssh_max_output: int = 60_000
     ssh_max_file_bytes: int = 5_242_880
 
-    pool_enabled: bool = True
+    pool_enabled: bool = False
     pool_blob_dir: Path = ROOT / "pool-blobs"
     pool_machine_ttl: float = 90.0
     pool_poll_timeout: float = 25.0
@@ -222,7 +224,7 @@ class Settings(BaseSettings):
     pool_vnc_port: int = 5900
     pool_desktop_ttl: float = 7_200.0
     pool_tunnel_wait: float = 30.0
-    pool_ci_enabled: bool = True
+    pool_ci_enabled: bool = False
     pool_ci_interval: float = 30.0
     pool_ci_jobs: int = 5
     pool_ci_max_jobs: int = 20
@@ -261,7 +263,7 @@ class Settings(BaseSettings):
     live_image_bytes: int = 262_144
     live_stream_seconds: float = 3_600.0
 
-    @field_validator("fluent_dir", "static_dir", "github_cache_dir", "pool_blob_dir", mode="before")
+    @field_validator("fluent_dir", "static_dir", "github_cache_dir", "pool_blob_dir", "chats_dir", mode="before")
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v
