@@ -82,7 +82,7 @@
             .level = get(["emerg", "alert", "crit", "error", "warning", "notice", "info", "debug"], [p]) ?? "info"
             parsed, err = parse_json(.message)
             if err == null && is_object(parsed) {
-              . = merge(., parsed)
+              ., err = merge(., parsed)
               if exists(.timestamp) {
                 .timestamp = parse_timestamp(string!(.timestamp), "%+") ?? .timestamp
               }
