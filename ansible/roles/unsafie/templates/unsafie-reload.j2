@@ -35,55 +35,60 @@ switch_upstream() {
 }
 
 do_reload() {
-    local current=""
     local target=""
     local target_port=""
+    local old_slot=""
 
-    local active_port=""
-    if [ -f "$UPSTREAM_FILE" ]; then
-        active_port=$(grep -oE '[0-9]+' "$UPSTREAM_FILE" | head -n 1 || true)
-    fi
-
-    if [ "$active_port" = "$GREEN_PORT" ] || { [ -z "$active_port" ] && is_active unsafie@green && ! is_active unsafie@blue; }; then
-        current="green"
+    if is_active unsafie@green && ! is_active unsafie@blue; then
         target="blue"
         target_port="$BLUE_PORT"
-    else
-        current="blue"
+        old_slot="green"
+    elif is_active unsafie@blue && ! is_active unsafie@green; then
         target="green"
         target_port="$GREEN_PORT"
+        old_slot="blue"
+    else
+        local active_port=""
+        if [ -f "$UPSTREAM_FILE" ]; then
+            active_port=$(grep -oE '[0-9]+' "$UPSTREAM_FILE" | head -n 1 || true)
+        fi
+        if [ "$active_port" = "$GREEN_PORT" ]; then
+            target="blue"
+            target_port="$BLUE_PORT"
+            old_slot="green"
+        else
+            target="green"
+            target_port="$GREEN_PORT"
+            old_slot="blue"
+        fi
     fi
 
-    if ! is_active "unsafie@${current}"; then
-        do_start
-        return 0
-    fi
-
-    echo "Reloading unsafie: switching from ${current} to ${target} (port ${target_port})..."
+    echo "Reloading unsafie: starting ${target} on port ${target_port}..."
     systemctl restart "unsafie@${target}"
 
     echo "Waiting for health check on http://${HOST}:${target_port}/health..."
     if ! wait_for_health "$target_port"; then
-        echo "Health check failed on port ${target_port}" >&2
+        echo "Health check failed for unsafie@${target} on port ${target_port}" >&2
         systemctl stop "unsafie@${target}" 2>/dev/null || true
         exit 1
     fi
 
     echo "Switching upstream to port ${target_port}..."
     switch_upstream "$target_port"
-    echo "Stopping previous slot unsafie@${current}..."
-    systemctl stop "unsafie@${current}"
-    echo "Reload completed successfully on slot ${target}."
+
+    if [ -n "$old_slot" ] && is_active "unsafie@${old_slot}"; then
+        echo "Stopping previous slot unsafie@${old_slot}..."
+        systemctl stop "unsafie@${old_slot}"
+    fi
+    echo "Reload completed successfully. Active slot: ${target} (port ${target_port})."
 }
 
 do_start() {
     if is_active unsafie@blue; then
-        echo "unsafie@blue is already active, switching upstream to ${BLUE_PORT}..."
         switch_upstream "$BLUE_PORT"
         return 0
     fi
     if is_active unsafie@green; then
-        echo "unsafie@green is already active, switching upstream to ${GREEN_PORT}..."
         switch_upstream "$GREEN_PORT"
         return 0
     fi
