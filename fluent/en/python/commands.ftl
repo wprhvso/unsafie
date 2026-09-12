@@ -2,6 +2,7 @@ commands-unknown = Unknown command: { $command }
 commands-start =
     Hi. Just write — every message without a reply starts a new conversation with a clean context, and a reply to any message (mine or yours) continues the conversation it belongs to. React to your own message to get a link to the turn it started, where everything I do is visible.
 
+    /wipe — delete all conversation history, sandbox files, and artifacts
     /stop — stop: as a reply, whatever that message started; without a reply, everything
     /pipe — sequential execution of lines as separate turns
     /effort — thinking effort
@@ -85,3 +86,5 @@ cmd-long-empty = Nothing to send yet
 cmd-long-expired = Timed out — nothing was sent
 
 cmd-runs-empty = No active runs in this chat
+
+commands-wipe-success = All conversation history, context, sandbox files, and artifacts for this chat have been permanently deleted.
