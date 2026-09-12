@@ -674,6 +674,21 @@ wheels = [
 ]
 
 [[package]]
+name = "kameleo-local-api-client"
+version = "5.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "typing-extensions" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/99/20/3e39d3dc242aba9cacafa59d86203c4c2020f8fe6edafdf972ffc835d9a7/kameleo_local_api_client-5.2.0.tar.gz", hash = "sha256:6df8d92604537594a8f6ca474c3f7ba6c35f9d56edf79579b337aa0f9b295df9", size = 1121203, upload-time = "2026-08-31T13:47:19.813Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/67/e9ba90a58964d9d4bbb83a1ff1bf88dc12abd3b1831b277f1dbb189eb5b3/kameleo_local_api_client-5.2.0-py2.py3-none-any.whl", hash = "sha256:d59d9762e6508cf943d9cbe43d976753c6362bdd3d932a93ae41e06a1759d5e5", size = 1210779, upload-time = "2026-08-31T13:47:16.863Z" },
+]
+
+[[package]]
 name = "llmmd"
 version = "0.1.7"
 source = { registry = "https://pypi.org/simple" }
@@ -1438,6 +1453,18 @@ wheels = [
 ]
 
 [[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
+]
+
+[[package]]
 name = "python-dotenv"
 version = "1.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1621,6 +1648,7 @@ dependencies = [
     { name = "defusedxml" },
     { name = "fastapi" },
     { name = "fluent-runtime" },
+    { name = "kameleo-local-api-client" },
     { name = "llmmd" },
     { name = "lxml" },
     { name = "mammoth" },
@@ -1665,6 +1693,7 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "fluent-runtime", specifier = ">=0.4.0" },
+    { name = "kameleo-local-api-client", specifier = ">=5.2.0" },
     { name = "llmmd", specifier = ">=0.1.7" },
     { name = "lxml", specifier = ">=6.1" },
     { name = "mammoth", specifier = ">=1.12" },
@@ -1703,6 +1732,15 @@ dev = [
 name = "unsafie-wire"
 version = "0.1.0"
 source = { editable = "unsafie-wire" }
+
+[[package]]
+name = "urllib3"
+version = "2.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c", size = 433602, upload-time = "2026-05-07T16:13:18.596Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897", size = 131087, upload-time = "2026-05-07T16:13:17.151Z" },
+]
 
 [[package]]
 name = "uvicorn"

@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from kameleo.local_api_client import KameleoLocalApiClient
-from kameleo.local_api_client.models import CreateProfileRequest
+from kameleo.local_api_client.kameleo_local_api_client import KameleoLocalApiClient
+from kameleo.local_api_client.models.create_profile_request import CreateProfileRequest
 
 from unsafie.chrome import vnc
 from unsafie.chrome.cdp import Cdp, CdpError
@@ -88,7 +88,7 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
 
     if not profile_id:
         req = CreateProfileRequest(
-            fingerprint_id=fingerprints[0].id,
+            fingerprintId=fingerprints[0].id,
             name=profile_name,
         )
         created = client.profile.create_profile(req)
