@@ -27,7 +27,7 @@
     const root = document.documentElement;
     root.classList.add('answer');
     const restoreViewport = viewport();
-    const stopZoom = zoomable();
+    const stopZoom = zoomable({ key: 'answer-zoom', variable: '--answer-zoom' });
 
     return () => {
       stopZoom();
@@ -63,16 +63,18 @@
   <link rel="icon" href="data:," />
 </svelte:head>
 
-<main>
-  {#if view === 'loading'}
-    <p class="muted">Loading…</p>
-  {:else if view === 'answer'}
-    <article bind:this={article} class="markdown-body"></article>
-  {:else}
-    <p class="muted">This link does not exist or has been removed.</p>
-    <p class="small"><a href="/admin">Go to the admin panel</a></p>
-  {/if}
-</main>
+<div class="answer-page">
+  <main>
+    {#if view === 'loading'}
+      <p class="muted">Loading…</p>
+    {:else if view === 'answer'}
+      <article bind:this={article} class="markdown-body"></article>
+    {:else}
+      <p class="muted">This link does not exist or has been removed.</p>
+      <p class="small"><a href="/admin">Go to the admin panel</a></p>
+    {/if}
+  </main>
+</div>
 
 <style>
   :global(:root) {
@@ -108,14 +110,18 @@
     }
   }
 
+  .answer-page {
+    width: 100%;
+    min-height: 100vh;
+    zoom: var(--answer-zoom, 1);
+  }
+
   main {
     box-sizing: border-box;
     width: 100%;
-    max-width: calc(44rem / var(--answer-zoom));
+    max-width: 44rem;
     margin: 0 auto;
-    padding: calc(2rem / var(--answer-zoom)) calc(1.25rem / var(--answer-zoom))
-      calc(4rem / var(--answer-zoom));
-    zoom: var(--answer-zoom);
+    padding: 2rem 1.25rem 4rem;
   }
 
   .markdown-body {
