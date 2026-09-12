@@ -38,13 +38,15 @@ def test_browser_launch_reuses_existing_profile():
     with patch.object(browser, "_client", return_value=(mock_client, "127.0.0.1", 5050)), \
          patch.object(vnc, "ensure", return_value=""), \
          patch.object(vnc, "listening", return_value=True), \
-         patch("unsafie.pool.tunnels.publish_sync", return_value="test-slug"):
+         patch("unsafie.pool.tunnels.publish_sync", return_value="ABCDEFGHIJKL"), \
+         patch("unsafie.artifacts.publish_desktop_sync", return_value="ABCDEFGHIJKL"), \
+         patch("unsafie.slugs.generate_slug", return_value="ABCDEFGHIJKL"):
         state = browser.launch(profile="my-profile", size="1920x1080", headless=False)
 
     assert state["profile_id"] == "prof-existing"
     assert state["vnc_port"] == 5900
-    assert state["vnc_slug"] == "test-slug"
-    assert "/m/test-slug" in state["vnc_url"]
+    assert state["vnc_slug"] == "ABCDEFGHIJKL"
+    assert state["vnc_url"].endswith("/ABCDEFGHIJKL")
     mock_client.profile.create_profile.assert_not_called()
 
 
@@ -95,8 +97,8 @@ def test_cli_browser_start_and_stop(tmp_path: Path):
         "profile_id": "prof-test",
         "profile": "p1",
         "vnc_port": 5900,
-        "vnc_slug": "prof-slug",
-        "vnc_url": "https://unsafie.com/m/prof-slug",
+        "vnc_slug": "ABCDEFGHIJKL",
+        "vnc_url": "https://unsafie.com/ABCDEFGHIJKL",
     }
     state_file = tmp_path / "kameleo.json"
 
@@ -107,7 +109,7 @@ def test_cli_browser_start_and_stop(tmp_path: Path):
         assert res_start["running"] is True
         assert res_start["profile_id"] == "prof-test"
         assert res_start["vnc_port"] == 5900
-        assert res_start["vnc_url"] == "https://unsafie.com/m/prof-slug"
+        assert res_start["vnc_url"] == "https://unsafie.com/ABCDEFGHIJKL"
         assert state_file.is_file()
 
         with patch.object(browser, "stop") as mock_stop:

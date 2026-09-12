@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -6,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.artifact import Artifact, ArtifactKind
+from unsafie.log import get_logger
 from unsafie.slugs import generate_slug
 
 logger = get_logger(__name__)
@@ -92,6 +92,35 @@ class ArtifactRepository:
             return existing
         return await self._add(
             kind=ArtifactKind.TELEMETRY, turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
+        )
+
+    async def for_desktop(
+        self,
+        *,
+        title: str | None = None,
+        slug: str | None = None,
+        bot_id: int | None = None,
+        chat_id: int | None = None,
+        turn_id: UUID | None = None,
+    ) -> Artifact | None:
+        if slug:
+            artifact = Artifact(
+                slug=slug,
+                kind=ArtifactKind.DESKTOP,
+                title=title,
+                bot_id=bot_id,
+                chat_id=chat_id,
+                turn_id=turn_id,
+            )
+            self.session.add(artifact)
+            await self.session.commit()
+            return artifact
+        return await self._add(
+            kind=ArtifactKind.DESKTOP,
+            title=title,
+            bot_id=bot_id,
+            chat_id=chat_id,
+            turn_id=turn_id,
         )
 
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[Artifact], int]:

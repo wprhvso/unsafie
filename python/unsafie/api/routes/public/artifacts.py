@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -7,6 +5,7 @@ from unsafie.api import static
 from unsafie.database import SessionLocal
 from unsafie.database.models.artifact import ArtifactKind
 from unsafie.database.repositories.artifact import ArtifactRepository
+from unsafie.log import get_logger
 from unsafie.slugs import is_slug
 
 logger = get_logger(__name__)
@@ -48,6 +47,11 @@ async def page_json(slug: str):
                     payload["turn_slug"] = turn_art.slug
         if artifact.kind == ArtifactKind.MARKDOWN:
             payload["content"] = artifact.content or ""
+        elif artifact.kind == ArtifactKind.DESKTOP:
+            payload["desktop_url"] = (
+                f"/kasmvnc/index.html?path=api/m/{slug}/stream&autoconnect=1&resize=remote"
+            )
+            payload["stream_url"] = f"/api/m/{slug}/stream"
     return JSONResponse(payload)
 
 
@@ -103,6 +107,11 @@ async def spa(path: str, request: Request):
                     payload["turn_slug"] = turn_art.slug
         if artifact.kind == ArtifactKind.MARKDOWN:
             payload["content"] = artifact.content or ""
+        elif artifact.kind == ArtifactKind.DESKTOP:
+            payload["desktop_url"] = (
+                f"/kasmvnc/index.html?path=api/m/{slug}/stream&autoconnect=1&resize=remote"
+            )
+            payload["stream_url"] = f"/api/m/{slug}/stream"
     if "application/json" in (request.headers.get("accept") or ""):
         return JSONResponse(payload)
     return HTMLResponse(static.render(payload))
