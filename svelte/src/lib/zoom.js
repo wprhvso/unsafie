@@ -1,5 +1,5 @@
 const KEY = 'answer-zoom';
-const VARIABLE = '--live-zoom';
+const VARIABLE = '--answer-zoom';
 const MIN = 0.2;
 const MAX = 4;
 const DEFAULT = 1;
@@ -7,7 +7,11 @@ const SAVE_MS = 250;
 
 function isAndroid() {
   if (typeof navigator === 'undefined') return false;
-  return /android/i.test(navigator.userAgent);
+  return (
+    /android/i.test(navigator.userAgent) ||
+    (/mobile/i.test(navigator.userAgent) && !/windows|macintosh/i.test(navigator.userAgent)) ||
+    ('ontouchstart' in window && navigator.maxTouchPoints > 1 && !/windows|macintosh/i.test(navigator.userAgent))
+  );
 }
 
 function restore(key) {
