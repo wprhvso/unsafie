@@ -41,19 +41,10 @@ jobs:
           uv tool install "$TARGET" || uv tool install git+https://github.com/wprhvso/unsafie@main#subdirectory=python
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
-      - name: bring the desktop along
+      - name: bring the tools along
         run: |
           BIN="$(command -v unsafie-machine || command -v unsafie)"
-          sudo -E env "PATH=$PATH" "$BIN" setup xvfb kasmvnc tools
-          for tool in Xvfb x11vnc openbox; do
-            command -v "$tool" >/dev/null || {
-              echo "::error::$tool is missing after setup, the desktop link would be dead"
-              exit 1
-            }
-          done
-          command -v Xkasmvnc >/dev/null \
-            || echo "::warning::no KasmVNC, the desktop falls back to Xvfb plus x11vnc"
-
+          sudo -E env "PATH=$PATH" "$BIN" setup tools
       - name: serve
         env:
           UNSAFIE_API: ${{ secrets.UNSAFIE_URL }}

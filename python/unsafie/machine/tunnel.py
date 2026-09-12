@@ -6,7 +6,6 @@ import struct
 import threading
 import time
 
-from unsafie.chrome import vnc
 from unsafie.chrome.ws import WebSocket
 
 CHUNK = 65536
@@ -32,11 +31,6 @@ def serve_tunnel(url: str, kind: str, port: int) -> None:
 
 
 def dial(port: int) -> socket.socket:
-    if port == vnc.RFB_PORT:
-        problem = vnc.ensure()
-        if problem and not vnc.listening(vnc.RFB_PORT, 2.0):
-            msg = f"no desktop on this machine: {problem}"
-            raise TunnelError(msg)
     try:
         local = socket.create_connection(("127.0.0.1", port), timeout=DIAL_WAIT)
     except OSError as broken:

@@ -38,29 +38,6 @@
   <Turn token={slug} telemetrySlug={data?.telemetry_slug} />
 {:else if data?.kind === 'telemetry'}
   <Telemetry token={slug} />
-{:else if data?.kind === 'desktop'}
-  <iframe
-    src={`/kasmvnc/index.html?path=api/m/${slug}/stream&autoconnect=1&resize=remote`}
-    title={data?.title || 'Desktop'}
-    class="kasm-frame"
-    allow="clipboard-read; clipboard-write; fullscreen"
-  ></iframe>
 {:else}
   <Answer content={typeof data?.content === 'string' ? data.content : null} title={data?.title} />
 {/if}
-
-<style>
-  :global(body:has(.kasm-frame), html:has(.kasm-frame)) {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    overflow: hidden;
-    background: #0b0d10;
-  }
-  .kasm-frame {
-    width: 100vw;
-    height: 100vh;
-    border: none;
-    display: block;
-  }
-</style>

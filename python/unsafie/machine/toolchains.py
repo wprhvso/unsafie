@@ -2,13 +2,10 @@ import os
 import shutil
 import subprocess
 
-TOOLCHAINS = ("kameleo", "xvfb", "kasmvnc", "nix", "rust", "tools", "libreoffice")
-KASMVNC = "1.5.0"
+TOOLCHAINS = ("kameleo", "nix", "rust", "tools", "libreoffice")
 
 PROBES: dict[str, tuple[tuple[str, ...], ...]] = {
     "kameleo": (("docker",),),
-    "xvfb": (("Xvfb",), ("x11vnc",), ("openbox",), ("xauth",)),
-    "kasmvnc": (("Xkasmvnc", "kasmvncserver"),),
     "nix": (("nix",),),
     "rust": (("cargo",),),
     "tools": (("rg",), ("jq",), ("zstd",), ("convert", "magick"), ("gh",)),
@@ -38,12 +35,8 @@ def _toolchain(name: str, timeout: float) -> str:
     try:
         if name == "kameleo":
             return _apt(["docker.io"], timeout)
-        if name == "xvfb":
-            return _apt(["xvfb", "openbox", "x11-utils", "xauth", "xfonts-base", "x11vnc"], timeout)
         if name == "tools":
             return _apt(["ripgrep", "fd-find", "jq", "zstd", "p7zip-full", "imagemagick", "gh"], timeout)
-        if name == "kasmvnc":
-            return _kasmvnc(timeout)
         if name == "nix":
             return _shell(
                 "curl -fsSL https://nixos.org/nix/install | sh -s -- --daemon --yes --no-channel-add",
@@ -89,31 +82,6 @@ def _apt(packages: list[str], timeout: float) -> str:
             return f"apt failed: {done.stderr.strip()[-300:]}"
     return "installed"
 
-
-def _kasmvnc(timeout: float) -> str:
-    if not shutil.which("apt-get"):
-        return "skipped (no apt-get)"
-    codename = "noble"
-    try:
-        with open("/etc/os-release", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("VERSION_CODENAME="):
-                    codename = line.split("=", 1)[1].strip().strip('"')
-    except OSError:
-        pass
-    architecture = subprocess.run(
-        ["dpkg", "--print-architecture"], capture_output=True, text=True, check=False,
-    ).stdout.strip() or "amd64"
-    package = f"kasmvncserver_{codename}_{KASMVNC}_{architecture}.deb"
-    url = f"https://github.com/kasmtech/KasmVNC/releases/download/v{KASMVNC}/{package}"
-    target = f"/tmp/{package}"
-    fetched = subprocess.run(
-        ["curl", "-fsSL", "--retry", "3", "-o", target, url],
-        capture_output=True, text=True, check=False, timeout=timeout,
-    )
-    if fetched.returncode != 0:
-        return f"could not download {url}: {fetched.stderr.strip()[-200:] or 'curl failed'}"
-    return _apt([target], timeout)
 
 
 def _shell(command: str, timeout: float) -> str:

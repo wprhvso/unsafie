@@ -97,7 +97,6 @@
       - p7zip-full
       - bubblewrap
       - xvfb
-      - x11vnc
       - openbox
       - xauth
       - x11-utils
