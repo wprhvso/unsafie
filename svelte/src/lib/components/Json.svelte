@@ -1,11 +1,12 @@
 <script>
+  import { highlightJson } from '$lib/format.js';
   let { value, open = false } = $props();
   let shown = $state(open);
 </script>
 
 <button class="toggle" onclick={() => (shown = !shown)}>{shown ? '▾' : '▸'} json</button>
 {#if shown}
-  <pre>{JSON.stringify(value, null, 2)}</pre>
+  <pre>{@html highlightJson(value)}</pre>
 {/if}
 
 <style>

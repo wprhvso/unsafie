@@ -1,4 +1,5 @@
 <script>
+  import { highlightJson } from '$lib/format.js';
   import Copy from './Copy.svelte';
   import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
@@ -73,7 +74,7 @@
 {:else if item.type === 'prompt'}
   <article class="entry prompt">
     <div class="card prompt-card">
-      <pre class="source">{item.text}</pre>
+      <pre class="source">{@html highlightJson(item.text)}</pre>
     </div>
   </article>
 
@@ -81,7 +82,7 @@
   {#if item.attributes}
     <article class="entry note">
       <div class="card">
-        <pre class="source">{JSON.stringify(item.attributes, null, 2)}</pre>
+        <pre class="source">{@html highlightJson(item.attributes)}</pre>
       </div>
     </article>
   {/if}

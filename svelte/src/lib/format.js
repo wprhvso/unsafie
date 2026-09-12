@@ -55,3 +55,45 @@ export function money() {
 export function usd() {
   return '';
 }
+
+
+export function highlightJson(input) {
+  let str = input;
+  if (typeof str !== 'string') {
+    try {
+      str = JSON.stringify(str, null, 2);
+    } catch {
+      str = String(str);
+    }
+  } else {
+    try {
+      str = JSON.stringify(JSON.parse(str), null, 2);
+    } catch {
+      // keep raw string
+    }
+  }
+
+  const escaped = String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return escaped.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    (match) => {
+      let cls = 'hl-number';
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          cls = 'hl-key';
+          return `<span class="${cls}">${match.slice(0, -1)}</span>:`;
+        }
+        cls = 'hl-string';
+      } else if (/true|false/.test(match)) {
+        cls = 'hl-boolean';
+      } else if (/null/.test(match)) {
+        cls = 'hl-null';
+      }
+      return `<span class="${cls}">${match}</span>`;
+    }
+  );
+}

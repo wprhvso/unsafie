@@ -19,16 +19,26 @@ class RetryCallback(CallbackData, prefix="retry"):
     turn_id: str
 
 
-def retry_markup(turn_id: str, locale: str, in_progress: bool = False) -> InlineKeyboardMarkup:
+def retry_markup(
+    turn_id: str,
+    locale: str,
+    in_progress: bool = False,
+    telemetry_url: str | None = None,
+) -> InlineKeyboardMarkup:
+    buttons = []
     if in_progress:
         text = t("commands-retry-in-progress", locale)
-        button = InlineKeyboardButton(text=text, callback_data="noop")
+        buttons.append(InlineKeyboardButton(text=text, callback_data="noop"))
     else:
         text = t("commands-retry-button", locale)
-        button = InlineKeyboardButton(
-            text=text, callback_data=RetryCallback(turn_id=str(turn_id)).pack(),
+        buttons.append(
+            InlineKeyboardButton(
+                text=text, callback_data=RetryCallback(turn_id=str(turn_id)).pack(),
+            )
         )
-    return InlineKeyboardMarkup(inline_keyboard=[[button]])
+    if telemetry_url:
+        buttons.append(InlineKeyboardButton(text="Diagnostics ⚡", url=telemetry_url))
+    return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 
 async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3) -> T:
