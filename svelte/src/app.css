@@ -87,3 +87,36 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); 
 .stack { display: flex; flex-direction: column; gap: 1rem; }
 .nowrap { white-space: nowrap; }
 .grow { flex: 1; }
+
+
+.hl-key {
+  color: #0550ae;
+  font-weight: 500;
+}
+.hl-string {
+  color: #0a3069;
+}
+.hl-number {
+  color: #0550ae;
+}
+.hl-boolean,
+.hl-null {
+  color: #cf222e;
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hl-key {
+    color: #79c0ff;
+  }
+  .hl-string {
+    color: #a5d6ff;
+  }
+  .hl-number {
+    color: #79c0ff;
+  }
+  .hl-boolean,
+  .hl-null {
+    color: #ff7b72;
+  }
+}

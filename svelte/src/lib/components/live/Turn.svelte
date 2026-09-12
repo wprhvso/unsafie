@@ -281,10 +281,10 @@
     --live-zoom: 1;
     --live-sunken: #f6f7f9;
     --live-think: #8250df;
-    --live-key: #6639ba;
-    --live-string: #0a6640;
+    --live-key: #0550ae;
+    --live-string: #0a3069;
     --live-number: #0550ae;
-    --live-atom: #a4413a;
+    --live-atom: #cf222e;
     --live-bar: rgba(251, 251, 250, 0.82);
   }
 
@@ -292,8 +292,8 @@
     :global(:root) {
       --live-sunken: #101014;
       --live-think: #b389f5;
-      --live-key: #c39bff;
-      --live-string: #7ee2b8;
+      --live-key: #79c0ff;
+      --live-string: #a5d6ff;
       --live-number: #79b8ff;
       --live-atom: #ff9492;
       --live-bar: rgba(19, 19, 22, 0.82);
