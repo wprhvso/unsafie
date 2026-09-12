@@ -1,10 +1,14 @@
 const KEY = 'answer-zoom';
-const VARIABLE = '--answer-zoom';
+const VARIABLE = '--live-zoom';
 const MIN = 0.2;
-const MAX = 5;
+const MAX = 4;
 const DEFAULT = 1;
 const SAVE_MS = 250;
-const STEP = 1.15;
+
+function isAndroid() {
+  if (typeof navigator === 'undefined') return false;
+  return /android/i.test(navigator.userAgent);
+}
 
 function restore(key) {
   try {
@@ -23,6 +27,19 @@ function spread(touches) {
 }
 
 export function zoomer({ key = KEY, variable = VARIABLE, onchange } = {}) {
+  if (!isAndroid()) {
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.removeProperty(variable);
+    }
+    return {
+      get value() { return DEFAULT; },
+      in: () => {},
+      out: () => {},
+      reset: () => {},
+      stop: () => {}
+    };
+  }
+
   let zoom = restore(key);
   let anchor = zoom;
   let start = 0;
@@ -69,32 +86,18 @@ export function zoomer({ key = KEY, variable = VARIABLE, onchange } = {}) {
     }
   };
 
-  const onWheel = (event) => {
-    if (!event.ctrlKey) return;
-    event.preventDefault();
-    apply(zoom * Math.exp(-event.deltaY * 0.002));
-    save();
-  };
-
   apply(zoom);
   document.addEventListener('touchstart', onStart, { passive: true });
   document.addEventListener('touchmove', onMove, { passive: false });
   document.addEventListener('touchend', onEnd);
   document.addEventListener('touchcancel', onEnd);
-  document.addEventListener('wheel', onWheel, { passive: false });
 
   return {
     get value() {
       return zoom;
     },
-    in: () => {
-      apply(zoom * STEP);
-      save();
-    },
-    out: () => {
-      apply(zoom / STEP);
-      save();
-    },
+    in: () => {},
+    out: () => {},
     reset: () => {
       apply(DEFAULT);
       save();
@@ -104,7 +107,6 @@ export function zoomer({ key = KEY, variable = VARIABLE, onchange } = {}) {
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onEnd);
       document.removeEventListener('touchcancel', onEnd);
-      document.removeEventListener('wheel', onWheel);
       if (timer) {
         clearTimeout(timer);
         write();

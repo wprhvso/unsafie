@@ -8,6 +8,7 @@
   import Entry from '$lib/components/live/Entry.svelte';
   import Icon from '$lib/components/live/Icon.svelte';
   import ContextBar from '$lib/components/live/ContextBar.svelte';
+  import { when } from '$lib/format.js';
   import Waterfall from '$lib/components/Waterfall.svelte';
   import Json from '$lib/components/Json.svelte';
   import Badge from '$lib/components/Badge.svelte';
@@ -29,13 +30,13 @@
   let zoom = $state(1);
   let now = $state(Date.now());
   let overrides = $state({});
-  let openByDefault = $state(false);
+  let openByDefault = $state(true);
   let control = $state.raw(null);
   let traceData = $state(null);
   let showTrace = $state(false);
   let showLogs = $state(false);
 
-  const isOpen = (id) => overrides[id] ?? openByDefault;
+  const isOpen = (id) => overrides[id] ?? true;
 
   function toggle(id) {
     overrides = { ...overrides, [id]: !isOpen(id) };
@@ -53,6 +54,27 @@
 
   const running = $derived(status === 'live' || status === 'reconnecting');
   const outcome = $derived(feed.outcome ?? meta?.status ?? null);
+
+  let mergedItems = $derived.by(() => {
+    if (!showLogs || !traceData?.logs?.length) {
+      return feed.items;
+    }
+    const combined = [];
+    for (const item of feed.items) {
+      combined.push({ kind: 'entry', at: item.at || '', data: item });
+    }
+    for (const log of traceData.logs) {
+      combined.push({
+        kind: 'log',
+        at: log.timestamp || log._time || '',
+        data: log,
+        id: (log.timestamp || '') + (log.event || log.message || '')
+      });
+    }
+    combined.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    return combined;
+  });
+
 
   const elapsed = $derived.by(() => {
     const from = feed.startedAt ?? meta?.created_at;
@@ -139,6 +161,7 @@
   <link rel="icon" href="data:," />
 </svelte:head>
 
+<div class="turn-page">
 <div class="top">
 <header class="bar">
   <div class="side">
@@ -171,26 +194,9 @@
         onclick={() => (showLogs = !showLogs)}
         title="Toggle Integrated System Logs"
       >
-        <span class="mono">📋 Logs ({traceData?.logs?.length || 0})</span>
+        <span class="mono">📋 Logs</span>
       </button>
-      <span class="sep"></span>
     {/if}
-    <button onclick={collapseAll} title="Collapse everything" aria-label="Collapse everything">
-      <Icon name="collapse" size={14} />
-    </button>
-    <button onclick={expandAll} title="Expand everything" aria-label="Expand everything">
-      <Icon name="expand" size={14} />
-    </button>
-    <span class="sep"></span>
-    <button onclick={() => control?.out()} title="Zoom out" aria-label="Zoom out">
-      <Icon name="zoomOut" size={14} />
-    </button>
-    <button class="level mono" onclick={() => control?.reset()} title="Reset the zoom">
-      {Math.round(zoom * 100)}%
-    </button>
-    <button onclick={() => control?.in()} title="Zoom in" aria-label="Zoom in">
-      <Icon name="zoomIn" size={14} />
-    </button>
   </div>
 </header>
 
@@ -220,33 +226,38 @@
     </div>
   {:else}
     <div class="log">
-      {#each feed.items as item (item.id)}
-        <Entry {item} open={isOpen(item.id)} ontoggle={toggle} />
-      {/each}
-
-      {#if showLogs && traceData?.logs?.length}
-        <div class="sys-logs-box">
-          <div class="sys-logs-title mono bold small">System & Runtime Logs ({traceData.logs.length})</div>
-          <ul class="sys-logs-list">
-            {#each traceData.logs as l, idx (idx)}
-              {@const lvl = (l.level || 'info').toLowerCase()}
-              {@const tone = lvl === 'error' ? 'bad' : lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok'}
-              <li class="sys-log-line">
-                <div class="row spread">
+      {#if showLogs}
+        {#each mergedItems as entity (entity.kind === 'entry' ? entity.data.id : entity.id)}
+          {#if entity.kind === 'entry'}
+            <Entry item={entity.data} open={isOpen(entity.data.id)} ontoggle={toggle} />
+          {:else}
+            {@const l = entity.data}
+            {@const lvl = (l.level || 'info').toLowerCase()}
+            {@const tone = lvl === 'error' ? 'bad' : lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok'}
+            <article class="log-entry">
+              <div class="log-rail">
+                <span class="log-dot {tone}"></span>
+              </div>
+              <div class="log-card">
+                <div class="row spread log-head">
                   <div class="row gap">
                     <Badge {tone}>{lvl}</Badge>
-                    <span class="mono event-txt">{l.event || l.message || '—'}</span>
-                    {#if l.logger}<span class="mono muted small">{l.logger}</span>{/if}
+                    <span class="mono bold event-text">{l.event || l.message || '—'}</span>
+                    {#if l.logger}<span class="mono muted tiny">{l.logger}</span>{/if}
                   </div>
-                  <span class="mono muted small">{l.timestamp || l._time || ''}</span>
+                  <time class="muted tiny mono">{when(l.timestamp || l._time)}</time>
                 </div>
-                <div class="sys-log-json">
+                <div class="log-payload">
                   <Json value={l} />
                 </div>
-              </li>
-            {/each}
-          </ul>
-        </div>
+              </div>
+            </article>
+          {/if}
+        {/each}
+      {:else}
+        {#each feed.items as item (item.id)}
+          <Entry {item} open={isOpen(item.id)} ontoggle={toggle} />
+        {/each}
       {/if}
     </div>
     {#if running}
@@ -262,6 +273,7 @@
     <Icon name="down" size={15} /> latest
   </button>
 {/if}
+</div>
 
 <style>
   :global(:root) {
@@ -432,14 +444,18 @@
     margin: 0 0.15rem;
   }
 
+  .turn-page {
+    width: 100%;
+    min-height: 100vh;
+    zoom: var(--live-zoom, 1);
+  }
+
   main {
     box-sizing: border-box;
     width: 100%;
-    max-width: calc(58rem / var(--live-zoom));
+    max-width: 58rem;
     margin: 0 auto;
-    padding: calc(0.8rem / var(--live-zoom)) calc(0.9rem / var(--live-zoom))
-      calc(6rem / var(--live-zoom));
-    zoom: var(--live-zoom);
+    padding: 0.8rem 0.9rem 6rem;
   }
 
   .log {
@@ -565,4 +581,47 @@
   .sys-log-json {
     margin-top: 0.2rem;
   }
+
+  .log-entry {
+    display: flex;
+    gap: 0.8rem;
+    padding: 0.4rem 0;
+  }
+  .log-rail {
+    width: 1.5rem;
+    display: flex;
+    justify-content: center;
+    padding-top: 0.35rem;
+  }
+  .log-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+  .log-dot.bad {
+    background: var(--bad);
+  }
+  .log-dot.warn {
+    background: var(--warn);
+  }
+  .log-card {
+    flex: 1;
+    background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.8rem;
+    overflow-x: auto;
+  }
+  .log-head {
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+  }
+  .event-text {
+    font-size: 0.82rem;
+  }
+  .log-payload {
+    margin-top: 0.2rem;
+  }
+
 </style>

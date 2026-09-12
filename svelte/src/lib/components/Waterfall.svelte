@@ -1,10 +1,6 @@
 <script>
-  import Badge from '$lib/components/Badge.svelte';
-  import Json from '$lib/components/Json.svelte';
-
   let { data } = $props();
 
-  let view = $state('waterfall');
   let expanded = $state({});
   let search = $state('');
   let hideShort = $state(false);
@@ -26,7 +22,6 @@
 
   let totalMs = $derived(Math.max(1, data?.total_duration_ms || 1));
   let spans = $derived(data?.spans || []);
-  let logs = $derived(data?.logs || []);
 
   function getSpanCategory(name, status) {
     if (status === 'error') return { cat: 'ERR', tone: 'bad', color: 'var(--bad)' };
@@ -73,14 +68,6 @@
 <div class="waterfall-container">
   <div class="toolbar spread">
     <div class="row wrap-gap">
-      <div class="tab-group">
-        <button class:active={view === 'waterfall'} onclick={() => (view = 'waterfall')}>
-          Waterfall ({spans.length})
-        </button>
-        <button class:active={view === 'logs'} onclick={() => (view = 'logs')}>
-          Logs ({logs.length})
-        </button>
-      </div>
       {#if data?.trace_id}
         <span class="mono muted small trace-text" title={data.trace_id}>
           trace: {shortTrace(data.trace_id)}
@@ -89,146 +76,116 @@
     </div>
     <div class="row wrap-gap end-controls">
       <span class="badge ok">{formatMs(totalMs)}</span>
-      {#if view === 'waterfall'}
-        <button
-          class="toggle-btn"
-          class:active={hideShort}
-          onclick={() => (hideShort = !hideShort)}
-          title="Toggle micro-spans under 1ms"
-        >
-          {hideShort ? 'Show all' : 'Hide < 1ms'}
-        </button>
-        <input
-          type="text"
-          placeholder="Filter..."
-          class="filter-input"
-          bind:value={search}
-        />
-      {/if}
+      <button
+        class="toggle-btn"
+        class:active={hideShort}
+        onclick={() => (hideShort = !hideShort)}
+        title="Toggle micro-spans under 1ms"
+      >
+        {hideShort ? 'Show all' : 'Hide < 1ms'}
+      </button>
+      <input
+        type="text"
+        placeholder="Filter spans..."
+        class="filter-input"
+        bind:value={search}
+      />
     </div>
   </div>
 
-  {#if view === 'waterfall'}
-    {#if filteredSpans.length === 0}
-      <p class="pad muted">No spans match the criteria.</p>
-    {:else}
-      <div class="waterfall-scroll">
-        <div class="waterfall-table">
-          <div class="ruler-row">
-            <div class="span-label-col muted small">Span / Operation</div>
-            <div class="timeline-col ruler">
-              <div class="ruler-grid-line" style="left: 0%"></div>
-              <div class="ruler-grid-line" style="left: 25%"></div>
-              <div class="ruler-grid-line" style="left: 50%"></div>
-              <div class="ruler-grid-line" style="left: 75%"></div>
-              <div class="ruler-grid-line" style="left: 100%"></div>
-              <span class="ruler-label">0</span>
-              <span class="ruler-label hide-mobile">{formatMs(totalMs * 0.25)}</span>
-              <span class="ruler-label">{formatMs(totalMs * 0.5)}</span>
-              <span class="ruler-label hide-mobile">{formatMs(totalMs * 0.75)}</span>
-              <span class="ruler-label">{formatMs(totalMs)}</span>
-            </div>
-          </div>
-
-          <div class="spans-list">
-            {#each filteredSpans as span (span.id)}
-              {@const depth = getDepth(span, spanMap)}
-              {@const left = (span.start_ms / totalMs) * 100}
-              {@const width = Math.max(0.6, (span.duration_ms / totalMs) * 100)}
-              {@const meta = getSpanCategory(span.name, span.status)}
-
-              <div class="span-row-wrap" class:open={expanded[span.id]}>
-                <div
-                  class="span-row"
-                  role="button"
-                  tabindex="0"
-                  onclick={() => toggle(span.id)}
-                  onkeydown={(e) => e.key === 'Enter' && toggle(span.id)}
-                >
-                  <div class="span-label-col" style="padding-left: {depth * 10 + 6}px">
-                    <span class="toggle-icon">{expanded[span.id] ? '▾' : '▸'}</span>
-                    <span class="type-tag mono" style="color: {meta.color}; border-color: {meta.color}">
-                      {meta.cat}
-                    </span>
-                    <span class="span-name mono" title={span.name}>{span.name}</span>
-                  </div>
-
-                  <div class="timeline-col">
-                    <div class="grid-line" style="left: 0%"></div>
-                    <div class="grid-line" style="left: 25%"></div>
-                    <div class="grid-line" style="left: 50%"></div>
-                    <div class="grid-line" style="left: 75%"></div>
-                    <div class="grid-line" style="left: 100%"></div>
-
-                    <div
-                      class="bar-fill"
-                      style="left: {left}%; width: {width}%; background-color: {meta.color};"
-                      title="{span.name}: {formatMs(span.duration_ms)}"
-                    ></div>
-                    <span class="bar-label mono" style="left: {Math.min(84, left + width + 0.8)}%">
-                      {formatMs(span.duration_ms)}
-                    </span>
-                  </div>
-                </div>
-
-                {#if expanded[span.id]}
-                  <div class="span-details">
-                    <div class="details-meta row small muted">
-                      <span>ID: <code class="mono">{span.id}</code></span>
-                      {#if span.parent_id}
-                        <span>Parent: <code class="mono">{span.parent_id}</code></span>
-                      {/if}
-                      <span>Start: +{formatMs(span.start_ms)}</span>
-                      <span>Duration: {formatMs(span.duration_ms)}</span>
-                    </div>
-                    {#if Object.keys(span.tags || {}).length}
-                      <div class="tags-table-wrap">
-                        <table class="tags-table">
-                          <tbody>
-                            {#each Object.entries(span.tags) as [k, v]}
-                              <tr>
-                                <td class="tag-key mono">{k}</td>
-                                <td class="tag-val mono">{typeof v === 'object' ? JSON.stringify(v) : v}</td>
-                              </tr>
-                            {/each}
-                          </tbody>
-                        </table>
-                      </div>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-            {/each}
+  {#if filteredSpans.length === 0}
+    <p class="pad muted">No spans match the criteria.</p>
+  {:else}
+    <div class="waterfall-scroll">
+      <div class="waterfall-table">
+        <div class="ruler-row">
+          <div class="span-label-col muted small">Span / Operation</div>
+          <div class="timeline-col ruler">
+            <div class="ruler-grid-line" style="left: 0%"></div>
+            <div class="ruler-grid-line" style="left: 25%"></div>
+            <div class="ruler-grid-line" style="left: 50%"></div>
+            <div class="ruler-grid-line" style="left: 75%"></div>
+            <div class="ruler-grid-line" style="left: 100%"></div>
+            <span class="ruler-label">0</span>
+            <span class="ruler-label hide-mobile">{formatMs(totalMs * 0.25)}</span>
+            <span class="ruler-label">{formatMs(totalMs * 0.5)}</span>
+            <span class="ruler-label hide-mobile">{formatMs(totalMs * 0.75)}</span>
+            <span class="ruler-label">{formatMs(totalMs)}</span>
           </div>
         </div>
-      </div>
-    {/if}
-  {:else if view === 'logs'}
-    {#if logs.length === 0}
-      <p class="pad muted">No structured logs recorded for this turn.</p>
-    {:else}
-      <ul class="logs-list">
-        {#each logs as log, idx (idx)}
-          {@const lvl = (log.level || 'info').toLowerCase()}
-          {@const tone = lvl === 'error' ? 'bad' : lvl === 'warning' || lvl === 'warn' ? 'warn' : 'ok'}
-          <li class="log-item">
-            <div class="log-header row spread">
-              <div class="row wrap-gap">
-                <Badge {tone}>{lvl}</Badge>
-                <span class="log-event mono bold">{log.event || log.message || '—'}</span>
-                {#if log.logger}
-                  <span class="muted small mono">{log.logger}</span>
-                {/if}
+
+        <div class="spans-list">
+          {#each filteredSpans as span (span.id)}
+            {@const depth = getDepth(span, spanMap)}
+            {@const left = (span.start_ms / totalMs) * 100}
+            {@const width = Math.max(0.6, (span.duration_ms / totalMs) * 100)}
+            {@const meta = getSpanCategory(span.name, span.status)}
+
+            <div class="span-row-wrap" class:open={expanded[span.id]}>
+              <div
+                class="span-row"
+                role="button"
+                tabindex="0"
+                onclick={() => toggle(span.id)}
+                onkeydown={(e) => e.key === 'Enter' && toggle(span.id)}
+              >
+                <div class="span-label-col" style="padding-left: {depth * 10 + 6}px">
+                  <span class="toggle-icon">{expanded[span.id] ? '▾' : '▸'}</span>
+                  <span class="type-tag mono" style="color: {meta.color}; border-color: {meta.color}">
+                    {meta.cat}
+                  </span>
+                  <span class="span-name mono" title={span.name}>{span.name}</span>
+                </div>
+
+                <div class="timeline-col">
+                  <div class="grid-line" style="left: 0%"></div>
+                  <div class="grid-line" style="left: 25%"></div>
+                  <div class="grid-line" style="left: 50%"></div>
+                  <div class="grid-line" style="left: 75%"></div>
+                  <div class="grid-line" style="left: 100%"></div>
+
+                  <div
+                    class="bar-fill"
+                    style="left: {left}%; width: {width}%; background-color: {meta.color};"
+                    title="{span.name}: {formatMs(span.duration_ms)}"
+                  ></div>
+                  <span class="bar-label mono" style="left: {Math.min(84, left + width + 0.8)}%">
+                    {formatMs(span.duration_ms)}
+                  </span>
+                </div>
               </div>
-              <span class="muted small mono">{log.timestamp || log._time || ''}</span>
+
+              {#if expanded[span.id]}
+                <div class="span-details">
+                  <div class="details-meta row small muted">
+                    <span>ID: <code class="mono">{span.id}</code></span>
+                    {#if span.parent_id}
+                      <span>Parent: <code class="mono">{span.parent_id}</code></span>
+                    {/if}
+                    <span>Start: +{formatMs(span.start_ms)}</span>
+                    <span>Duration: {formatMs(span.duration_ms)}</span>
+                  </div>
+                  {#if Object.keys(span.tags || {}).length}
+                    <div class="tags-table-wrap">
+                      <table class="tags-table">
+                        <tbody>
+                          {#each Object.entries(span.tags) as [k, v]}
+                            <tr>
+                              <td class="tag-key mono">{k}</td>
+                              <td class="tag-val mono">{typeof v === 'object' ? JSON.stringify(v) : v}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
-            <div class="log-json">
-              <Json value={log} />
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+          {/each}
+        </div>
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -252,24 +209,6 @@
   }
   .end-controls {
     flex-wrap: wrap;
-  }
-  .tab-group {
-    display: flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .tab-group button {
-    border: 0;
-    border-radius: 0;
-    background: var(--panel);
-    padding: 0.22rem 0.55rem;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .tab-group button.active {
-    background: var(--accent);
-    color: #fff;
   }
   .trace-text {
     font-size: 0.75rem;
@@ -448,29 +387,6 @@
   }
   .tag-val {
     word-break: break-all;
-  }
-  .logs-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .log-item {
-    padding: 0.5rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .log-item:last-child {
-    border-bottom: 0;
-  }
-  .log-header {
-    gap: 0.5rem;
-    margin-bottom: 0.25rem;
-    flex-wrap: wrap;
-  }
-  .log-event {
-    font-size: 0.82rem;
-  }
-  .bold {
-    font-weight: 600;
   }
   .pad {
     padding: 0.8rem;
