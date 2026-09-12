@@ -47,13 +47,7 @@
           {item.text}
         </div>
 
-        {#if item.signature && open}
-          <div class="signature-bar">
-            <span class="muted tiny">Signature:</span>
-            <code class="sig-preview" title={item.signature}>{item.signature.slice(0, 32)}…</code>
-            <Copy text={item.signature} label="Copy Thought Signature" />
-          </div>
-        {/if}
+
       </div>
     </article>
   {/if}
@@ -107,7 +101,7 @@
         <time class="muted tiny nowrap">{clock(item.at)}</time>
       </button>
 
-      {#if item.output || item.error || item.images?.length}
+      {#if item.output || item.error}
         <div class="output-box">
           {#if item.output}
             <div class="terminal-wrap">
@@ -120,13 +114,7 @@
             <div class="error-box">{item.error}</div>
           {/if}
 
-          {#if item.images?.length}
-            <div class="images-grid">
-              {#each item.images as img}
-                <img src="data:{img.media_type || 'image/png'};base64,{img.data}" alt="Output plot" />
-              {/each}
-            </div>
-          {/if}
+
         </div>
       {/if}
     </div>
@@ -147,11 +135,7 @@
       <div class="prose">
         <Markdown source={item.text} streaming={item.streaming} />
       </div>
-      {#if open && item.type === 'reply' && item.messageIds?.length}
-        <div class="details">
-          <p class="muted tiny">Telegram message IDs: {item.messageIds.join(', ')}</p>
-        </div>
-      {/if}
+
     </div>
   </article>
 
