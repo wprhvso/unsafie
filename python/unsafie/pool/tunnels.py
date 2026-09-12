@@ -51,18 +51,18 @@ async def publish(user_id: int, machine: str, kind: str, port: int) -> str:
     return slug
 
 
-def publish_sync(user_id: int, machine: str, kind: str, port: int) -> str:
+def publish_sync(user_id: int, machine: str, kind: str, port: int, slug: str | None = None) -> str:
     import redis
 
     r = redis.from_url(settings.redis_url)
-    slug = secrets.token_urlsafe(9)
+    target_slug = slug or secrets.token_urlsafe(9)
     r.set(
-        slug_key(slug),
+        slug_key(target_slug),
         json.dumps({"user": user_id, "machine": machine, "kind": kind, "port": port}),
         ex=int(settings.pool_desktop_ttl),
     )
-    logger.info("pool desktop %s -> %s:%s (%s)", slug, machine, port, kind)
-    return slug
+    logger.info("pool desktop %s -> %s:%s (%s)", target_slug, machine, port, kind)
+    return target_slug
 
 
 async def resolve(slug: str) -> dict | None:
