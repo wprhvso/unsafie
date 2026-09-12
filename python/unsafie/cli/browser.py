@@ -54,7 +54,7 @@ def _act(work, *args, **kwargs) -> Any:
     return None
 
 
-def start(profile: str | None = None, *, size: str = "1920x1080", headless: bool = False) -> dict:
+def start(profile: str | None = None, *, size: str = "1920x1080", headless: bool = True) -> dict:
     if engine.load() is not None:
         return {"running": True, **_state()}
     detach()

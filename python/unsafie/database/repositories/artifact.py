@@ -94,35 +94,6 @@ class ArtifactRepository:
             kind=ArtifactKind.TELEMETRY, turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
         )
 
-    async def for_desktop(
-        self,
-        *,
-        title: str | None = None,
-        slug: str | None = None,
-        bot_id: int | None = None,
-        chat_id: int | None = None,
-        turn_id: UUID | None = None,
-    ) -> Artifact | None:
-        if slug:
-            artifact = Artifact(
-                slug=slug,
-                kind=ArtifactKind.DESKTOP,
-                title=title,
-                bot_id=bot_id,
-                chat_id=chat_id,
-                turn_id=turn_id,
-            )
-            self.session.add(artifact)
-            await self.session.commit()
-            return artifact
-        return await self._add(
-            kind=ArtifactKind.DESKTOP,
-            title=title,
-            bot_id=bot_id,
-            chat_id=chat_id,
-            turn_id=turn_id,
-        )
-
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[Artifact], int]:
         total = await self.session.scalar(select(func.count()).select_from(Artifact)) or 0
         rows = await self.session.scalars(
