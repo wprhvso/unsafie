@@ -24,6 +24,25 @@ def test_extract_code() -> None:
     assert _extract_code("No numbers here") is None
 
 
+def test_extract_code_html() -> None:
+    snippet = """ 24px; line-height: 28px; background-color: #F3F3F3; co=
+lor: #5D5D5D; border-radius: 16px; padding: 28px 24px; margin: 24px 0;">
+                        <!--[if mso]>
+                            <span style=3D"font-family: Lucida Console, Ari=
+al, sans-serif;">
+                        <![endif]-->
+                        834254
+                        <!--[if mso]>
+                            </span>
+                        <![endif]-->
+                      </p>
+
+                     =20"""
+    assert _extract_code(snippet) == "834254"
+    assert _extract_code("<div>&nbsp;123456&nbsp;</div>") == "123456"
+    assert _extract_code("<p>  654321  </p>") == "654321"
+
+
 def test_extract_emails() -> None:
     assert _extract_emails("user@example.com") == ["user@example.com"]
     assert _extract_emails("User Name <user@example.com>") == ["user@example.com"]

@@ -1,6 +1,7 @@
 import contextlib
 import email
 import hmac
+import quopri
 import re
 from email.policy import default
 from typing import Annotated, Any
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/email", tags=["cli"])
 PATTERNS = (
     re.compile(r"(?i)(?:code|verification|passcode|pin|otp|парол\w*|код|подтвержден\w*)[^\d\n]{0,30}?\b(\d{6})\b"),
     re.compile(r"\b(\d{6})\b[^\d\n]{0,30}?(?:is your|это ваш|твой код|code)"),
+    re.compile(r">(?:&nbsp;|\s)*(\d{6})(?:&nbsp;|\s)*<"),
     re.compile(r"\b(\d{6})\b"),
 )
 
@@ -34,6 +36,12 @@ def _extract_code(text: str) -> str | None:
     for pattern in PATTERNS:
         if match := pattern.search(text):
             return match.group(1) if match.groups() else match.group(0)
+    if "=3D" in text or "=\n" in text or "=\r\n" in text:
+        with contextlib.suppress(Exception):
+            decoded = quopri.decodestring(text.encode("utf-8")).decode("utf-8", errors="replace")
+            for pattern in PATTERNS:
+                if match := pattern.search(decoded):
+                    return match.group(1) if match.groups() else match.group(0)
     return None
 
 
