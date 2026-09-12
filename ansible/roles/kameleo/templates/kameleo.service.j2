@@ -8,7 +8,7 @@ TimeoutStartSec=0
 Restart=always
 ExecStartPre=-/usr/bin/docker stop kameleo
 ExecStartPre=-/usr/bin/docker rm kameleo
-ExecStart=/usr/bin/docker run --name kameleo --rm -p {{ kameleo_port }}:5050 --shm-size=2g --ipc=host -e PAT={{ kameleo_pat }} -v /tmp/.X11-unix:/tmp/.X11-unix -v {{ kameleo_data_volume }}:/data {{ kameleo_docker_image }}
+ExecStart=/usr/bin/docker run --name kameleo --rm --net=host --shm-size=2g --ipc=host -e PAT={{ kameleo_pat }} -v /tmp/.X11-unix:/tmp/.X11-unix -v {{ kameleo_data_volume }}:/data {{ kameleo_docker_image }}
 ExecStop=/usr/bin/docker stop kameleo
 
 [Install]
