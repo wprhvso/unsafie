@@ -58,29 +58,3 @@ async def of_telemetry(turn_id: UUID) -> str | None:
     return artifact.slug if artifact is not None else None
 
 
-def publish_desktop_sync(
-    *,
-    slug: str,
-    title: str | None = None,
-    bot_id: int | None = None,
-    chat_id: int | None = None,
-    turn_id: UUID | None = None,
-) -> str:
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import Session
-
-    from unsafie.database.models.artifact import Artifact, ArtifactKind
-
-    engine = create_engine(settings.database_url)
-    with Session(engine) as session:
-        artifact = Artifact(
-            slug=slug,
-            kind=ArtifactKind.DESKTOP,
-            title=title,
-            bot_id=bot_id,
-            chat_id=chat_id,
-            turn_id=turn_id,
-        )
-        session.add(artifact)
-        session.commit()
-    return slug

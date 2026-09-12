@@ -1,8 +1,6 @@
 import contextlib
 import json
 import os
-import shutil
-import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -11,7 +9,6 @@ from urllib.parse import urlparse
 from kameleo.local_api_client.kameleo_local_api_client import KameleoLocalApiClient
 from kameleo.local_api_client.models.create_profile_request import CreateProfileRequest
 
-from unsafie.chrome import vnc
 from unsafie.chrome.cdp import Cdp, CdpError
 from unsafie.settings import settings
 
@@ -61,7 +58,7 @@ def _client() -> tuple[KameleoLocalApiClient, str, int]:
     return client, host, resolved_port
 
 
-def launch(profile: str | None = None, size: str = "1920x1080", headless: bool = False) -> dict:
+def launch(profile: str | None = None, size: str = "1920x1080", headless: bool = True) -> dict:
     client, host, port = _client()
     fingerprints = client.fingerprint.search_fingerprints(
         device_type=settings.kameleo_device_type,
@@ -90,34 +87,6 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         created = client.profile.create_profile(req)
         profile_id = created.id
 
-    vnc_port = None
-    vnc_slug = None
-    vnc_url = None
-    if not headless:
-        vnc.ensure(size, display=vnc.DISPLAY)
-        if vnc.listening(vnc.RFB_PORT, 2.0):
-            vnc_port = vnc.RFB_PORT
-            with contextlib.suppress(Exception):
-                import uuid
-
-                from unsafie import artifacts
-                from unsafie.pool import tunnels
-                from unsafie.slugs import generate_slug
-
-                vnc_slug = generate_slug()
-                tunnels.publish_sync(0, "local", "vnc", vnc_port, slug=vnc_slug)
-                turn_env = os.environ.get("UNSAFIE_TURN")
-                chat_env = os.environ.get("UNSAFIE_CHAT")
-                turn_uuid = uuid.UUID(turn_env) if turn_env else None
-                chat_id = int(chat_env) if chat_env and chat_env.lstrip("-").isdigit() else None
-                artifacts.publish_desktop_sync(
-                    slug=vnc_slug,
-                    title=f"Desktop · {profile_name}",
-                    turn_id=turn_uuid,
-                    chat_id=chat_id,
-                )
-                vnc_url = artifacts.url(vnc_slug)
-
     endpoint = f"ws://{host}:{port}/playwright/{profile_id}"
     return {
         "port": port,
@@ -126,9 +95,6 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         "profile_id": profile_id,
         "headless": headless,
         "size": size,
-        "vnc_port": vnc_port,
-        "vnc_slug": vnc_slug,
-        "vnc_url": vnc_url,
         "started_at": time.time(),
     }
 
@@ -137,7 +103,7 @@ def connect(endpoint: str, timeout: float = 30.0) -> Cdp:
     try:
         return Cdp(endpoint, timeout)
     except Exception as broken:
-        msg = f"cannot reach the browser: {broken}"
+        msg = f"cannot connect to chrome via devtools at {endpoint}: {broken}"
         raise BrowserError(msg) from None
 
 
@@ -173,11 +139,6 @@ def stop(state: dict) -> None:
         with contextlib.suppress(Exception):
             client, _, _ = _client()
             client.profile.stop_profile(profile_id)
-    pkill = shutil.which("pkill")
-    if pkill and not state.get("headless"):
-        subprocess.run([pkill, "-f", f"kasmxproxy.*{vnc.DISPLAY}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run([pkill, "-f", f"x11vnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run([pkill, "-f", f"Xkasmvnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _alive(profile_id: str) -> bool:
