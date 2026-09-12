@@ -4,12 +4,14 @@
   import Waterfall from '$lib/components/Waterfall.svelte';
   import Json from '$lib/components/Json.svelte';
   import Badge from '$lib/components/Badge.svelte';
+  import { zoomer } from '$lib/zoom.js';
 
-  let { token, turnSlug = null } = $props();
+  let { token } = $props();
 
   let data = $state(null);
   let loading = $state(true);
   let error = $state(null);
+  let activeTab = $state('waterfall');
   let logFilter = $state('ALL');
   let searchLog = $state('');
 
@@ -20,6 +22,11 @@
   }
 
   onMount(() => {
+    const control = zoomer({
+      key: 'telemetry-zoom',
+      variable: '--telem-zoom'
+    });
+
     fetch(`/api/pages/${token}/trace`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -33,6 +40,10 @@
         error = e.message || 'Failed to load telemetry';
         loading = false;
       });
+
+    return () => {
+      control?.stop();
+    };
   });
 
   let totalMs = $derived(Math.max(1, data?.total_duration_ms || 1));
@@ -67,7 +78,7 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="telemetry-page">
+<div class="telem-page">
   <header class="telem-header spread">
     <div class="row header-left">
       <span class="icon-bolt">⚡</span>
@@ -76,11 +87,7 @@
     </div>
 
     <div class="row header-right">
-      {#if turnSlug}
-        <a href="/{turnSlug}" class="back-link">
-          ← Chat View (/{turnSlug})
-        </a>
-      {/if}
+      <span class="privacy-tag mono tiny">🔒 diagnostics only</span>
     </div>
   </header>
 
@@ -134,76 +141,91 @@
         </section>
       {/if}
 
-      <section class="section-card">
-        <div class="section-head">
-          <h2 class="section-title">Execution Waterfall</h2>
-        </div>
-        <div class="waterfall-embed">
-          <Waterfall {data} />
-        </div>
-      </section>
+      <div class="tabs-nav row">
+        <button
+          class="tab-nav-btn"
+          class:active={activeTab === 'waterfall'}
+          onclick={() => (activeTab = 'waterfall')}
+        >
+          ⚡ Execution Waterfall ({spans.length})
+        </button>
+        <button
+          class="tab-nav-btn"
+          class:active={activeTab === 'logs'}
+          onclick={() => (activeTab = 'logs')}
+        >
+          📋 System & Runtime Logs ({logs.length})
+        </button>
+      </div>
 
-      <section class="section-card">
-        <div class="section-head spread">
-          <h2 class="section-title">System & Runtime Logs</h2>
-          <div class="row filter-controls">
-            <div class="filter-pills">
-              <button class:active={logFilter === 'ALL'} onclick={() => (logFilter = 'ALL')}>All</button>
-              <button class:active={logFilter === 'ERROR'} onclick={() => (logFilter = 'ERROR')}>Errors</button>
-              <button class:active={logFilter === 'WARN'} onclick={() => (logFilter = 'WARN')}>Warnings</button>
-              <button class:active={logFilter === 'INFO'} onclick={() => (logFilter = 'INFO')}>Info</button>
-            </div>
-            <input
-              type="text"
-              placeholder="Search logs..."
-              class="search-input"
-              bind:value={searchLog}
-            />
+      {#if activeTab === 'waterfall'}
+        <section class="section-card">
+          <div class="waterfall-embed">
+            <Waterfall {data} />
           </div>
-        </div>
+        </section>
+      {:else if activeTab === 'logs'}
+        <section class="section-card">
+          <div class="section-head spread">
+            <h2 class="section-title">System & Runtime Logs</h2>
+            <div class="row filter-controls">
+              <div class="filter-pills">
+                <button class:active={logFilter === 'ALL'} onclick={() => (logFilter = 'ALL')}>All</button>
+                <button class:active={logFilter === 'ERROR'} onclick={() => (logFilter = 'ERROR')}>Errors</button>
+                <button class:active={logFilter === 'WARN'} onclick={() => (logFilter = 'WARN')}>Warnings</button>
+                <button class:active={logFilter === 'INFO'} onclick={() => (logFilter = 'INFO')}>Info</button>
+              </div>
+              <input
+                type="text"
+                placeholder="Search logs..."
+                class="search-input"
+                bind:value={searchLog}
+              />
+            </div>
+          </div>
 
-        {#if filteredLogs.length === 0}
-          <p class="pad muted">No logs matching filter.</p>
-        {:else}
-          <ul class="logs-stream">
-            {#each filteredLogs as l, idx (idx)}
-              {@const lvl = (l.level || 'info').toLowerCase()}
-              {@const tone = lvl === 'error' ? 'bad' : lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok'}
-              <li class="log-row">
-                <div class="row spread log-line-head">
-                  <div class="row gap">
-                    <Badge {tone}>{lvl}</Badge>
-                    <span class="mono bold event-txt">{l.event || l.message || '—'}</span>
-                    {#if l.logger}<span class="mono muted small">{l.logger}</span>{/if}
+          {#if filteredLogs.length === 0}
+            <p class="pad muted">No logs matching filter.</p>
+          {:else}
+            <ul class="logs-stream">
+              {#each filteredLogs as l, idx (idx)}
+                {@const lvl = (l.level || 'info').toLowerCase()}
+                {@const tone = lvl === 'error' ? 'bad' : lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok'}
+                <li class="log-row">
+                  <div class="row spread log-line-head">
+                    <div class="row gap">
+                      <Badge {tone}>{lvl}</Badge>
+                      <span class="mono bold event-txt">{l.event || l.message || '—'}</span>
+                      {#if l.logger}<span class="mono muted small">{l.logger}</span>{/if}
+                    </div>
+                    <time class="mono muted tiny">{when(l.timestamp || l._time)}</time>
                   </div>
-                  <time class="mono muted tiny">{when(l.timestamp || l._time)}</time>
-                </div>
-                <div class="log-details">
-                  <Json value={l} />
-                </div>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
+                  <div class="log-details">
+                    <Json value={l} />
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+      {/if}
     {/if}
   </main>
 </div>
 
 <style>
-  .telemetry-page {
+  .telem-page {
     min-height: 100vh;
     background: var(--bg);
     color: var(--text);
+    width: 100%;
+    zoom: var(--telem-zoom, 1);
   }
   .telem-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    padding: 0.6rem 1.2rem;
+    position: static;
+    padding: 0.75rem 1.2rem;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(8px);
     align-items: center;
   }
   .icon-bolt {
@@ -223,18 +245,33 @@
     gap: 0.8rem;
     align-items: center;
   }
-  .back-link {
-    font-size: 0.82rem;
+  .privacy-tag {
     color: var(--muted);
-    border: 1px solid var(--border);
-    padding: 0.2rem 0.6rem;
-    border-radius: 5px;
-    background: var(--bg);
+    font-size: 0.76rem;
   }
-  .back-link:hover {
+  .tabs-nav {
+    border-bottom: 1px solid var(--border);
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+  }
+  .tab-nav-btn {
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .tab-nav-btn:hover {
     color: var(--text);
-    border-color: var(--accent);
-    text-decoration: none;
+  }
+  .tab-nav-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
   .telem-main {
     max-width: 68rem;
@@ -376,4 +413,8 @@
   .pad {
     padding: 1rem;
   }
+  .tiny { font-size: 0.73rem; }
+  .small { font-size: 0.82rem; }
+  .mono { font-family: var(--mono); }
+  .bold { font-weight: 600; }
 </style>

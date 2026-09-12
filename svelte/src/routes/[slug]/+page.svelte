@@ -37,7 +37,7 @@
 {#if data?.kind === 'turn'}
   <Turn token={slug} telemetrySlug={data?.telemetry_slug} />
 {:else if data?.kind === 'telemetry'}
-  <Telemetry token={slug} turnSlug={data?.turn_slug} />
+  <Telemetry token={slug} />
 {:else}
   <Answer content={typeof data?.content === 'string' ? data.content : null} title={data?.title} />
 {/if}
