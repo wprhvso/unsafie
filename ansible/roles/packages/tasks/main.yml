@@ -19,22 +19,6 @@
     - /opt
     - /usr/local/bin
 
-- name: google chrome gpg key
-  ansible.builtin.get_url:
-    url: https://dl.google.com/linux/linux_signing_key.pub
-    dest: /etc/apt/keyrings/google-chrome.asc
-    mode: "0644"
-
-- name: google chrome repo
-  ansible.builtin.deb822_repository:
-    name: google-chrome
-    types: deb
-    uris: https://dl.google.com/linux/chrome/deb/
-    suites: stable
-    components: main
-    architectures: amd64
-    signed_by: /etc/apt/keyrings/google-chrome.asc
-
 - name: github cli gpg key
   ansible.builtin.get_url:
     url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
@@ -112,7 +96,6 @@
       - zstd
       - p7zip-full
       - bubblewrap
-      - google-chrome-stable
       - xvfb
       - x11vnc
       - openbox

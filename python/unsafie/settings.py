@@ -229,6 +229,15 @@ class Settings(BaseSettings):
     pool_max_blob_item: int = 134_217_728
     pool_boot_grace: float = 900.0
     pool_cache_url: str = ""
+    kameleo_port: int = Field(default=5050, validation_alias=AliasChoices("KAMELEO_PORT"))
+    kameleo_url: str = Field(
+        default="http://127.0.0.1:5050",
+        validation_alias=AliasChoices("KAMELEO_URL", "KAMELEO_ENDPOINT"),
+    )
+    kameleo_pat: str = Field(default="", validation_alias=AliasChoices("KAMELEO_PAT", "PAT"))
+    kameleo_device_type: str = "desktop"
+    kameleo_browser_product: str = "chrome"
+
     pool_vnc_port: int = 5900
     pool_desktop_ttl: float = 7_200.0
     pool_tunnel_wait: float = 30.0

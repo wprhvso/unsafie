@@ -18,6 +18,7 @@ class Cdp:
         self._answers: dict[int, dict] = {}
         self._events: list[dict] = []
         self._lock = threading.Lock()
+        self.session_id: str | None = None
 
     def close(self) -> None:
         self.socket.close()
@@ -29,8 +30,9 @@ class Cdp:
             payload: dict[str, Any] = {"id": message_id, "method": method}
             if params:
                 payload["params"] = params
-            if session:
-                payload["sessionId"] = session
+            target_session = session or self.session_id
+            if target_session:
+                payload["sessionId"] = target_session
             self.socket.send(json.dumps(payload))
             answer = self._wait(message_id)
         if "error" in answer:

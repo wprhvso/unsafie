@@ -1,0 +1,5 @@
+- name: restart kameleo
+  ansible.builtin.systemd:
+    name: kameleo
+    state: restarted
+    daemon_reload: true

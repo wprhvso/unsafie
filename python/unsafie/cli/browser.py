@@ -15,7 +15,7 @@ _open: dict[str, Any] = {}
 def _state() -> dict:
     state = engine.load()
     if state is None:
-        msg = "chrome is not running: call unsafie browser start"
+        msg = "browser is not running: call unsafie browser start"
         raise RuntimeError(msg)
     return state
 
@@ -23,17 +23,19 @@ def _state() -> dict:
 def _session() -> Cdp:
     state = _state()
     cached = _open.get("cdp")
-    if cached is not None and _open.get("port") == state["port"]:
+    if cached is not None and _open.get("endpoint") == state.get("endpoint"):
         return cached
     detach()
     cdp, _ = engine.session(state)
     _open["cdp"] = cdp
-    _open["port"] = state["port"]
+    _open["endpoint"] = state.get("endpoint")
+    _open["port"] = state.get("port")
     return cdp
 
 
 def detach() -> None:
     cdp = _open.pop("cdp", None)
+    _open.pop("endpoint", None)
     _open.pop("port", None)
     if cdp is not None:
         with contextlib.suppress(Exception):

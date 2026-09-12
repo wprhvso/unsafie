@@ -16,3 +16,7 @@ tls_cloudflare_api_token: "{{ vault_cloudflare_api_token }}"
 victoriametrics_version: 1.151.0
 victorialogs_version: 1.52.0
 victoriatraces_version: 0.11.0
+
+kameleo_port: 5050
+kameleo_data_volume: kameleo-data
+kameleo_docker_image: kameleo/kameleo-app:latest

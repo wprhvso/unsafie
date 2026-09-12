@@ -23,4 +23,5 @@
     - { role: vector, tags: [vector] }
     - { role: monitoring_web, tags: [monitoring_web] }
     - { role: caches, tags: [caches] }
+    - { role: kameleo, tags: [kameleo] }
     - { role: unsafie, tags: [unsafie] }
