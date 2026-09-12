@@ -1,7 +1,24 @@
+- name: ensure x11 socket dir exists
+  ansible.builtin.file:
+    path: /tmp/.X11-unix
+    state: directory
+    mode: "1777"
+
 - name: ensure docker is installed
   ansible.builtin.apt:
     name:
       - docker.io
+    state: present
+
+- name: download kasmvnc deb
+  ansible.builtin.get_url:
+    url: "https://github.com/kasmtech/KasmVNC/releases/download/v{{ kasmvnc_version }}/kasmvncserver_{{ ansible_distribution_release }}_{{ kasmvnc_version }}_{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}.deb"
+    dest: "/tmp/kasmvnc.deb"
+    mode: "0644"
+
+- name: install kasmvnc
+  ansible.builtin.apt:
+    deb: "/tmp/kasmvnc.deb"
     state: present
 
 - name: ensure docker service is running

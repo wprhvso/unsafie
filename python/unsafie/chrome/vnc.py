@@ -5,7 +5,7 @@ import subprocess
 import time
 
 RFB_PORT = 5900
-DISPLAY = ":97"
+DISPLAY = ":99"
 WAIT = 15.0
 BOOT = 10.0
 SIZE = "1920x1080"
@@ -100,9 +100,40 @@ def attach(display: str, size: str = SIZE) -> str:
         return ""
     if not running(display):
         return f"there is no X display on {display}"
+    kasm = shutil.which("Xkasmvnc")
+    proxy = shutil.which("kasmxproxy")
+    if kasm and proxy:
+        width, _, height = size.partition("x")
+        vnc_disp = ":98" if display != ":98" else ":96"
+        subprocess.Popen(
+            [
+                kasm,
+                vnc_disp,
+                "-geometry",
+                f"{width}x{height}",
+                "-depth",
+                "24",
+                "-rfbport",
+                str(RFB_PORT),
+                "-SecurityTypes",
+                "None",
+                "-interface",
+                "127.0.0.1",
+                "-AlwaysShared",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if listening(RFB_PORT, BOOT):
+            subprocess.Popen(
+                [proxy, "-a", display, "-v", vnc_disp],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return ""
     x11vnc = shutil.which("x11vnc")
     if x11vnc is None:
-        return "x11vnc is not installed"
+        return "neither kasmvnc nor x11vnc is installed"
     subprocess.Popen(
         [
             x11vnc,
@@ -119,7 +150,7 @@ def attach(display: str, size: str = SIZE) -> str:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    return "" if listening(RFB_PORT, BOOT) else "x11vnc did not come up"
+    return "" if listening(RFB_PORT, BOOT) else "vnc did not come up"
 
 
 def _await(display: str, timeout: float = BOOT) -> bool:

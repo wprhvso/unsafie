@@ -1,6 +1,8 @@
 import contextlib
 import json
 import os
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -9,6 +11,7 @@ from urllib.parse import urlparse
 from kameleo.local_api_client import KameleoLocalApiClient
 from kameleo.local_api_client.models import CreateProfileRequest
 
+from unsafie.chrome import vnc
 from unsafie.chrome.cdp import Cdp, CdpError
 from unsafie.settings import settings
 
@@ -91,6 +94,11 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         created = client.profile.create_profile(req)
         profile_id = created.id
 
+    vnc_port = None
+    if not headless:
+        vnc.ensure(size, display=vnc.DISPLAY)
+        vnc_port = vnc.RFB_PORT if vnc.listening(vnc.RFB_PORT, 2.0) else None
+
     endpoint = f"ws://{host}:{port}/playwright/{profile_id}"
     return {
         "port": port,
@@ -99,6 +107,7 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         "profile_id": profile_id,
         "headless": headless,
         "size": size,
+        "vnc_port": vnc_port,
         "started_at": time.time(),
     }
 
@@ -143,6 +152,11 @@ def stop(state: dict) -> None:
         with contextlib.suppress(Exception):
             client, _, _ = _client()
             client.profile.stop_profile(profile_id)
+    pkill = shutil.which("pkill")
+    if pkill and not state.get("headless"):
+        subprocess.run([pkill, "-f", f"kasmxproxy.*{vnc.DISPLAY}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([pkill, "-f", f"x11vnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([pkill, "-f", f"Xkasmvnc.*{vnc.RFB_PORT}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _alive(profile_id: str) -> bool:
