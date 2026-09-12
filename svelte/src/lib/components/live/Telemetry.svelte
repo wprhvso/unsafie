@@ -86,9 +86,7 @@
       <span class="mono muted small">/{token}</span>
     </div>
 
-    <div class="row header-right">
-      <span class="privacy-tag mono tiny">🔒 diagnostics only</span>
-    </div>
+
   </header>
 
   <main class="telem-main">
@@ -244,10 +242,6 @@
   .header-right {
     gap: 0.8rem;
     align-items: center;
-  }
-  .privacy-tag {
-    color: var(--muted);
-    font-size: 0.76rem;
   }
   .tabs-nav {
     border-bottom: 1px solid var(--border);
