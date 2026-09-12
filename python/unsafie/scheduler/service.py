@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from unsafie.database import SessionLocal
@@ -11,7 +11,7 @@ from unsafie.scheduler import cron as cronlib
 from unsafie.scheduler.when import WhenError, absolute, duration, fmt_local, humanize, zone
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScheduleError(OpsError):

@@ -1,6 +1,6 @@
 import gzip
 import json
-import logging
+from unsafie.log import get_logger
 from typing import Any
 from uuid import UUID
 
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unsafie.database.models.turn import Turn
 from unsafie.database.models.turn_checkpoint import TurnCheckpoint
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CheckpointRepository:

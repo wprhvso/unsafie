@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.artifact import ArtifactKind
 from unsafie.database.repositories.artifact import ArtifactRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/pages", tags=["cli"])
 

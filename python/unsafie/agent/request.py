@@ -1,9 +1,9 @@
-import logging
+from unsafie.log import get_logger
 from typing import Any
 
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SAFETY_CATEGORIES = (
     "HARM_CATEGORY_HATE_SPEECH",

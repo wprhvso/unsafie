@@ -1,5 +1,5 @@
 import json
-import logging
+from unsafie.log import get_logger
 import secrets
 import time
 from datetime import UTC, datetime
@@ -13,7 +13,7 @@ from unsafie.database.models.pool import MachineState, PoolMachine
 from unsafie.pool import keys
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 BOOTED = time.monotonic()
 

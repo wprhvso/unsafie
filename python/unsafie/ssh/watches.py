@@ -1,11 +1,11 @@
 import hashlib
-import logging
+from unsafie.log import get_logger
 import re
 from dataclasses import dataclass
 
 from unsafie.ssh.errors import SshError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 NUMBER_RE = re.compile(r"-?\d+(?:[.,]\d+)?")
 OPERATORS = ("==", "!=", ">=", "<=", "=", ">", "<")

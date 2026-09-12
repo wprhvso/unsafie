@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import secrets
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from unsafie.github.app import auth
 from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def create_from_manifest(code: str) -> dict:

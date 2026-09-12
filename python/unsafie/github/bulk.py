@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 import tarfile
 import tempfile
 import time
@@ -13,7 +13,7 @@ from unsafie.mime import human_size
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def name_for(full: str, commit_sha: str) -> str:

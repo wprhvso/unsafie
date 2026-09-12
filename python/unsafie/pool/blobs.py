@@ -1,6 +1,6 @@
 import asyncio
 import hashlib
-import logging
+from unsafie.log import get_logger
 from pathlib import Path
 
 from sqlalchemy import delete, func, select
@@ -10,7 +10,7 @@ from unsafie.database.models.pool import PoolBlob
 from unsafie.errors import OpsError
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BlobError(OpsError):

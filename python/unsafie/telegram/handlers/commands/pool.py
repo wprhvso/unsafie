@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from aiogram import Router
 from aiogram.enums import ChatType
@@ -13,7 +13,7 @@ from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _machine_line(machine) -> str:

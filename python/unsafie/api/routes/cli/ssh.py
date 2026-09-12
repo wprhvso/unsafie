@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -9,7 +9,7 @@ from unsafie.settings import settings
 from unsafie.ssh import binding, keys
 from unsafie.ssh import pool as ssh_pool
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ssh", tags=["cli"])
 

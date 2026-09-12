@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 import aiohttp
 
@@ -52,7 +52,7 @@ async def get_access_token(session_id: int, refresh_token: str) -> str:
     return fresh
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def invalidate(session_id: int) -> None:

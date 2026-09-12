@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass
 
 from aiogram import Bot
@@ -10,7 +10,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.telegram.tracing import ApiTracing
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

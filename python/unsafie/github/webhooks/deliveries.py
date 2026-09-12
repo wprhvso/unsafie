@@ -1,10 +1,10 @@
-import logging
+from unsafie.log import get_logger
 
 from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.delivery import DeliveryRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def summarize(event: str, payload: dict) -> dict:

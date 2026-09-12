@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from unsafie.fluent import t
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_TIMEOUT = 900.0
 

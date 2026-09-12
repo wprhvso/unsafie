@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unsafie.database.models.repo import Repo
 from unsafie.database.models.subscription import GithubSubscription
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SubscriptionRepository:

@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
@@ -8,7 +8,7 @@ from unsafie.api.schemas.common import Ok
 from unsafie.api.schemas.models import LoginWrite
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["auth"])
 

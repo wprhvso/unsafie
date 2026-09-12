@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -10,11 +9,11 @@ import aiohttp
 
 from unsafie import telemetry
 from unsafie.agent import opal
-from unsafie.log import short
+from unsafie.log import get_logger, short
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
 RETRYABLE_KINDS = frozenset(

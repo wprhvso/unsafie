@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from aiogram import Router
 from aiogram.enums import ChatType
@@ -11,7 +11,7 @@ from unsafie.ssh.errors import SshError
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_ssh_router() -> Router:

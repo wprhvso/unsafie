@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 import asyncssh
 
@@ -6,7 +6,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.repositories.user import UserRepository
 from unsafie.ssh.errors import SshError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 KEY_TYPE = "ssh-ed25519"
 

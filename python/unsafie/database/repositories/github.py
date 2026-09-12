@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
@@ -11,7 +11,7 @@ from unsafie.database.models.installation import Installation, InstallationAccou
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.worktree import Worktree
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GithubAppRepository:

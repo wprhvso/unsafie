@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import fnmatch
 import json
-import logging
+from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -13,7 +13,7 @@ from redis.exceptions import TimeoutError as RedisTimeout
 from unsafie import cluster
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 GAP = "gap"
 STREAM = "events"

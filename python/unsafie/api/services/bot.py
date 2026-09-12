@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +9,7 @@ from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.chat import ChatRepository
 from unsafie.telegram import service, webhook
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def read(

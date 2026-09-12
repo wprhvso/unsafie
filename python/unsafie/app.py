@@ -1,5 +1,5 @@
-import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -20,7 +20,7 @@ from unsafie.github.cache import sweeper
 from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.worker import worker
 from unsafie.janitor import janitor
-from unsafie.log import setup
+from unsafie.log import bind_contextvars, clear_contextvars, get_logger, setup
 from unsafie.pool.ci.supervisor import ci_supervisor
 from unsafie.pool.keeper import keeper
 from unsafie.presence import presence
@@ -34,7 +34,7 @@ from unsafie.telemetry import attrs
 
 setup()
 telemetry.setup()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor, recovery_supervisor)
 
@@ -42,7 +42,7 @@ LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keepe
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     with telemetry.span("app.startup", kind=telemetry.INTERNAL):
-        logger.info("lifespan startup instance=%s role=%s", settings.instance_id, settings.role)
+        logger.info("app.lifespan.startup", instance_id=settings.instance_id, role=settings.role)
         await cluster.connect()
         with telemetry.detached():
             events.bus.start()
@@ -51,13 +51,13 @@ async def lifespan(app: FastAPI):
             await recovery_supervisor.startup_sweep()
             for loop in LOOPS:
                 loop.start()
-        logger.info("lifespan ready")
+        logger.info("app.lifespan.ready")
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
-        logger.info("lifespan shutdown")
+        logger.info("app.lifespan.shutdown")
         await supervisor.pause()
         if left := await turns.drain(settings.shutdown_grace):
-            logger.warning("%s turn(s) still running after the grace period: %s", len(left), left)
+            logger.warning("app.lifespan.turns_draining", running_turns_count=len(left), turns=left)
         for loop in reversed(LOOPS):
             await loop.stop()
         await pool.close_all()
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
         await engine.dispose()
         await events.bus.stop()
         await cluster.close()
-        logger.info("shutdown complete")
+        logger.info("app.lifespan.complete")
     telemetry.shutdown()
 
 
@@ -76,24 +76,34 @@ app = FastAPI(title="unsafie", lifespan=lifespan)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    telemetry.annotate(**{attrs.REQUEST_ID: request.headers.get("x-request-id")})
+    clear_contextvars()
+    req_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    bind_contextvars(
+        request_id=req_id,
+        http_method=request.method,
+        http_path=request.url.path,
+        client_ip=request.client.host if request.client else None,
+    )
+    telemetry.annotate(**{attrs.REQUEST_ID: req_id})
     started = time.perf_counter()
     try:
         response = await call_next(request)
     except Exception:
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
         logger.exception(
-            "http !! %s %s failed after %.1fms",
-            request.method,
-            request.url.path,
-            (time.perf_counter() - started) * 1000,
+            "http.request.failed",
+            method=request.method,
+            path=request.url.path,
+            duration_ms=duration_ms,
         )
         raise
+    duration_ms = round((time.perf_counter() - started) * 1000, 2)
     logger.info(
-        "http %s %s status=%s %.1fms",
-        request.method,
-        request.url.path,
-        response.status_code,
-        (time.perf_counter() - started) * 1000,
+        "http.request.completed",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration_ms=duration_ms,
     )
     return response
 
@@ -119,9 +129,9 @@ async def health(response: Response) -> dict[str, object]:
 
 if (assets := static.assets_dir()) is not None:
     app.mount("/_app", StaticFiles(directory=assets), name="assets")
-    logger.info("serving the frontend bundle from %s", assets)
+    logger.info("serving frontend bundle", assets=assets)
 else:
-    logger.warning("no frontend bundle at %s; nginx must serve it", settings.static_dir)
+    logger.warning("no frontend bundle found", static_dir=str(settings.static_dir))
 
 app.include_router(artifact_router)
 telemetry.instrument_app(app)

@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.update import UpdateRepository
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

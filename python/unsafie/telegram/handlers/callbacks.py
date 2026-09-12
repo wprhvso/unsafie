@@ -1,5 +1,5 @@
 import contextlib
-import logging
+from unsafie.log import get_logger
 from uuid import UUID
 
 from aiogram import Router
@@ -16,7 +16,7 @@ from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.retry import RetryCallback, retry_markup
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_callbacks_router() -> Router:

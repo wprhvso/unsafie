@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import logging
+from unsafie.log import get_logger
 
 from unsafie.errors import OpsError
 from unsafie.loop import Loop
@@ -8,7 +8,7 @@ from unsafie.pool.ci import repos
 from unsafie.pool.ci.controller import Controller
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CiSupervisor(Loop):

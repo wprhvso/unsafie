@@ -1,12 +1,12 @@
 """A stop button for a turn, readable from any instance."""
 
-import logging
+from unsafie.log import get_logger
 from uuid import UUID
 
 from unsafie import cluster
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TTL = 3600.0
 

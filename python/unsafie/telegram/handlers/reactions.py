@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 
 from aiogram import Router
 from aiogram.exceptions import TelegramAPIError
@@ -10,7 +10,7 @@ from unsafie.database.models.response import ResponseKind
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.telegram import sender
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_reactions_router() -> Router:

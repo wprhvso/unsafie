@@ -1,9 +1,9 @@
-import logging
+from unsafie.log import get_logger
 
 from unsafie.github import icons
 from unsafie.mime import human_size
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MAX_BODY = 400
 

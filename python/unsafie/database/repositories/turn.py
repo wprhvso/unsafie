@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import uuid
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -11,7 +11,7 @@ from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.models.update import Update
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 OWNER_QUERY = text("""
     SELECT COALESCE(

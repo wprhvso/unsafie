@@ -1,12 +1,12 @@
 import contextlib
-import logging
+from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from unsafie.pool import tunnels
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/m", tags=["desktop"])
 

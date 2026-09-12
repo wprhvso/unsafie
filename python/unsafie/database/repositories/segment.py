@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.turn_message import TurnMessages
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LINEAGE = text("""
 WITH RECURSIVE lineage AS (

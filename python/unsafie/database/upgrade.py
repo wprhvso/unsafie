@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 import time
 from pathlib import Path
 
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 

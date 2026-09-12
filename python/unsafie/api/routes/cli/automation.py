@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
@@ -20,7 +20,7 @@ from unsafie.settings import settings
 from unsafie.ssh import binding
 from unsafie.ssh import watches as conditions
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["cli"])
 

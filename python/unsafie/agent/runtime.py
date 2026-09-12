@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -41,14 +40,14 @@ from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.update import UpdateRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
-from unsafie.log import short
+from unsafie.log import get_logger, short
 from unsafie.settings import settings
 from unsafie.telegram import bots, render, sender
 from unsafie.telegram.chat_action import typing
 from unsafie.telegram.retry import retry_markup
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ACTIVE_TURNS: set[asyncio.Task] = set()
 

@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, or_, select
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unsafie.database.models.webhook_delivery import WebhookDelivery
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DeliveryRepository:

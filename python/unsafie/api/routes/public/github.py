@@ -1,5 +1,5 @@
 import html
-import logging
+from unsafie.log import get_logger
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -13,7 +13,7 @@ from unsafie.github.errors import GithubError
 from unsafie.github.webhooks import router as webhooks
 from unsafie.github.webhooks.verify import valid
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/gh", tags=["github"])
 

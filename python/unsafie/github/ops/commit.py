@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from unsafie.log import get_logger
 from dataclasses import dataclass
 
 from unsafie import telemetry
@@ -13,7 +13,7 @@ from unsafie.mime import is_text
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 import re
 
 from unsafie.database import SessionLocal
@@ -6,7 +6,7 @@ from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.repositories.ssh import SshRepository
 from unsafie.ssh.errors import SshError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TARGET_RE = re.compile(r"^(?:(?P<user>[^@\s]+)@)?(?P<host>[^:\s]+)(?::(?P<port>\d+))?$")
 ALIAS_RE = re.compile(r"^[a-zA-Z0-9][\w.-]{0,31}$")

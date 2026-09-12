@@ -1,11 +1,11 @@
-import logging
+from unsafie.log import get_logger
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserRepository:

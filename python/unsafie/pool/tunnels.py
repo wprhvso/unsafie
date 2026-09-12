@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import json
-import logging
+from unsafie.log import get_logger
 import secrets
 import time
 from dataclasses import dataclass
@@ -11,7 +11,7 @@ from unsafie.pool import channel, keys
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 KINDS = ("vnc", "term")
 BROWSER = "browser"

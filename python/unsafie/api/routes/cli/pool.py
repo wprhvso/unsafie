@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -14,7 +14,7 @@ from unsafie.errors import OpsError
 from unsafie.pool import channel, leases, registry, tunnels
 from unsafie.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/pool", tags=["cli"])
 

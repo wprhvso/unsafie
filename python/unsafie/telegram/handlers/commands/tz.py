@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from aiogram import Router
@@ -11,7 +11,7 @@ from unsafie.scheduler.when import WhenError, fmt_local, zone
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_tz_router() -> Router:

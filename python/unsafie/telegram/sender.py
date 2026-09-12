@@ -1,5 +1,5 @@
 import functools
-import logging
+from unsafie.log import get_logger
 from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot
@@ -28,7 +28,7 @@ from unsafie.telemetry import attrs
 if TYPE_CHECKING:
     from uuid import UUID
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CAPTION_LIMIT = 1024
 

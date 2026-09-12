@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+from unsafie.log import get_logger
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -16,7 +16,7 @@ from unsafie.pool import keys, registry
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CHUNK_WAIT = 5.0
 BLOCK = max(1, int(min(CHUNK_WAIT, settings.redis_timeout - 1)))

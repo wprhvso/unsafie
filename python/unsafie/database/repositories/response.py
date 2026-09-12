@@ -1,4 +1,4 @@
-import logging
+from unsafie.log import get_logger
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.response import Response, ResponseKind
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResponseRepository:

@@ -1,5 +1,5 @@
 import hashlib
-import logging
+from unsafie.log import get_logger
 
 from aiogram import Dispatcher
 
@@ -9,7 +9,7 @@ from unsafie.telegram.engine import telegram_engine
 from unsafie.telegram.handlers import build_router
 from unsafie.telegram.middleware import UpdateMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 dispatcher = Dispatcher()
 dispatcher.update.outer_middleware(UpdateMiddleware())
