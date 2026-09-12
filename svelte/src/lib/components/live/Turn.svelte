@@ -297,12 +297,18 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 0.45rem 0.9rem;
+    gap: 0.6rem;
+    padding: 0.45rem 0.7rem;
     background: var(--live-bar);
     backdrop-filter: saturate(140%) blur(10px);
     border-bottom: 1px solid var(--border);
     font-size: 0.82rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .bar::-webkit-scrollbar {
+    display: none;
   }
 
   .side {
@@ -519,10 +525,12 @@
     border-color: var(--accent);
   }
   .trace-box {
-    border-bottom: 1px solid var(--border);
+    border-bottom: 2px solid var(--border);
     background: var(--panel);
-    max-height: 480px;
+    max-height: 52vh;
     overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .sys-logs-box {
     margin-top: 2rem;
