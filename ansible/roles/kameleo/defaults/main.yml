@@ -2,3 +2,4 @@ kameleo_port: 5050
 kameleo_pat: "{{ vault_kameleo_pat | default('') }}"
 kameleo_data_volume: kameleo-data
 kameleo_docker_image: kameleo/kameleo-app:latest
+kasmvnc_version: "1.5.0"

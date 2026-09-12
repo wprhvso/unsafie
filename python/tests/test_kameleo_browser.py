@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from unsafie.chrome import browser
+from unsafie.chrome import browser, vnc
 from unsafie.chrome.cdp import CdpError
 from unsafie.cli import browser as cli_browser
 
@@ -20,6 +20,7 @@ def test_browser_launch_creates_profile():
     assert state["profile"] == "test-prof"
     assert state["profile_id"] == "prof-456"
     assert state["endpoint"] == "ws://127.0.0.1:5050/playwright/prof-456"
+    assert state["vnc_port"] is None
     mock_client.profile.create_profile.assert_called_once()
 
 
@@ -31,10 +32,13 @@ def test_browser_launch_reuses_existing_profile():
     existing.name = "my-profile"
     mock_client.profile.list_profiles.return_value = [existing]
 
-    with patch.object(browser, "_client", return_value=(mock_client, "127.0.0.1", 5050)):
+    with patch.object(browser, "_client", return_value=(mock_client, "127.0.0.1", 5050)), \
+         patch.object(vnc, "ensure", return_value=""), \
+         patch.object(vnc, "listening", return_value=True):
         state = browser.launch(profile="my-profile", size="1920x1080", headless=False)
 
     assert state["profile_id"] == "prof-existing"
+    assert state["vnc_port"] == 5900
     mock_client.profile.create_profile.assert_not_called()
 
 
@@ -84,6 +88,7 @@ def test_cli_browser_start_and_stop(tmp_path: Path):
         "endpoint": "ws://127.0.0.1:5050/playwright/prof-test",
         "profile_id": "prof-test",
         "profile": "p1",
+        "vnc_port": 5900,
     }
     state_file = tmp_path / "kameleo.json"
 
@@ -93,6 +98,7 @@ def test_cli_browser_start_and_stop(tmp_path: Path):
         res_start = cli_browser.start("p1")
         assert res_start["running"] is True
         assert res_start["profile_id"] == "prof-test"
+        assert res_start["vnc_port"] == 5900
         assert state_file.is_file()
 
         with patch.object(browser, "stop") as mock_stop:
