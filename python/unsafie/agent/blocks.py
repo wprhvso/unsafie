@@ -6,7 +6,9 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from unsafie import tokens
+from opentelemetry import trace
+from unsafie import telemetry, tokens
+from unsafie.telemetry import attrs
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.log import get_logger, short
@@ -196,37 +198,52 @@ class Runner:
             "--setenv", "UNSAFIE_TOKEN", token,
             "--setenv", "UNSAFIE_CHAT", str(self.ctx.chat_id),
             "--setenv", "UNSAFIE_TURN", str(self.ctx.turn_id),
-            "--die-with-parent",
-            "--chdir", "/work",
-            "bash", "-lc", block.code,
         ])
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                stdin=asyncio.subprocess.DEVNULL,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            out, _ = await proc.communicate()
-            block.exit_code = proc.returncode
-            block.seconds = time.monotonic() - started
+        with telemetry.span(
+            "runner.bwrap",
+            attributes={
+                attrs.TURN_ID: str(self.ctx.turn_id),
+                "block.index": block.index,
+            },
+        ):
+            span_ctx = trace.get_current_span().get_span_context()
+            if span_ctx.is_valid:
+                traceparent = f"00-{format(span_ctx.trace_id, '032x')}-{format(span_ctx.span_id, '016x')}-01"
+                argv.extend(["--setenv", "TRACEPARENT", traceparent])
 
-            combined = (out or b"").decode("utf-8", "replace")
-            body, found = markers.split(combined)
-            block.output = body
-            await self._decorate(block, found)
-        except asyncio.CancelledError:
-            block.error = "stopped by the user"
-            block.seconds = time.monotonic() - started
-            self._finished(block)
-            raise
-        except Exception as e:
-            block.error = f"{type(e).__name__}: {e}"
-            block.seconds = time.monotonic() - started
-            logger.exception("%s sandbox error", self.ctx.prefix)
-        finally:
-            self._finished(block)
+            argv.extend([
+                "--die-with-parent",
+                "--chdir", "/work",
+                "bash", "-lc", block.code,
+            ])
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *argv,
+                    stdin=asyncio.subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                out, _ = await proc.communicate()
+                block.exit_code = proc.returncode
+                block.seconds = time.monotonic() - started
+
+                combined = (out or b"").decode("utf-8", "replace")
+                body, found = markers.split(combined)
+                block.output = body
+                await self._decorate(block, found)
+            except asyncio.CancelledError:
+                block.error = "stopped by the user"
+                block.seconds = time.monotonic() - started
+                self._finished(block)
+                raise
+            except Exception as e:
+                block.error = f"{type(e).__name__}: {e}"
+                block.seconds = time.monotonic() - started
+                logger.exception("%s sandbox error", self.ctx.prefix)
+            finally:
+                self._finished(block)
 
     async def _decorate(self, block: Block, found: list[markers.Block]) -> None:
         for item in found:

@@ -81,6 +81,8 @@ class Client:
         request = urllib.request.Request(url, data=payload, method=method.upper())
         request.add_header("Authorization", f"Bearer {self.token}")
         request.add_header("User-Agent", USER_AGENT)
+        if traceparent := os.environ.get("TRACEPARENT"):
+            request.add_header("traceparent", traceparent)
         if payload is not None:
             request.add_header("Content-Type", "application/json")
         try:

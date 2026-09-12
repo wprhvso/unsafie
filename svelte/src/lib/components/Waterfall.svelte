@@ -7,6 +7,7 @@
   let view = $state('waterfall');
   let expanded = $state({});
   let search = $state('');
+  let hideShort = $state(false);
 
   function toggle(id) {
     expanded[id] = !expanded[id];
@@ -16,22 +17,33 @@
   let spans = $derived(data?.spans || []);
   let logs = $derived(data?.logs || []);
 
-  let filteredSpans = $derived(
-    search
-      ? spans.filter(
-          (s) =>
-            s.name.toLowerCase().includes(search.toLowerCase()) ||
-            JSON.stringify(s.tags || {}).toLowerCase().includes(search.toLowerCase())
-        )
-      : spans
-  );
-
-  function getBarTone(span) {
-    if (span.status === 'error') return 'var(--bad)';
-    if (span.name.includes('gemini') || span.name.includes('gen_ai')) return 'var(--accent)';
-    if (span.name.includes('bwrap') || span.name.includes('runner')) return 'var(--warn)';
-    return 'var(--ok)';
+  function getSpanCategory(name, status) {
+    if (status === 'error') return { cat: 'ERR', tone: 'bad', color: 'var(--bad)' };
+    if (name.includes('gemini') || name.includes('gen_ai')) return { cat: 'LLM', tone: 'accent', color: '#8b5cf6' };
+    if (name.includes('bwrap') || name.includes('runner')) return { cat: 'RUNNER', tone: 'warn', color: '#f59e0b' };
+    if (name.startsWith('tg.') || name.includes('telegram')) return { cat: 'TG', tone: 'ok', color: '#0ea5e9' };
+    if (name.includes('SELECT') || name.includes('INSERT') || name.includes('UPDATE') || name === 'connect') {
+      return { cat: 'DB', tone: 'ok', color: '#38bdf8' };
+    }
+    if (name.startsWith('POST') || name.startsWith('GET') || name.startsWith('DELETE') || name.startsWith('PUT')) {
+      return { cat: 'HTTP', tone: 'warn', color: '#ec4899' };
+    }
+    if (name.startsWith('agent.') || name.startsWith('turn.')) {
+      return { cat: 'AGENT', tone: 'ok', color: '#10b981' };
+    }
+    return { cat: 'SYS', tone: 'muted', color: 'var(--muted)' };
   }
+
+  let filteredSpans = $derived(
+    spans.filter((s) => {
+      if (hideShort && s.duration_ms < 1.0) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return s.name.toLowerCase().includes(q) || JSON.stringify(s.tags || {}).toLowerCase().includes(q);
+      }
+      return true;
+    })
+  );
 
   function getDepth(span, spanMap) {
     let d = 0;
@@ -49,7 +61,7 @@
 
 <div class="waterfall-container">
   <div class="toolbar spread">
-    <div class="row">
+    <div class="row wrap-gap">
       <div class="tab-group">
         <button class:active={view === 'waterfall'} onclick={() => (view = 'waterfall')}>
           Waterfall ({spans.length})
@@ -62,9 +74,17 @@
         <span class="mono muted small">trace: {data.trace_id}</span>
       {/if}
     </div>
-    <div class="row">
+    <div class="row wrap-gap">
       <span class="badge ok">{totalMs.toFixed(1)} ms</span>
       {#if view === 'waterfall'}
+        <button
+          class="toggle-btn"
+          class:active={hideShort}
+          onclick={() => (hideShort = !hideShort)}
+          title="Toggle micro-spans under 1ms"
+        >
+          {hideShort ? 'Show all' : 'Hide < 1ms'}
+        </button>
         <input
           type="text"
           placeholder="Filter spans..."
@@ -77,11 +97,16 @@
 
   {#if view === 'waterfall'}
     {#if filteredSpans.length === 0}
-      <p class="pad muted">No spans recorded.</p>
+      <p class="pad muted">No spans match the criteria.</p>
     {:else}
       <div class="ruler-row">
         <div class="span-label-col muted small">Span / Operation</div>
         <div class="timeline-col ruler">
+          <div class="ruler-grid-line" style="left: 0%"></div>
+          <div class="ruler-grid-line" style="left: 25%"></div>
+          <div class="ruler-grid-line" style="left: 50%"></div>
+          <div class="ruler-grid-line" style="left: 75%"></div>
+          <div class="ruler-grid-line" style="left: 100%"></div>
           <span>0ms</span>
           <span>{(totalMs * 0.25).toFixed(0)}ms</span>
           <span>{(totalMs * 0.5).toFixed(0)}ms</span>
@@ -94,8 +119,8 @@
         {#each filteredSpans as span (span.id)}
           {@const depth = getDepth(span, spanMap)}
           {@const left = (span.start_ms / totalMs) * 100}
-          {@const width = Math.max(0.8, (span.duration_ms / totalMs) * 100)}
-          {@const tone = getBarTone(span)}
+          {@const width = Math.max(0.6, (span.duration_ms / totalMs) * 100)}
+          {@const meta = getSpanCategory(span.name, span.status)}
 
           <div class="span-row-wrap" class:open={expanded[span.id]}>
             <div
@@ -107,19 +132,25 @@
             >
               <div class="span-label-col" style="padding-left: {depth * 14 + 8}px">
                 <span class="toggle-icon">{expanded[span.id] ? '▾' : '▸'}</span>
+                <span class="type-tag mono" style="color: {meta.color}; border-color: {meta.color}">
+                  {meta.cat}
+                </span>
                 <span class="span-name mono" title={span.name}>{span.name}</span>
-                {#if span.status === 'error'}
-                  <Badge tone="bad">err</Badge>
-                {/if}
               </div>
 
               <div class="timeline-col">
+                <div class="grid-line" style="left: 0%"></div>
+                <div class="grid-line" style="left: 25%"></div>
+                <div class="grid-line" style="left: 50%"></div>
+                <div class="grid-line" style="left: 75%"></div>
+                <div class="grid-line" style="left: 100%"></div>
+
                 <div
                   class="bar-fill"
-                  style="left: {left}%; width: {width}%; background-color: {tone};"
+                  style="left: {left}%; width: {width}%; background-color: {meta.color};"
                   title="{span.name}: {span.duration_ms}ms"
                 ></div>
-                <span class="bar-label mono" style="left: {Math.min(92, left + width + 0.5)}%">
+                <span class="bar-label mono" style="left: {Math.min(91, left + width + 0.6)}%">
                   {span.duration_ms}ms
                 </span>
               </div>
@@ -132,7 +163,7 @@
                   {#if span.parent_id}
                     <span>Parent: <code class="mono">{span.parent_id}</code></span>
                   {/if}
-                  <span>Start: {span.start_ms}ms</span>
+                  <span>Start: +{span.start_ms}ms</span>
                   <span>Duration: {span.duration_ms}ms</span>
                 </div>
                 {#if Object.keys(span.tags || {}).length}
@@ -196,6 +227,10 @@
     gap: 0.8rem;
     flex-wrap: wrap;
   }
+  .wrap-gap {
+    gap: 0.8rem;
+    align-items: center;
+  }
   .tab-group {
     display: flex;
     border: 1px solid var(--border);
@@ -213,6 +248,20 @@
   .tab-group button.active {
     background: var(--accent);
     color: #fff;
+  }
+  .toggle-btn {
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--panel);
+    padding: 0.2rem 0.5rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .toggle-btn.active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    border-color: var(--accent);
   }
   .filter-input {
     font: inherit;
@@ -232,9 +281,26 @@
   .ruler {
     display: flex;
     justify-content: space-between;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--muted);
     font-family: var(--mono);
+  }
+  .ruler-grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--border);
+    opacity: 0.5;
+  }
+  .grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--border);
+    opacity: 0.3;
+    pointer-events: none;
   }
   .spans-list {
     display: flex;
@@ -249,7 +315,7 @@
   .span-row {
     display: flex;
     align-items: center;
-    min-height: 2rem;
+    min-height: 2.1rem;
     cursor: pointer;
     user-select: none;
     transition: background 0.1s ease;
@@ -258,14 +324,21 @@
     background: color-mix(in srgb, var(--accent) 6%, transparent);
   }
   .span-label-col {
-    width: 38%;
-    min-width: 200px;
+    width: 40%;
+    min-width: 220px;
     display: flex;
     align-items: center;
     gap: 0.4rem;
     padding: 0.3rem 0.6rem;
     overflow: hidden;
     white-space: nowrap;
+  }
+  .type-tag {
+    font-size: 0.68rem;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    border: 1px solid;
+    font-weight: 600;
   }
   .toggle-icon {
     font-size: 0.75rem;
@@ -278,19 +351,19 @@
     text-overflow: ellipsis;
   }
   .timeline-col {
-    width: 62%;
+    width: 60%;
     position: relative;
-    height: 1.5rem;
+    height: 1.6rem;
     display: flex;
     align-items: center;
-    padding-right: 3.5rem;
+    padding-right: 4rem;
   }
   .bar-fill {
     position: absolute;
-    height: 0.75rem;
+    height: 0.8rem;
     border-radius: 3px;
     min-width: 3px;
-    opacity: 0.9;
+    opacity: 0.85;
   }
   .bar-label {
     position: absolute;
