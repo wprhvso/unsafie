@@ -3,7 +3,6 @@ collections:
   - name: community.general
   - name: community.crypto
   - name: prometheus.prometheus
-  - name: grafana.grafana
 
 roles:
   - name: geerlingguy.postgresql

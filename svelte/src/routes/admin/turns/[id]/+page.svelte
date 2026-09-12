@@ -6,10 +6,12 @@
   import Panel from '$lib/components/Panel.svelte';
   import Loader from '$lib/components/Loader.svelte';
   import Badge from '$lib/components/Badge.svelte';
+  import Waterfall from '$lib/components/Waterfall.svelte';
 
   const id = page.params.id;
   const detail = resource(() => admin.get(`/turns/${id}`));
   const live = resource(() => admin.get(`/turns/${id}/live`));
+  const trace = resource(() => admin.get(`/turns/${id}/trace`));
 </script>
 
 <svelte:head><title>unsafie — turn</title></svelte:head>
@@ -32,6 +34,16 @@
         {/if}
       </div>
       {#if t.result}<pre class="result">{t.result}</pre>{/if}
+    </Panel>
+
+    <Panel title="Trace & Execution Waterfall">
+      <Loader state={trace}>
+        {#if trace.data?.spans?.length || trace.data?.logs?.length}
+          <Waterfall data={trace.data} />
+        {:else}
+          <p class="muted pad">No trace data recorded for this turn.</p>
+        {/if}
+      </Loader>
     </Panel>
 
     {#if detail.data.parent || detail.data.children.length}
