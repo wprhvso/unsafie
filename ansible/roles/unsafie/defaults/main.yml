@@ -52,3 +52,4 @@ unsafie_otel_capture_content: false
 unsafie_node_version: "22"
 unsafie_build_frontend: true
 unsafie_chrome_no_sandbox: true
+unsafie_email_webhook_secret: "{{ vault_email_webhook_secret | default('') }}"

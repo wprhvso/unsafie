@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
     telegram_webhook_base_url: str = ""
     telegram_webhook_sync_interval: float = 60.0
+    email_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("EMAIL_WEBHOOK_SECRET", "UNSAFIE_EMAIL_WEBHOOK_SECRET"),
+    )
 
     job_lease: float = 300.0
     chat_lock_ttl: float = 30.0
