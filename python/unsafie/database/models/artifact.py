@@ -13,6 +13,8 @@ from unsafie.slugs import SLUG_LENGTH
 class ArtifactKind(StrEnum):
     MARKDOWN = "markdown"
     TURN = "turn"
+    TELEMETRY = "telemetry"
+    TELEMETRY = "telemetry"
 
 
 class Artifact(Base):
@@ -20,6 +22,8 @@ class Artifact(Base):
     __table_args__ = (
         Index("ix_artifacts_chat", "bot_id", "chat_id", "created_at"),
         Index("ix_artifacts_turn", "turn_id", unique=True, postgresql_where=text("kind = 'turn'")),
+        Index("ix_artifacts_turn_telemetry", "turn_id", unique=True, postgresql_where=text("kind = 'telemetry'")),
+        Index("ix_artifacts_telemetry", "turn_id", unique=True, postgresql_where=text("kind = 'telemetry'")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

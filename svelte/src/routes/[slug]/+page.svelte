@@ -3,6 +3,7 @@
 
   import Answer from '$lib/components/Answer.svelte';
   import Turn from '$lib/components/live/Turn.svelte';
+  import Telemetry from '$lib/components/live/Telemetry.svelte';
 
   function payload() {
     const el = typeof document === 'undefined' ? null : document.getElementById('payload');
@@ -34,7 +35,9 @@
 </script>
 
 {#if data?.kind === 'turn'}
-  <Turn token={slug} />
+  <Turn token={slug} telemetrySlug={data?.telemetry_slug} />
+{:else if data?.kind === 'telemetry'}
+  <Telemetry token={slug} turnSlug={data?.turn_slug} />
 {:else}
   <Answer content={typeof data?.content === 'string' ? data.content : null} title={data?.title} />
 {/if}

@@ -16,7 +16,8 @@
   import { timeline } from '$lib/live/timeline.svelte.js';
   import { zoomer } from '$lib/zoom.js';
 
-  let { token } = $props();
+  let { token, telemetrySlug = null } = $props();
+  let activeTelemetrySlug = $state(telemetrySlug);
 
   const log = timeline();
   const feed = log.state;
@@ -32,9 +33,7 @@
   let overrides = $state({});
   let openByDefault = $state(true);
   let control = $state.raw(null);
-  let traceData = $state(null);
-  let showTrace = $state(false);
-  let showLogs = $state(false);
+  
 
   const isOpen = (id) => overrides[id] ?? true;
 
@@ -55,26 +54,7 @@
   const running = $derived(status === 'live' || status === 'reconnecting');
   const outcome = $derived(feed.outcome ?? meta?.status ?? null);
 
-  let mergedItems = $derived.by(() => {
-    if (!showLogs || !traceData?.logs?.length) {
-      return feed.items;
-    }
-    const combined = [];
-    for (const item of feed.items) {
-      combined.push({ kind: 'entry', at: item.at || '', data: item });
-    }
-    for (const log of traceData.logs) {
-      combined.push({
-        kind: 'log',
-        at: log.timestamp || log._time || '',
-        data: log,
-        id: (log.timestamp || '') + (log.event || log.message || '')
-      });
-    }
-    combined.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-    return combined;
-  });
-
+  
 
   const elapsed = $derived.by(() => {
     const from = feed.startedAt ?? meta?.created_at;
@@ -112,6 +92,14 @@
   }
 
   onMount(() => {
+    if (!activeTelemetrySlug) {
+      fetch(`/api/pages/${token}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.telemetry_slug) activeTelemetrySlug = d.telemetry_slug;
+        })
+        .catch(() => {});
+    }
     fetch(`/api/pages/${token}/trace`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -179,33 +167,20 @@
   </div>
 
   <div class="side end">
-    {#if traceData?.spans?.length || traceData?.logs?.length}
-      <button
+    {#if activeTelemetrySlug}
+      <a
+        href="/{activeTelemetrySlug}"
         class="action-btn"
-        class:active={showTrace}
-        onclick={() => (showTrace = !showTrace)}
-        title="Toggle Waterfall Trace"
+        title="Open Diagnostics & Telemetry"
       >
-        <span class="mono">⚡ Trace</span>
-      </button>
-      <button
-        class="action-btn"
-        class:active={showLogs}
-        onclick={() => (showLogs = !showLogs)}
-        title="Toggle Integrated System Logs"
-      >
-        <span class="mono">📋 Logs</span>
-      </button>
+        <span class="mono">⚡ Telemetry</span>
+      </a>
     {/if}
   </div>
 </header>
 
 <ContextBar context={feed.context} limit={feed.contextLimit} />
-{#if showTrace && traceData}
-  <div class="trace-box">
-    <Waterfall data={traceData} />
-  </div>
-{/if}
+
 </div>
 
 <main>
@@ -226,39 +201,9 @@
     </div>
   {:else}
     <div class="log">
-      {#if showLogs}
-        {#each mergedItems as entity (entity.kind === 'entry' ? entity.data.id : entity.id)}
-          {#if entity.kind === 'entry'}
-            <Entry item={entity.data} />
-          {:else}
-            {@const l = entity.data}
-            {@const lvl = (l.level || 'info').toLowerCase()}
-            {@const tone = lvl === 'error' ? 'bad' : lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok'}
-            <article class="log-entry">
-              <div class="log-rail">
-                <span class="log-dot {tone}"></span>
-              </div>
-              <div class="log-card">
-                <div class="row spread log-head">
-                  <div class="row gap">
-                    <Badge {tone}>{lvl}</Badge>
-                    <span class="mono bold event-text">{l.event || l.message || '—'}</span>
-                    {#if l.logger}<span class="mono muted tiny">{l.logger}</span>{/if}
-                  </div>
-                  <time class="muted tiny mono">{when(l.timestamp || l._time)}</time>
-                </div>
-                <div class="log-payload">
-                  <Json value={l} />
-                </div>
-              </div>
-            </article>
-          {/if}
-        {/each}
-      {:else}
-        {#each feed.items as item (item.id)}
-          <Entry {item} />
-        {/each}
-      {/if}
+      {#each feed.items as item (item.id)}
+        <Entry {item} />
+      {/each}
     </div>
     {#if running}
       <p class="tail muted small">

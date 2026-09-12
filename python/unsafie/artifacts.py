@@ -40,3 +40,33 @@ async def of_turn(turn_id: UUID) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).of_turn(turn_id)
     return artifact.slug if artifact is not None else None
+
+
+async def telemetry_for_turn(turn: Turn) -> str | None:
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).for_telemetry(
+            turn_id=turn.id, bot_id=turn.bot_id, chat_id=turn.chat_id,
+        )
+    return artifact.slug if artifact is not None else None
+
+
+async def telemetry_of_turn(turn_id: UUID) -> str | None:
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).of_telemetry(turn_id)
+    return artifact.slug if artifact is not None else None
+
+
+async def telemetry_for_turn(
+    turn_id: UUID, bot_id: int | None = None, chat_id: int | None = None
+) -> str | None:
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).for_telemetry(
+            turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
+        )
+    return artifact.slug if artifact is not None else None
+
+
+async def of_telemetry(turn_id: UUID) -> str | None:
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).telemetry_of_turn(turn_id)
+    return artifact.slug if artifact is not None else None

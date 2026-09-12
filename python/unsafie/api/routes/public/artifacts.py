@@ -35,6 +35,16 @@ async def page_json(slug: str):
     payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
     if artifact.turn_id:
         payload["turn_id"] = str(artifact.turn_id)
+        if artifact.kind == ArtifactKind.TURN:
+            telem = await ArtifactRepository(session).for_telemetry(
+                turn_id=artifact.turn_id, bot_id=artifact.bot_id, chat_id=artifact.chat_id,
+            )
+            if telem:
+                payload["telemetry_slug"] = telem.slug
+        elif artifact.kind == ArtifactKind.TELEMETRY:
+            turn_art = await ArtifactRepository(session).of_turn(artifact.turn_id)
+            if turn_art:
+                payload["turn_slug"] = turn_art.slug
     if artifact.kind == ArtifactKind.MARKDOWN:
         payload["content"] = artifact.content or ""
     return JSONResponse(payload)
@@ -77,6 +87,18 @@ async def spa(path: str, request: Request):
     if artifact is None:
         return HTMLResponse(static.not_found(slug), status_code=404)
     payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
+    if artifact.turn_id:
+        payload["turn_id"] = str(artifact.turn_id)
+        if artifact.kind == ArtifactKind.TURN:
+            telem = await ArtifactRepository(session).for_telemetry(
+                turn_id=artifact.turn_id, bot_id=artifact.bot_id, chat_id=artifact.chat_id,
+            )
+            if telem:
+                payload["telemetry_slug"] = telem.slug
+        elif artifact.kind == ArtifactKind.TELEMETRY:
+            turn_art = await ArtifactRepository(session).of_turn(artifact.turn_id)
+            if turn_art:
+                payload["turn_slug"] = turn_art.slug
     if artifact.kind == ArtifactKind.MARKDOWN:
         payload["content"] = artifact.content or ""
     if "application/json" in (request.headers.get("accept") or ""):

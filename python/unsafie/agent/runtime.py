@@ -10,7 +10,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, ChosenInlineResult, InlineKeyboardMarkup, Message
 
-from unsafie import events, telemetry
+from unsafie import artifacts, events, telemetry
 from unsafie.agent import (
     cancel,
     checkpoints,
@@ -338,11 +338,13 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                             outcome.status if outcome.error is None else short(outcome.error, 1000)
                         )
                         logger.info("%s finished with %s", prefix, outcome.status)
+                        telemetry_slug = await artifacts.telemetry_for_turn(turn)
+                        telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
                         await notify(
                             bot,
                             turn,
                             _failure_text(locale, outcome),
-                            reply_markup=retry_markup(str(turn.id), locale),
+                            reply_markup=retry_markup(str(turn.id), locale, telemetry_url=telemetry_url),
                         )
                         return
                     leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
@@ -376,11 +378,13 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             logger.exception("%s turn crashed", prefix)
             await queue.clear(turn.id)
             note = "crashed"
+            telemetry_slug = await artifacts.telemetry_for_turn(turn)
+            telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
             await notify(
                 bot,
                 turn,
                 t("agent-failure", locale),
-                reply_markup=retry_markup(str(turn.id), locale),
+                reply_markup=retry_markup(str(turn.id), locale, telemetry_url=telemetry_url),
             )
         finally:
             with telemetry.span("agent.teardown", attributes={attrs.TURN_ID: str(turn.id)}):
@@ -909,11 +913,13 @@ async def resume_turn(turn_id: UUID) -> None:
                         outcome.status if outcome.error is None else short(outcome.error, 1000)
                     )
                     logger.info("%s resume finished with %s", prefix, outcome.status)
+                    telemetry_slug = await artifacts.telemetry_for_turn(turn)
+                    telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
                     await notify(
                         bot,
                         turn,
                         _failure_text(locale, outcome),
-                        reply_markup=retry_markup(str(turn.id), locale),
+                        reply_markup=retry_markup(str(turn.id), locale, telemetry_url=telemetry_url),
                     )
                     return
                 leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
@@ -944,11 +950,13 @@ async def resume_turn(turn_id: UUID) -> None:
         logger.exception("%s resume turn crashed", prefix)
         await queue.clear(turn.id)
         note = "crashed"
+        telemetry_slug = await artifacts.telemetry_for_turn(turn)
+        telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
         await notify(
             bot,
             turn,
             t("agent-failure", locale),
-            reply_markup=retry_markup(str(turn.id), locale),
+            reply_markup=retry_markup(str(turn.id), locale, telemetry_url=telemetry_url),
         )
     finally:
         await cancel_subagents_of(turn.id)
