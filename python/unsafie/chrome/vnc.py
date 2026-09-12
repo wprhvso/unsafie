@@ -30,7 +30,16 @@ def listening(port: int, timeout: float = WAIT) -> bool:
 
 def running(display: str) -> bool:
     number = display.lstrip(":").split(".")[0]
-    return bool(number) and os.path.exists(f"{SOCKETS}/X{number}")
+    if not number:
+        return False
+    if os.path.exists(f"{SOCKETS}/X{number}"):
+        return True
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.connect(f"\0/tmp/.X11-unix/X{number}")
+            return True
+    except OSError:
+        return False
 
 
 def ensure(size: str = SIZE, display: str = DISPLAY) -> str:
