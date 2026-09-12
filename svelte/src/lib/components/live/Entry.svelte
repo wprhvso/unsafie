@@ -32,25 +32,26 @@
   {/if}
 
 {:else if item.type === 'llm'}
-  <article class="entry llm">
-    <div class="card">
-      {#if item.thoughts && item.thoughts.trim()}
+  {#if item.thoughts && item.thoughts.trim()}
+    <article class="entry think">
+      <div class="card thought-card">
         <div class="thought-body prose">
           <Markdown source={item.thoughts} streaming={item.streaming} />
         </div>
-      {/if}
-      {#if item.text && item.text.trim()}
-        <div class="prose" style="padding: 0.6rem 0.8rem;">
-          <Markdown source={item.text} streaming={item.streaming} />
-        </div>
-      {/if}
-    </div>
-  </article>
+      </div>
+    </article>
+  {/if}
+  {#if item.text && item.text.trim()}
+    <article class="entry llm direct-code">
+      <Markdown source={item.text} streaming={item.streaming} />
+    </article>
+  {/if}
 
 {:else if item.type === 'code'}
   {#if item.output || item.error}
+    {@const isBad = Boolean(item.error) || item.status === 'failed' || (item.exit_code !== null && item.exit_code !== 0)}
     <article class="entry code">
-      <div class="card output-card">
+      <div class="card output-card" class:ok-border={!isBad} class:bad-border={isBad}>
         {#if item.output}
           <div class="terminal-wrap">
             <div class="tools"><Copy text={item.output} label="Copy Output" /></div>
@@ -65,12 +66,8 @@
   {/if}
 
 {:else if item.type === 'text' || item.type === 'reply'}
-  <article class="entry {item.type}">
-    <div class="card prose-card">
-      <div class="prose" style="padding: 0.6rem 0.8rem;">
-        <Markdown source={item.text} streaming={item.streaming} />
-      </div>
-    </div>
+  <article class="entry {item.type} direct-code">
+    <Markdown source={item.text} streaming={item.streaming} />
   </article>
 
 {:else if item.type === 'prompt'}
@@ -91,7 +88,7 @@
 
 {:else if item.type === 'error'}
   <article class="entry error bad">
-    <div class="card error-box">
+    <div class="card error-box bad-border">
       <strong>Error:</strong> {item.message || item.text}
     </div>
   </article>
@@ -125,12 +122,26 @@
     width: 100%;
   }
 
+  .direct-code {
+    width: 100%;
+  }
+  .direct-code :global(pre) {
+    margin: 0;
+  }
+
   .card {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel);
     overflow: hidden;
     min-width: 0;
+  }
+
+  .ok-border {
+    border: 1.5px solid var(--ok) !important;
+  }
+  .bad-border {
+    border: 1.5px solid var(--bad) !important;
   }
 
   .thought-card {
