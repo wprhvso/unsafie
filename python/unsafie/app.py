@@ -1,6 +1,7 @@
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -125,6 +126,10 @@ async def health(response: Response) -> dict[str, object]:
         "role": settings.role,
         "redis": redis,
     }
+
+
+if (kasm_www := Path("/usr/share/kasmvnc/www")).is_dir():
+    app.mount("/kasmvnc", StaticFiles(directory=kasm_www, html=True), name="kasmvnc")
 
 
 if (assets := static.assets_dir()) is not None:

@@ -1,12 +1,12 @@
 import asyncio
 import contextlib
 import json
-from unsafie.log import get_logger
 import secrets
 import time
 from dataclasses import dataclass
 
 from unsafie import cluster
+from unsafie.log import get_logger
 from unsafie.pool import channel, keys
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
@@ -43,6 +43,20 @@ async def _load(name: str) -> dict | None:
 async def publish(user_id: int, machine: str, kind: str, port: int) -> str:
     slug = secrets.token_urlsafe(9)
     await cluster.client().set(
+        slug_key(slug),
+        json.dumps({"user": user_id, "machine": machine, "kind": kind, "port": port}),
+        ex=int(settings.pool_desktop_ttl),
+    )
+    logger.info("pool desktop %s -> %s:%s (%s)", slug, machine, port, kind)
+    return slug
+
+
+def publish_sync(user_id: int, machine: str, kind: str, port: int) -> str:
+    import redis
+
+    r = redis.from_url(settings.redis_url)
+    slug = secrets.token_urlsafe(9)
+    r.set(
         slug_key(slug),
         json.dumps({"user": user_id, "machine": machine, "kind": kind, "port": port}),
         ex=int(settings.pool_desktop_ttl),

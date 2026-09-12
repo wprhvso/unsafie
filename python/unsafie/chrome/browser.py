@@ -95,9 +95,17 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         profile_id = created.id
 
     vnc_port = None
+    vnc_slug = None
+    vnc_url = None
     if not headless:
         vnc.ensure(size, display=vnc.DISPLAY)
-        vnc_port = vnc.RFB_PORT if vnc.listening(vnc.RFB_PORT, 2.0) else None
+        if vnc.listening(vnc.RFB_PORT, 2.0):
+            vnc_port = vnc.RFB_PORT
+            with contextlib.suppress(Exception):
+                from unsafie.pool import tunnels
+
+                vnc_slug = tunnels.publish_sync(0, "local", "vnc", vnc_port)
+                vnc_url = f"{settings.public_origin}/m/{vnc_slug}"
 
     endpoint = f"ws://{host}:{port}/playwright/{profile_id}"
     return {
@@ -108,6 +116,8 @@ def launch(profile: str | None = None, size: str = "1920x1080", headless: bool =
         "headless": headless,
         "size": size,
         "vnc_port": vnc_port,
+        "vnc_slug": vnc_slug,
+        "vnc_url": vnc_url,
         "started_at": time.time(),
     }
 

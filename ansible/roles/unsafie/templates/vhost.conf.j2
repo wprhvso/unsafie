@@ -32,6 +32,12 @@ server {
         try_files $uri =404;
     }
 
+    location /kasmvnc/ {
+        alias /usr/share/kasmvnc/www/;
+        index index.html;
+        try_files $uri $uri/ =404;
+    }
+
     location ~ ^/api/(m/[^/]+/stream|v1/machines/[^/]+/tunnel) {
         proxy_pass http://unsafie_app;
         proxy_http_version 1.1;

@@ -1,8 +1,9 @@
+import asyncio
 import contextlib
-from unsafie.log import get_logger
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
+from unsafie.log import get_logger
 from unsafie.pool import tunnels
 from unsafie.settings import settings
 
@@ -42,6 +43,57 @@ async def stream(websocket: WebSocket, slug: str) -> None:
     if found is None:
         logger.info("desktop %s: no such link", slug)
         await _refuse(websocket, GONE, "this link has expired")
+        return
+
+    if str(found.get("machine")) in ("local", "host") or found.get("local"):
+        port = int(found["port"])
+        try:
+            reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        except OSError as broken:
+            logger.warning("desktop %s: local connect failed: %s", slug, broken)
+            await _refuse(websocket, REFUSED, f"local connect failed: {broken}")
+            return
+
+        done = asyncio.Event()
+
+        async def ws_to_tcp():
+            try:
+                while not done.is_set():
+                    msg = await websocket.receive()
+                    if msg["type"] == "websocket.disconnect":
+                        break
+                    data = msg.get("bytes")
+                    if data is None and msg.get("text") is not None:
+                        data = msg["text"].encode()
+                    if data:
+                        writer.write(data)
+                        await writer.drain()
+            except Exception:
+                pass
+            finally:
+                done.set()
+
+        async def tcp_to_ws():
+            try:
+                while not done.is_set():
+                    data = await reader.read(65536)
+                    if not data:
+                        break
+                    await websocket.send_bytes(data)
+            except Exception:
+                pass
+            finally:
+                done.set()
+
+        tasks = [asyncio.create_task(ws_to_tcp()), asyncio.create_task(tcp_to_ws())]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for t in tasks:
+                t.cancel()
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
         return
 
     machine = str(found["machine"])
