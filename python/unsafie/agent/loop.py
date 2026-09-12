@@ -53,12 +53,10 @@ async def run(
     result = Result(credential_id=credential_id)
     clear_contextvars()
     bind_contextvars(
-        turn_id=ctx.turn_id,
-        session_id=ctx.session_id,
+        turn_id=str(ctx.turn_id),
         bot_id=ctx.bot_id,
         chat_id=ctx.chat_id,
         user_id=ctx.user_id,
-        agent_name=ctx.name,
         model=model,
     )
     logger.info("agent.turn.started", step=initial_step, credential_id=credential_id)

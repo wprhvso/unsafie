@@ -1,3 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_DIR="."
+if [ -d "python/unsafie" ]; then
+    BASE_DIR="python"
+fi
+
+cat << 'EOF' > "${BASE_DIR}/unsafie/agent/session.py"
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -35,3 +44,34 @@ class Ctx:
 async def current_turn(ctx: Ctx) -> Turn | None:
     async with SessionLocal() as session:
         return await TurnRepository(session).get(ctx.turn_id)
+EOF
+
+python3 - << EOF
+from pathlib import Path
+
+target = Path("${BASE_DIR}/unsafie/agent/loop.py")
+content = target.read_text(encoding="utf-8")
+
+old = """    clear_contextvars()
+    bind_contextvars(
+        turn_id=ctx.turn_id,
+        session_id=ctx.session_id,
+        bot_id=ctx.bot_id,
+        chat_id=ctx.chat_id,
+        user_id=ctx.user_id,
+        agent_name=ctx.name,
+        model=model,
+    )"""
+
+new = """    clear_contextvars()
+    bind_contextvars(
+        turn_id=str(ctx.turn_id),
+        bot_id=ctx.bot_id,
+        chat_id=ctx.chat_id,
+        user_id=ctx.user_id,
+        model=model,
+    )"""
+
+if old in content:
+    target.write_text(content.replace(old, new, 1), encoding="utf-8")
+EOF
