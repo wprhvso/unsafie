@@ -8,6 +8,7 @@ Requires=postgresql.service
 Type=exec
 User={{ unsafie_user }}
 Group={{ unsafie_group }}
+SupplementaryGroups=unsafie-sandbox
 WorkingDirectory={{ unsafie_src }}/python
 EnvironmentFile={{ unsafie_config_dir }}/app.env
 EnvironmentFile={{ unsafie_config_dir }}/app-%i.env
@@ -22,14 +23,14 @@ TimeoutStopSec={{ (unsafie_shutdown_grace | int) + 30 }}
 MemoryHigh={{ unsafie_memory_high }}
 MemoryMax={{ unsafie_memory_max }}
 
-NoNewPrivileges=true
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=false
 ReadWritePaths={{ unsafie_home }}
 ProtectKernelTunables=true
-ProtectControlGroups=true
-RestrictSUIDSGID=true
+ProtectControlGroups=false
+RestrictSUIDSGID=false
 
 StandardOutput=journal
 StandardError=journal

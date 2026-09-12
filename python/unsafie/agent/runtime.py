@@ -40,10 +40,8 @@ from unsafie.database.repositories.opal_session import OpalSessionRepository
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.update import UpdateRepository
 from unsafie.database.repositories.user import UserRepository
-from unsafie.errors import OpsError
 from unsafie.fluent import t
 from unsafie.log import short
-from unsafie.pool import leases
 from unsafie.settings import settings
 from unsafie.telegram import bots, render, sender
 from unsafie.telegram.chat_action import typing
@@ -259,22 +257,6 @@ def _failure_text(locale: str, outcome: Outcome) -> str:
 
 async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None:
     turn = plan.turn
-
-    try:
-        machine = await leases.ensure(
-            user_id=turn.user_id,
-            chat_id=turn.chat_id,
-            turn_id=turn.id,
-            bot_id=turn.bot_id,
-        )
-    except OpsError as e:
-        logger.warning("bot=%s chat=%s turn=%s pool exhausted: %s", turn.bot_id, turn.chat_id, turn.id, e)
-        msg = "⏳ Все раннеры сейчас заняты. Освободите машину через /pool release или повторите запрос позже."
-        await notify(bot, turn, msg)
-        async with SessionLocal() as session:
-            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "pool exhausted")
-        return
-
     ctx = Ctx(
         bot,
         turn.bot_id,
@@ -283,7 +265,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
         turn.id,
         locale,
         inline_message_id=turn.inline_message_id,
-        machine_name=machine.name,
+        machine_name="sandbox",
     )
     prefix = ctx.prefix
     history = await segments.load(turn)
@@ -475,21 +457,7 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
         logger.error("subagent turn=%s bot=%s not found", turn_id, turn.bot_id)
         return
 
-    try:
-        machine = await leases.ensure(
-            user_id=turn.user_id,
-            chat_id=turn.chat_id,
-            turn_id=turn.id,
-            bot_id=turn.bot_id,
-        )
-    except OpsError as e:
-        logger.warning("subagent turn=%s pool exhausted: %s", turn.id, e)
-        async with SessionLocal() as session:
-            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "pool exhausted")
-        await notify_subagent_done(turn.id)
-        return
-
-    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale, machine_name=machine.name)
+    ctx = Ctx(bot, turn.bot_id, turn.chat_id, turn.user_id, turn.id, locale, machine_name="sandbox")
     prefix = f"[subagent] {ctx.prefix}"
     system_prompt = SUBAGENT_SYSTEM_PROMPT
     messages = [request.user(prompt)]
@@ -863,19 +831,6 @@ async def resume_turn(turn_id: UUID) -> None:
         logger.error("turn=%s bot=%s not found", turn.id, turn.bot_id)
         return
 
-    try:
-        machine = await leases.ensure(
-            user_id=turn.user_id,
-            chat_id=turn.chat_id,
-            turn_id=turn.id,
-            bot_id=turn.bot_id,
-        )
-    except OpsError as e:
-        logger.warning("resume turn=%s pool exhausted: %s", turn.id, e)
-        async with SessionLocal() as session:
-            await TurnRepository(session).finish(turn.id, TurnStatus.FAILED, "pool exhausted")
-        return
-
     ctx = Ctx(
         bot,
         turn.bot_id,
@@ -884,7 +839,7 @@ async def resume_turn(turn_id: UUID) -> None:
         turn.id,
         locale,
         inline_message_id=turn.inline_message_id,
-        machine_name=machine.name,
+        machine_name="sandbox",
     )
     prefix = ctx.prefix
 
