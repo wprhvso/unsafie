@@ -105,8 +105,6 @@ def start_display(size: str, display: str = DISPLAY) -> tuple[str, subprocess.Po
 
 
 def attach(display: str, size: str = SIZE) -> str:
-    if listening(RFB_PORT, 0.5):
-        return ""
     if not running(display):
         return f"there is no X display on {display}"
     kasm = shutil.which("Xkasmvnc")
@@ -114,26 +112,30 @@ def attach(display: str, size: str = SIZE) -> str:
     if kasm and proxy:
         width, _, height = size.partition("x")
         vnc_disp = ":98" if display != ":98" else ":96"
-        subprocess.Popen(
-            [
-                kasm,
-                vnc_disp,
-                "-geometry",
-                f"{width}x{height}",
-                "-depth",
-                "24",
-                "-rfbport",
-                str(RFB_PORT),
-                "-SecurityTypes",
-                "None",
-                "-interface",
-                "127.0.0.1",
-                "-AlwaysShared",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        if not listening(RFB_PORT, 0.5):
+            subprocess.Popen(
+                [
+                    kasm,
+                    vnc_disp,
+                    "-geometry",
+                    f"{width}x{height}",
+                    "-depth",
+                    "24",
+                    "-rfbport",
+                    str(RFB_PORT),
+                    "-SecurityTypes",
+                    "None",
+                    "-interface",
+                    "127.0.0.1",
+                    "-AlwaysShared",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         if listening(RFB_PORT, BOOT):
+            pkill = shutil.which("pkill")
+            if pkill:
+                subprocess.run([pkill, "-f", f"kasmxproxy.*{display}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.Popen(
                 [proxy, "-a", display, "-v", vnc_disp],
                 stdout=subprocess.DEVNULL,
@@ -143,6 +145,8 @@ def attach(display: str, size: str = SIZE) -> str:
     x11vnc = shutil.which("x11vnc")
     if x11vnc is None:
         return "neither kasmvnc nor x11vnc is installed"
+    if listening(RFB_PORT, 0.5):
+        return ""
     subprocess.Popen(
         [
             x11vnc,

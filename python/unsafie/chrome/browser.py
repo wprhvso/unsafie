@@ -23,18 +23,14 @@ class BrowserError(RuntimeError):
 
 
 def state_dir() -> Path:
-    try:
-        STATE.mkdir(parents=True, exist_ok=True)
-        return STATE
-    except OSError:
-        fallback = Path.home() / ".local" / "state" / "unsafie"
-        fallback.mkdir(parents=True, exist_ok=True)
-        return fallback
+    target = Path.home() / ".local" / "state" / "unsafie"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 def state_file() -> Path:
-    turn_id = os.environ.get("UNSAFIE_TURN")
-    filename = f"kameleo_{turn_id}.json" if turn_id else "kameleo.json"
+    token = os.environ.get("UNSAFIE_CHAT") or os.environ.get("UNSAFIE_TURN")
+    filename = f"kameleo_{token}.json" if token else "kameleo.json"
     return state_dir() / filename
 
 
