@@ -117,7 +117,7 @@ def generate(
         while time.monotonic() < set_deadline:
             time.sleep(1)
             res = browser.evaluate("""(() => {
-                const btns = Array.from(document.querySelectorAll("button, a, [role=\"button\"]"));
+                const btns = Array.from(document.querySelectorAll('button, a, [role="button"]'));
                 for (const b of btns) {
                     const t = (b.innerText || b.textContent || "").trim().toLowerCase();
                     if (t === "continue" || t.includes("continue") || t.includes("продолжить")) {
