@@ -1,67 +1,44 @@
-from pathlib import Path
+import os
+
+PAGE_SIZE = os.sysconf("SC_PAGE_SIZE") or 4096
 
 
-def _get_process_tree_pids(root_pid: int) -> set[int]:
-    pids = {root_pid}
-    proc = Path("/proc")
-    if not proc.is_dir():
-        return pids
+def get_pgrp_stats(pgid: int) -> tuple[float, int]:
+    total_rss_bytes = 0
+    total_cpu_ticks = 0
     try:
-        for entry in proc.iterdir():
-            if not entry.name.isdigit():
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
                 continue
-            pid = int(entry.name)
+            pid = int(entry)
             try:
-                status_file = entry / "status"
-                if not status_file.is_file():
+                with open(f"/proc/{pid}/stat", "rb") as f:
+                    data = f.read()
+                idx = data.rfind(b")")
+                if idx == -1:
                     continue
-                with open(status_file, encoding="utf-8", errors="ignore") as f:
-                    for line in f:
-                        if line.startswith("PPid:"):
-                            ppid = int(line.split()[1])
-                            if ppid in pids:
-                                pids.add(pid)
-                            break
-            except (FileNotFoundError, ProcessLookupError, PermissionError):
+                fields = data[idx + 2 :].split()
+                if int(fields[2]) == pgid or pid == pgid:
+                    total_cpu_ticks += int(fields[11]) + int(fields[12])
+                    with open(f"/proc/{pid}/statm") as fm:
+                        pages = int(fm.read().split()[1])
+                        total_rss_bytes += pages * PAGE_SIZE
+            except (FileNotFoundError, ProcessLookupError, PermissionError, IndexError, ValueError):
                 continue
     except Exception:
         pass
-    return pids
+    rss_mb = round(total_rss_bytes / (1024 * 1024), 2)
+    return rss_mb, total_cpu_ticks
 
 
 def get_tree_rss_mb(root_pid: int) -> float:
-    pids = _get_process_tree_pids(root_pid)
-    total_kb = 0
-    for pid in pids:
-        try:
-            with open(f"/proc/{pid}/status", encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    if line.startswith("VmRSS:"):
-                        parts = line.split()
-                        if len(parts) >= 2 and parts[1].isdigit():
-                            total_kb += int(parts[1])
-                        break
-        except (FileNotFoundError, ProcessLookupError, PermissionError):
-            continue
-    return round(total_kb / 1024.0, 2)
+    rss, _ = get_pgrp_stats(root_pid)
+    return rss
 
 
 def get_tree_cpu_ticks(root_pid: int) -> int:
-    pids = _get_process_tree_pids(root_pid)
-    total_ticks = 0
-    for pid in pids:
-        try:
-            with open(f"/proc/{pid}/stat", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-                idx = content.rfind(")")
-                if idx != -1:
-                    fields = content[idx + 2 :].split()
-                    utime = int(fields[11])
-                    stime = int(fields[12])
-                    total_ticks += utime + stime
-        except (FileNotFoundError, ProcessLookupError, PermissionError, IndexError, ValueError):
-            continue
-    return total_ticks
+    _, ticks = get_pgrp_stats(root_pid)
+    return ticks
 
 
 def get_net_bytes() -> tuple[int, int]:
@@ -69,8 +46,7 @@ def get_net_bytes() -> tuple[int, int]:
     tx = 0
     try:
         with open("/proc/net/dev", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()[2:]
-            for line in lines:
+            for line in f.readlines()[2:]:
                 parts = line.split(":")
                 if len(parts) == 2:
                     iface = parts[0].strip()

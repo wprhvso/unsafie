@@ -268,9 +268,9 @@ async def rerun(run_id: int, user: CurrentUser):
 
 
 @router.get("/runs/{run_id}/metrics")
-async def get_run_metrics(run_id: int, user: CurrentUser):
+async def get_run_metrics(run_id: int, user: CurrentUser, job: str | None = None):
     async with SessionLocal() as session:
-        metrics = await CiRepository(session).get_metrics(run_id)
+        metrics = await CiRepository(session).get_metrics(run_id, job_name=job)
         return [
             {
                 "time": m.recorded_at.isoformat(),
@@ -278,6 +278,7 @@ async def get_run_metrics(run_id: int, user: CurrentUser):
                 "rss": m.memory_rss_mb,
                 "rx": m.network_rx_kbps,
                 "tx": m.network_tx_kbps,
+                "job": m.job_name,
             }
             for m in metrics
         ]

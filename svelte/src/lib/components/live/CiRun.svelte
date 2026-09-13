@@ -20,8 +20,11 @@
   let rss = $state(0);
   let peakRss = $state(0);
   let rx = $state(0);
+  let peakRx = $state(0);
   let tx = $state(0);
+  let peakTx = $state(0);
 
+  let metricHistory = $state([]);
   let evSource = null;
 
   async function fetchRun() {
@@ -31,6 +34,29 @@
         selectedJob = run.jobs[0].name;
       }
     } catch {
+    }
+  }
+
+  async function fetchMetrics() {
+    try {
+      const url = selectedJob
+        ? `/api/ci/runs/${runId}/metrics?job=${encodeURIComponent(selectedJob)}`
+        : `/api/ci/runs/${runId}/metrics`;
+      const data = await api.get(url) || [];
+      metricHistory = data;
+      if (metricHistory.length) {
+        peakCpu = Math.max(...metricHistory.map(m => m.cpu || 0), 0);
+        peakRss = Math.max(...metricHistory.map(m => m.rss || 0), 0);
+        peakRx = Math.max(...metricHistory.map(m => m.rx || 0), 0);
+        peakTx = Math.max(...metricHistory.map(m => m.tx || 0), 0);
+        const last = metricHistory[metricHistory.length - 1];
+        cpu = last.cpu || 0;
+        rss = last.rss || 0;
+        rx = last.rx || 0;
+        tx = last.tx || 0;
+      }
+    } catch {
+      metricHistory = [];
     }
   }
 
@@ -66,18 +92,33 @@
         } else if (data.type === 'log') {
           logs += data.chunk || '';
         } else if (data.type === 'metric') {
-          cpu = data.cpu || 0;
-          if (cpu > peakCpu) peakCpu = cpu;
-          rss = data.rss || 0;
-          if (rss > peakRss) peakRss = rss;
-          rx = data.rx || 0;
-          tx = data.tx || 0;
+          if (!selectedJob || data.job === selectedJob) {
+            cpu = data.cpu || 0;
+            if (cpu > peakCpu) peakCpu = cpu;
+            rss = data.rss || 0;
+            if (rss > peakRss) peakRss = rss;
+            rx = data.rx || 0;
+            if (rx > peakRx) peakRx = rx;
+            tx = data.tx || 0;
+            if (tx > peakTx) peakTx = tx;
+            metricHistory.push({
+              time: data.time || new Date().toISOString(),
+              cpu,
+              rss,
+              rx,
+              tx,
+            });
+            if (metricHistory.length > 600) {
+              metricHistory.shift();
+            }
+          }
         } else if (data.type === 'status') {
           if (run) {
             run.status = data.status;
             run.exit_code = data.exit_code;
           }
           fetchRun();
+          fetchMetrics();
         }
       } catch {
       }
@@ -88,8 +129,17 @@
     };
   }
 
+  function selectJob(name) {
+    selectedJob = name;
+    setupStream();
+    fetchMetrics();
+  }
+
   onMount(() => {
-    fetchRun().then(setupStream);
+    fetchRun().then(() => {
+      setupStream();
+      fetchMetrics();
+    });
     return () => {
       if (evSource) evSource.close();
     };
@@ -102,6 +152,30 @@
   );
 
   const renderedLogs = $derived(ansiToHtml(filteredLogs));
+
+  function buildPath(items, key, maxVal, width = 240, height = 46) {
+    if (!items || items.length < 2) return '';
+    const m = Math.max(maxVal, 1);
+    const step = width / (items.length - 1);
+    return items.map((p, i) => {
+      const x = (i * step).toFixed(1);
+      const val = Math.max(p[key] || 0, 0);
+      const y = (height - (val / m) * (height - 6) - 3).toFixed(1);
+      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(' ');
+  }
+
+  const cpuMax = $derived(Math.max(peakCpu, 100));
+  const cpuLine = $derived(buildPath(metricHistory, 'cpu', cpuMax));
+  const cpuArea = $derived(cpuLine ? `${cpuLine} L 240 46 L 0 46 Z` : '');
+
+  const rssMax = $derived(Math.max(peakRss * 1.15, 10));
+  const rssLine = $derived(buildPath(metricHistory, 'rss', rssMax));
+  const rssArea = $derived(rssLine ? `${rssLine} L 240 46 L 0 46 Z` : '');
+
+  const netMax = $derived(Math.max(peakRx, peakTx, 50));
+  const rxLine = $derived(buildPath(metricHistory, 'rx', netMax));
+  const txLine = $derived(buildPath(metricHistory, 'tx', netMax));
 </script>
 
 {#if !run}
@@ -146,24 +220,83 @@
 
     <div class="telemetry-grid">
       <div class="metric-card">
-        <div class="metric-label">CPU Utilization</div>
-        <div class="metric-val">{cpu}%</div>
-        <div class="metric-sub">Peak: {peakCpu}%</div>
+        <div class="metric-head">
+          <span class="metric-label">CPU Utilization</span>
+          <span class="metric-val">{cpu}%</span>
+        </div>
+        <div class="chart-box">
+          <svg viewBox="0 0 240 46" class="sparkline" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45" />
+                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            {#if cpuArea}
+              <path d={cpuArea} fill="url(#cpuGrad)" />
+              <path d={cpuLine} fill="none" stroke="#38bdf8" stroke-width="2" vector-effect="non-scaling-stroke" />
+            {:else}
+              <line x1="0" y1="44" x2="240" y2="44" stroke="#334155" stroke-dasharray="3,3" />
+            {/if}
+          </svg>
+        </div>
+        <div class="metric-sub">Peak: {peakCpu}% · {metricHistory.length}s recorded</div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Memory (RSS)</div>
-        <div class="metric-val">{rss >= 1024 ? `${(rss / 1024).toFixed(2)} GB` : `${rss} MB`}</div>
+        <div class="metric-head">
+          <span class="metric-label">Memory (RSS)</span>
+          <span class="metric-val">{rss >= 1024 ? `${(rss / 1024).toFixed(2)} GB` : `${rss} MB`}</span>
+        </div>
+        <div class="chart-box">
+          <svg viewBox="0 0 240 46" class="sparkline" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="rssGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#a855f7" stop-opacity="0.45" />
+                <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            {#if rssArea}
+              <path d={rssArea} fill="url(#rssGrad)" />
+              <path d={rssLine} fill="none" stroke="#a855f7" stroke-width="2" vector-effect="non-scaling-stroke" />
+            {:else}
+              <line x1="0" y1="44" x2="240" y2="44" stroke="#334155" stroke-dasharray="3,3" />
+            {/if}
+          </svg>
+        </div>
         <div class="metric-sub">Peak: {peakRss >= 1024 ? `${(peakRss / 1024).toFixed(2)} GB` : `${peakRss} MB`}</div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Network I/O</div>
-        <div class="metric-val">{rx} KB/s ↓</div>
-        <div class="metric-sub">{tx} KB/s ↑</div>
+        <div class="metric-head">
+          <span class="metric-label">Network I/O</span>
+          <span class="metric-val">{rx} KB/s ↓</span>
+        </div>
+        <div class="chart-box">
+          <svg viewBox="0 0 240 46" class="sparkline" preserveAspectRatio="none">
+            {#if rxLine}
+              <path d={rxLine} fill="none" stroke="#22c55e" stroke-width="2" vector-effect="non-scaling-stroke" />
+            {/if}
+            {#if txLine}
+              <path d={txLine} fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3,2" vector-effect="non-scaling-stroke" />
+            {/if}
+            {#if !rxLine && !txLine}
+              <line x1="0" y1="44" x2="240" y2="44" stroke="#334155" stroke-dasharray="3,3" />
+            {/if}
+          </svg>
+        </div>
+        <div class="metric-sub">↓ {peakRx} KB/s peak · ↑ {tx} KB/s</div>
       </div>
+
       <div class="metric-card">
-        <div class="metric-label">Parallel Jobs</div>
-        <div class="metric-val">{run.jobs ? run.jobs.length : 0}</div>
-        <div class="metric-sub">{run.is_default_branch ? 'Default Branch (ci-* & cd-*)' : 'Feature Branch (ci-* only)'}</div>
+        <div class="metric-head">
+          <span class="metric-label">Parallel Jobs</span>
+          <span class="metric-val">{run.jobs ? run.jobs.length : 0}</span>
+        </div>
+        <div class="job-count-box">
+          <span class="muted">{run.is_default_branch ? 'Default Branch (ci-* & cd-*)' : 'Feature Branch (ci-* only)'}</span>
+        </div>
+        <div class="metric-sub">Status: {run.status}</div>
       </div>
     </div>
 
@@ -173,7 +306,7 @@
           <button
             class="job-tab"
             class:active={selectedJob === j.name}
-            onclick={() => { selectedJob = j.name; setupStream(); }}
+            onclick={() => selectJob(j.name)}
           >
             <span class="status-dot small {j.status}"></span>
             <span class="job-title">{j.name}</span>
@@ -185,7 +318,7 @@
         <button
           class="job-tab"
           class:active={selectedJob === ''}
-          onclick={() => { selectedJob = ''; setupStream(); }}
+          onclick={() => selectJob('')}
         >
           <span>All Combined Logs</span>
         </button>
@@ -230,11 +363,15 @@
   .btn.ok:hover { background: #16a34a; }
   .btn.outline { background: transparent; border-color: var(--border, #334155); color: #cbd5e1; }
   .btn.outline:hover { background: rgba(255,255,255,0.05); }
-  .telemetry-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-  .metric-card { background: var(--panel, #111827); border: 1px solid var(--border, #1e293b); border-radius: 8px; padding: 1rem; }
-  .metric-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #94a3b8); font-weight: 600; margin-bottom: 0.3rem; }
-  .metric-val { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
-  .metric-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+  .telemetry-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .metric-card { background: var(--panel, #111827); border: 1px solid var(--border, #1e293b); border-radius: 8px; padding: 0.9rem 1rem; display: flex; flex-direction: column; }
+  .metric-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem; }
+  .metric-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #94a3b8); font-weight: 600; }
+  .metric-val { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
+  .chart-box { height: 46px; margin-bottom: 0.4rem; }
+  .sparkline { width: 100%; height: 100%; overflow: visible; display: block; }
+  .job-count-box { height: 46px; display: flex; align-items: center; font-size: 0.85rem; }
+  .metric-sub { font-size: 0.75rem; color: #64748b; margin-top: auto; }
   .job-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; overflow-x: auto; padding-bottom: 0.2rem; }
   .job-tab { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid var(--border, #334155); background: var(--panel, #111827); color: #cbd5e1; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
   .job-tab:hover { background: rgba(255,255,255,0.06); color: #fff; }
