@@ -4,13 +4,12 @@
 
   let state = $state('connecting');
   let note = $state('');
-  let kind = $state('vnc');
+  let kind = $state('term');
   let machine = $state('');
   let terminal;
   let cleanup = null;
 
   const slug = page.params.slug;
-  const kasmUrl = `/kasmvnc/index.html?path=api/m/${slug}/stream&autoconnect=1&resize=remote`;
 
   function socketUrl() {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -78,7 +77,7 @@
 </script>
 
 <svelte:head>
-  <title>{kind === 'term' ? 'terminal' : 'desktop'} · {machine || slug}</title>
+  <title>{kind === 'term' ? 'terminal' : 'machine'} · {machine || slug}</title>
 </svelte:head>
 
 <div class="frame">
@@ -86,20 +85,13 @@
     <p class="note">This link has expired. Ask for a new one.</p>
   {:else if state === 'failed'}
     <p class="note">The machine is not answering.</p>
-  {:else if kind === 'term'}
+  {:else}
     <header>
-      <span class="what">terminal</span>
+      <span class="what">{kind === 'term' ? 'terminal' : 'tunnel'}</span>
       <span class="machine">{machine}</span>
       <span class="state {state}">{state}</span>
     </header>
     <div class="terminal" bind:this={terminal}></div>
-  {:else}
-    <iframe
-      src={kasmUrl}
-      title="KasmVNC Desktop"
-      class="kasm-frame"
-      allow="clipboard-read; clipboard-write; fullscreen"
-    ></iframe>
   {/if}
 </div>
 
@@ -147,12 +139,5 @@
     flex: 1;
     min-height: 0;
     padding: 0.4rem;
-  }
-  .kasm-frame {
-    flex: 1;
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
   }
 </style>

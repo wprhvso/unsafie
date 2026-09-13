@@ -194,7 +194,6 @@ class Runner:
             "--ro-bind", "/proc", "/proc",
             "--dev-bind", "/dev", "/dev",
             "--tmpfs", "/tmp",
-            "--bind-try", "/tmp/.X11-unix", "/tmp/.X11-unix",
             "--bind", str(workdir), "/work",
             "--bind", str(homedir), "/home/unsafie",
             "--setenv", "HOME", "/home/unsafie",

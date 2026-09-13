@@ -47,11 +47,6 @@ async def page_json(slug: str):
                     payload["turn_slug"] = turn_art.slug
         if artifact.kind == ArtifactKind.MARKDOWN:
             payload["content"] = artifact.content or ""
-        elif artifact.kind == ArtifactKind.DESKTOP:
-            payload["desktop_url"] = (
-                f"/kasmvnc/index.html?path=api/m/{slug}/stream&autoconnect=1&resize=remote"
-            )
-            payload["stream_url"] = f"/api/m/{slug}/stream"
         elif artifact.kind == ArtifactKind.CI:
             payload["run_id"] = artifact.ci_run_id
     return JSONResponse(payload)
@@ -109,11 +104,6 @@ async def spa(path: str, request: Request):
                     payload["turn_slug"] = turn_art.slug
         if artifact.kind == ArtifactKind.MARKDOWN:
             payload["content"] = artifact.content or ""
-        elif artifact.kind == ArtifactKind.DESKTOP:
-            payload["desktop_url"] = (
-                f"/kasmvnc/index.html?path=api/m/{slug}/stream&autoconnect=1&resize=remote"
-            )
-            payload["stream_url"] = f"/api/m/{slug}/stream"
         elif artifact.kind == ArtifactKind.CI:
             payload["run_id"] = artifact.ci_run_id
     if "application/json" in (request.headers.get("accept") or ""):
