@@ -1,3 +1,4 @@
+from unsafie.database.models.ci import CiApiToken, CiRun, CiRunMetric, CiSecret, CiWhitelist
 from unsafie.database.models.api_token import ApiToken, TokenKind
 from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.bot import Bot
@@ -79,4 +80,9 @@ __all__ = [
     "WatchMode",
     "WebhookDelivery",
     "Worktree",
+    "CiApiToken",
+    "CiRun",
+    "CiRunMetric",
+    "CiSecret",
+    "CiWhitelist",
 ]

@@ -1,3 +1,4 @@
+from unsafie.github.ci import service as ci_service
 from unsafie.log import get_logger
 
 from sqlalchemy import select
@@ -50,6 +51,8 @@ async def process(row) -> None:
             if event in LIFECYCLE:
                 await _lifecycle(event, payload)
             else:
+                if event in ('push', 'check_run', 'check_suite'):
+                    await ci_service.enqueue_from_webhook(event, payload)
                 notified = await _notify(event, payload)
         except Exception as e:
             telemetry.fail(span, e)

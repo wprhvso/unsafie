@@ -4,6 +4,10 @@
   import { api } from '$lib/api.js';
 
   onMount(async () => {
+    if (typeof window !== 'undefined' && window.location.hostname.startsWith('ci.')) {
+      await goto('/ci', { replaceState: true });
+      return;
+    }
     try {
       const session = await api.get('/api/session');
       await goto(session?.ok ? '/admin' : '/login', { replaceState: true });

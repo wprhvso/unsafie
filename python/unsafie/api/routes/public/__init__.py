@@ -1,3 +1,4 @@
+from unsafie.api.routes.public.ci import router as ci_router
 from fastapi import APIRouter
 
 from unsafie.api.routes.public.artifacts import router as artifact_router
@@ -13,5 +14,6 @@ public_router.include_router(github_router)
 public_router.include_router(live_router)
 public_router.include_router(machine_router)
 public_router.include_router(telegram_router)
+public_router.include_router(ci_router)
 
 __all__ = ["artifact_router", "public_router"]

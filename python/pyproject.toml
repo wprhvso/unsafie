@@ -102,3 +102,6 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", 
 
 [tool.ruff.lint.isort]
 known-first-party = ["unsafie", "unsafie_wire"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
