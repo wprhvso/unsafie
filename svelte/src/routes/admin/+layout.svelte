@@ -20,6 +20,7 @@
     ['/admin/ssh', 'SSH'],
     ['/admin/pool', 'Pool'],
     ['/admin/artifacts', 'Artifacts'],
+    ['/admin/ci', 'CI'],
     ['/admin/stats', 'Stats']
   ];
 

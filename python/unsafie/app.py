@@ -1,3 +1,5 @@
+from unsafie.github.ci.worker import ci_worker
+from unsafie.github.ci.janitor import ci_janitor
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -37,7 +39,7 @@ setup()
 telemetry.setup()
 logger = get_logger(__name__)
 
-LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor, recovery_supervisor)
+LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor, recovery_supervisor, ci_worker, ci_janitor)
 
 
 @asynccontextmanager

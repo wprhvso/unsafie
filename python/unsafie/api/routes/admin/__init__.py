@@ -19,6 +19,7 @@ from unsafie.api.routes.admin import (
     turns,
     users,
     watches,
+    ci,
 )
 
 admin_router = APIRouter(prefix="/api/admin", dependencies=[Depends(admin_required)])
@@ -41,6 +42,7 @@ for module in (
     artifacts,
     stats,
     events,
+    ci,
 ):
     admin_router.include_router(module.router)
 
