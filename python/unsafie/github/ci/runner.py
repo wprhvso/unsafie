@@ -7,6 +7,7 @@ import select
 import shutil
 import subprocess
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from unsafie import cluster
@@ -173,54 +174,60 @@ async def _run_command_pty(
     )
     os.close(slave_fd)
 
-    async def _heartbeat_and_monitor():
-        prev_ticks = monitor.get_tree_cpu_ticks(proc.pid)
-        prev_time = time.time()
-        prev_rx, prev_tx = monitor.get_net_bytes()
-        hb_counter = 0
-        while proc.poll() is None:
-            await asyncio.sleep(1.0)
-            hb_counter += 1
-            if hb_counter % 5 == 0:
-                async with SessionLocal() as session:
-                    await CiRepository(session).renew_lease(run_id, 30)
+    pgid = proc.pid
+    prev_time = time.time()
+    prev_rss, prev_ticks = monitor.get_pgrp_stats(pgid)
+    prev_rx, prev_tx = monitor.get_net_bytes()
+    clk_tck = os.sysconf("SC_CLK_TCK") or 100
 
-            cur_time = time.time()
-            dt = max(cur_time - prev_time, 0.1)
-            cur_ticks = monitor.get_tree_cpu_ticks(proc.pid)
-            clk_tck = os.sysconf("SC_CLK_TCK") or 100
-            cpu_pct = round(((cur_ticks - prev_ticks) / clk_tck / dt) * 100, 1)
-            rss_mb = monitor.get_tree_rss_mb(proc.pid)
-            cur_rx, cur_tx = monitor.get_net_bytes()
-            rx_kbps = round((cur_rx - prev_rx) / 1024 / dt, 1)
-            tx_kbps = round((cur_tx - prev_tx) / 1024 / dt, 1)
+    async def _sample():
+        nonlocal prev_time, prev_rss, prev_ticks, prev_rx, prev_tx
+        cur_time = time.time()
+        dt = max(cur_time - prev_time, 0.05)
+        rss_mb, cur_ticks = monitor.get_pgrp_stats(pgid)
+        cur_rx, cur_tx = monitor.get_net_bytes()
 
-            prev_ticks = cur_ticks
-            prev_time = cur_time
-            prev_rx, prev_tx = cur_rx, cur_tx
+        cpu_pct = round(max((cur_ticks - prev_ticks) / clk_tck / dt * 100, 0), 1)
+        rx_kbps = round(max(cur_rx - prev_rx, 0) / 1024 / dt, 1)
+        tx_kbps = round(max(cur_tx - prev_tx, 0) / 1024 / dt, 1)
 
-            async with SessionLocal() as session:
-                await CiRepository(session).record_metrics(
-                    run_id, cpu_pct, rss_mb, rx_kbps, tx_kbps
+        prev_time = cur_time
+        prev_ticks = cur_ticks
+        prev_rx = cur_rx
+        prev_tx = cur_tx
+
+        async with SessionLocal() as session:
+            await CiRepository(session).record_metrics(
+                run_id, cpu_pct, rss_mb, rx_kbps, tx_kbps, job_name=job_name
+            )
+
+        metric_payload = json.dumps(
+            {
+                "type": "metric",
+                "job": job_name,
+                "cpu": cpu_pct,
+                "rss": rss_mb,
+                "rx": rx_kbps,
+                "tx": tx_kbps,
+                "time": datetime.now(UTC).isoformat(),
+            }
+        )
+        with contextlib.suppress(Exception):
+            await cluster.client().publish(f"ci:run:{run_id}:stream", metric_payload)
+            if job_name:
+                await cluster.client().publish(
+                    f"ci:run:{run_id}:{job_name}:stream", metric_payload
                 )
 
-            metric_payload = json.dumps(
-                {
-                    "type": "metric",
-                    "job": job_name,
-                    "cpu": cpu_pct,
-                    "rss": rss_mb,
-                    "rx": rx_kbps,
-                    "tx": tx_kbps,
-                    "ts": int(time.time()),
-                }
-            )
-            with contextlib.suppress(Exception):
-                await cluster.client().publish(f"ci:run:{run_id}:stream", metric_payload)
-                if job_name:
-                    await cluster.client().publish(
-                        f"ci:run:{run_id}:{job_name}:stream", metric_payload
-                    )
+    async def _heartbeat_and_monitor():
+        hb_counter = 0
+        while proc.poll() is None:
+            await asyncio.sleep(0.5)
+            await _sample()
+            hb_counter += 1
+            if hb_counter % 10 == 0:
+                async with SessionLocal() as session:
+                    await CiRepository(session).renew_lease(run_id, 30)
 
     monitor_task = asyncio.create_task(_heartbeat_and_monitor())
 
@@ -260,8 +267,10 @@ async def _run_command_pty(
 
     await loop.run_in_executor(None, _read_output)
     proc.wait()
-    os.close(master_fd)
     monitor_task.cancel()
+    with contextlib.suppress(Exception):
+        await _sample()
+    os.close(master_fd)
     return proc.returncode
 
 
