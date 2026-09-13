@@ -5,6 +5,8 @@ from sqlalchemy import func, select
 from unsafie.database import SessionLocal
 from unsafie.database.models.ci import CiRun
 from unsafie.database.repositories.ci import CiRepository
+from unsafie.database.repositories.github import GithubAppRepository
+from unsafie.github.app import manifest
 
 router = APIRouter(prefix="/ci", tags=["admin-ci"])
 
@@ -47,3 +49,21 @@ async def get_overview():
             "success": success or 0,
             "failure": failure or 0,
         }
+
+@router.get("/app")
+async def get_app_info():
+    async with SessionLocal() as session:
+        app_row = await GithubAppRepository(session).get()
+    configured = app_row is not None
+    return {
+        "configured": configured,
+        "name": app_row.name if app_row else None,
+        "slug": app_row.slug if app_row else None,
+        "html_url": app_row.html_url if app_row else None,
+        "settings_url": f"https://github.com/settings/apps/{app_row.slug}" if (app_row and app_row.slug) else None,
+        "callback_urls": [
+            "https://ci.unsafie.com/api/ci/auth/callback",
+            "https://unsafie.com/api/ci/auth/callback",
+        ],
+        "webhook_url": manifest.webhook_url(),
+    }
