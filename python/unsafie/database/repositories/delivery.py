@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, or_, select
@@ -6,6 +5,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.webhook_delivery import WebhookDelivery
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -102,7 +102,11 @@ class DeliveryRepository:
         return int(getattr(res, "rowcount", 0) or 0)
 
     async def page(
-        self, offset: int = 0, limit: int = 50, event: str | None = None, errors_only: bool = False,
+        self,
+        offset: int = 0,
+        limit: int = 50,
+        event: str | None = None,
+        errors_only: bool = False,
     ) -> tuple[list[WebhookDelivery], int]:
         cond = []
         if event:

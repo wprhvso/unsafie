@@ -156,7 +156,9 @@ def _alive(profile_id: str) -> bool:
     try:
         client, _, _ = _client()
         status = client.profile.get_profile_status(profile_id)
-        return any(s in str(status.lifetime_state).lower() for s in ("running", "starting", "created"))
+        return any(
+            s in str(status.lifetime_state).lower() for s in ("running", "starting", "created")
+        )
     except Exception:
         return False
 

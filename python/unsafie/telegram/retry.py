@@ -1,5 +1,4 @@
 import asyncio
-from unsafie.log import get_logger
 import tempfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -11,6 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from unsafie import telemetry
 from unsafie.fluent import t
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -33,7 +33,8 @@ def retry_markup(
         text = t("commands-retry-button", locale)
         buttons.append(
             InlineKeyboardButton(
-                text=text, callback_data=RetryCallback(turn_id=str(turn_id)).pack(),
+                text=text,
+                callback_data=RetryCallback(turn_id=str(turn_id)).pack(),
             )
         )
     if telemetry_url:
@@ -49,7 +50,8 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
             if attempt == attempts - 1:
                 raise
             telemetry.event(
-                "telegram.rate_limited", {"attempt": attempt + 1, "retry_after": e.retry_after},
+                "telegram.rate_limited",
+                {"attempt": attempt + 1, "retry_after": e.retry_after},
             )
             logger.warning("%s rate limited retry_after=%ss", what, e.retry_after)
             await asyncio.sleep(e.retry_after)
@@ -60,7 +62,8 @@ async def retry[T](fn: Callable[[], Awaitable[T]], what: str, attempts: int = 3)
             telemetry.event("telegram.network_error", {"attempt": attempt + 1, "retry_in": delay})
             logger.warning("%s network error=%s retry_in=%ss", what, e, delay)
             await asyncio.sleep(delay)
-    raise RuntimeError(f"{what} failed after {attempts} attempts")
+    msg = f"{what} failed after {attempts} attempts"
+    raise RuntimeError(msg)
 
 
 async def download(bot: Bot, file_id: str, what: str) -> bytes:

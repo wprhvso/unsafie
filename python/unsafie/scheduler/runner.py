@@ -1,5 +1,4 @@
 import asyncio
-from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from unsafie import events, telemetry
@@ -9,6 +8,7 @@ from unsafie.database.models.scheduled_task import TaskKind
 from unsafie.database.repositories.schedule import ScheduleRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.scheduler import service
 from unsafie.settings import settings

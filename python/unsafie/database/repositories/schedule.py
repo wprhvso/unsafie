@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -7,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.scheduled_task import ScheduledTask
 from unsafie.database.models.turn import Turn, TurnStatus
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -84,6 +84,7 @@ class ScheduleRepository:
                     row.runs += 1
                     row.last_run_at = now
                     from unsafie.scheduler import service
+
                     next_at = await service.advance(row)
                     if next_at is None:
                         await self.session.delete(row)
@@ -125,7 +126,8 @@ class ScheduleRepository:
     async def remove_all(self, bot_id: int, chat_id: int) -> int:
         result = await self.session.execute(
             delete(ScheduledTask).where(
-                ScheduledTask.bot_id == bot_id, ScheduledTask.chat_id == chat_id,
+                ScheduledTask.bot_id == bot_id,
+                ScheduledTask.chat_id == chat_id,
             ),
         )
         await self.session.commit()

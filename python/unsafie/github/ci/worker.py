@@ -11,6 +11,7 @@ from unsafie.settings import settings
 
 logger = get_logger(__name__)
 
+
 class CiWorker(Loop):
     name = "ci-worker"
     startup_delay = 2.0
@@ -42,5 +43,6 @@ class CiWorker(Loop):
             await runner.execute_run(run.id)
         except Exception:
             logger.exception("unhandled error executing ci run %s", run.id)
+
 
 ci_worker = CiWorker()

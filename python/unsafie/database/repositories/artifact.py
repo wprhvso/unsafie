@@ -42,7 +42,9 @@ class ArtifactRepository:
 
     async def telemetry_of_turn(self, turn_id: UUID) -> Artifact | None:
         return await self.session.scalar(
-            select(Artifact).where(Artifact.turn_id == turn_id, Artifact.kind == ArtifactKind.TELEMETRY),
+            select(Artifact).where(
+                Artifact.turn_id == turn_id, Artifact.kind == ArtifactKind.TELEMETRY
+            ),
         )
 
     async def _add(self, **fields) -> Artifact | None:
@@ -101,7 +103,10 @@ class ArtifactRepository:
         if existing is not None:
             return existing
         return await self._add(
-            kind=ArtifactKind.TURN, turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
+            kind=ArtifactKind.TURN,
+            turn_id=turn_id,
+            bot_id=bot_id,
+            chat_id=chat_id,
         )
 
     async def for_telemetry(
@@ -111,7 +116,10 @@ class ArtifactRepository:
         if existing is not None:
             return existing
         return await self._add(
-            kind=ArtifactKind.TELEMETRY, turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
+            kind=ArtifactKind.TELEMETRY,
+            turn_id=turn_id,
+            bot_id=bot_id,
+            chat_id=chat_id,
         )
 
     async def page(self, offset: int = 0, limit: int = 50) -> tuple[list[Artifact], int]:

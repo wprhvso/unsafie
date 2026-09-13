@@ -1,5 +1,4 @@
 import asyncio
-from unsafie.log import get_logger
 import time
 from pathlib import Path
 
@@ -9,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -25,7 +25,8 @@ async def ensure_database() -> None:
     try:
         async with engine.connect() as conn:
             exists = await conn.scalar(
-                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name},
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": name},
             )
             if exists:
                 logger.debug("database %s exists", name)

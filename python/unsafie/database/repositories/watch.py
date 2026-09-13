@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select
@@ -6,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.models.ssh_watch import SshWatch
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -51,7 +51,10 @@ class WatchRepository:
         )
 
     async def claim(
-        self, now: datetime, limit: int, lease: float,
+        self,
+        now: datetime,
+        limit: int,
+        lease: float,
     ) -> list[tuple[SshWatch, SshHost]]:
         rows = (
             await self.session.execute(
@@ -89,7 +92,9 @@ class WatchRepository:
         await self.session.commit()
 
     async def page(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> tuple[list[tuple[SshWatch, SshHost]], int]:
         total = await self.session.scalar(select(func.count()).select_from(SshWatch)) or 0
         rows = await self.session.execute(

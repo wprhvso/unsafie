@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
@@ -11,6 +9,7 @@ from unsafie.fluent import t
 from unsafie.github import pat, workspace
 from unsafie.github.app import auth, manifest
 from unsafie.github.errors import GithubError
+from unsafie.log import get_logger
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
 
@@ -102,13 +101,17 @@ def build_gh_router() -> Router:
                     return
                 repo, alias = await pat.add(user_id, parts[1], parts[2] if len(parts) > 2 else None)
                 await answer(
-                    message, bot_id, t("github-added", locale, repo=repo.full, alias=alias),
+                    message,
+                    bot_id,
+                    t("github-added", locale, repo=repo.full, alias=alias),
                 )
                 return
             if action in ("app", "install", "repos"):
                 app = await auth.load_app()
                 await answer(
-                    message, bot_id, t("github-install", locale, url=manifest.install_url(app.slug)),
+                    message,
+                    bot_id,
+                    t("github-install", locale, url=manifest.install_url(app.slug)),
                 )
                 return
             if action in ("rm", "remove", "logout"):

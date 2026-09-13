@@ -1,3 +1,4 @@
+import contextlib
 import json
 from typing import Annotated
 from uuid import UUID
@@ -31,13 +32,20 @@ async def list_turns(
 ):
     async with SessionLocal() as session:
         rows, total = await TurnRepository(session).page(
-            params.offset, params.limit, bot_id, chat_id, user_id, status,
+            params.offset,
+            params.limit,
+            bot_id,
+            chat_id,
+            user_id,
+            status,
         )
         turn_ids = [r.id for r in rows]
         slug_map = {}
         if turn_ids:
             from sqlalchemy import select
+
             from unsafie.database.models.artifact import Artifact
+
             stmt = select(Artifact.turn_id, Artifact.slug).where(Artifact.turn_id.in_(turn_ids))
             res = await session.execute(stmt)
             slug_map = dict(res.all())
@@ -61,7 +69,6 @@ async def live_link(turn_id: UUID):
 
 @router.get("/{turn_id}/trace")
 async def get_turn_trace(turn_id: UUID):
-    trace_data = None
     spans = []
     logs_data = []
 
@@ -72,7 +79,9 @@ async def get_turn_trace(turn_id: UUID):
                 "tags": json.dumps({"unsafie.turn_id": str(turn_id)}),
                 "limit": "20",
             }
-            async with client.get(f"{settings.victoriatraces_url}/select/jaeger/api/traces", params=params) as resp:
+            async with client.get(
+                f"{settings.victoriatraces_url}/select/jaeger/api/traces", params=params
+            ) as resp:
                 if resp.status == 200:
                     payload = await resp.json()
                     all_traces = payload.get("data", [])
@@ -83,7 +92,9 @@ async def get_turn_trace(turn_id: UUID):
         full_traces = []
         for tid in distinct_trace_ids:
             try:
-                async with client.get(f"{settings.victoriatraces_url}/select/jaeger/api/traces/{tid}") as resp:
+                async with client.get(
+                    f"{settings.victoriatraces_url}/select/jaeger/api/traces/{tid}"
+                ) as resp:
                     if resp.status == 200:
                         payload = await resp.json()
                         full_traces.extend(payload.get("data", []))
@@ -95,16 +106,16 @@ async def get_turn_trace(turn_id: UUID):
 
         try:
             logsql = f'turn_id:"{turn_id}"'
-            async with client.get(f"{settings.victorialogs_url}/select/logsql/query", params={"query": logsql}) as resp:
+            async with client.get(
+                f"{settings.victorialogs_url}/select/logsql/query", params={"query": logsql}
+            ) as resp:
                 if resp.status == 200:
                     raw = await resp.text()
                     for line in raw.splitlines():
                         line = line.strip()
                         if line:
-                            try:
+                            with contextlib.suppress(Exception):
                                 logs_data.append(json.loads(line))
-                            except Exception:
-                                pass
         except Exception as e:
             logger.warning("logs.fetch_failed", turn_id=str(turn_id), error=str(e))
 
@@ -141,15 +152,17 @@ async def get_turn_trace(turn_id: UUID):
             tags = {t.get("key"): t.get("value") for t in s.get("tags", [])}
             is_error = tags.get("error") is True or tags.get("otel.status_code") == "ERROR"
 
-            spans.append({
-                "id": s.get("spanID"),
-                "parent_id": parent_id,
-                "name": s.get("operationName", "span"),
-                "start_ms": round(max(0.0, (s_start - min_start) / 1000.0), 2),
-                "duration_ms": round(s_dur / 1000.0, 2),
-                "status": "error" if is_error else "ok",
-                "tags": tags,
-            })
+            spans.append(
+                {
+                    "id": s.get("spanID"),
+                    "parent_id": parent_id,
+                    "name": s.get("operationName", "span"),
+                    "start_ms": round(max(0.0, (s_start - min_start) / 1000.0), 2),
+                    "duration_ms": round(s_dur / 1000.0, 2),
+                    "status": "error" if is_error else "ok",
+                    "tags": tags,
+                }
+            )
 
         spans.sort(key=lambda x: (x["start_ms"], -x["duration_ms"]))
 
@@ -171,7 +184,9 @@ async def get_turn(turn_id: UUID):
         if turn is None:
             raise HTTPException(404, "no such turn")
         from sqlalchemy import select
+
         from unsafie.database.models.artifact import Artifact
+
         slug = await session.scalar(select(Artifact.slug).where(Artifact.turn_id == turn_id))
         parent = await repo.get(turn.parent_id) if turn.parent_id else None
         children = await repo.children(turn_id)

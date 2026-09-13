@@ -1,9 +1,9 @@
 import hashlib
-from unsafie.log import get_logger
 
 from aiogram import Dispatcher
 
 from unsafie import cluster
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telegram.engine import telegram_engine
 from unsafie.telegram.handlers import build_router
@@ -57,7 +57,7 @@ async def request_restart(bot_id: int) -> None:
 
 
 async def polled_by(bot_ids: list[int]) -> dict[int, str | None]:
-    return {b: "polling" for b in bot_ids}
+    return dict.fromkeys(bot_ids, "polling")
 
 
 async def reconcile() -> None:

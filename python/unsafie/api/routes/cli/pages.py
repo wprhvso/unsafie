@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -8,6 +6,7 @@ from unsafie.api.routes.cli.deps import Pages
 from unsafie.database import SessionLocal
 from unsafie.database.models.artifact import ArtifactKind
 from unsafie.database.repositories.artifact import ArtifactRepository
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -50,7 +49,9 @@ async def listing(who: Pages, limit: int = 20) -> list[dict]:
         raise HTTPException(400, "no chat: this token is not bound to a chat")
     async with SessionLocal() as session:
         rows = await ArtifactRepository(session).for_chat(
-            who.chat_id, kind=ArtifactKind.MARKDOWN, limit=min(max(limit, 1), 100),
+            who.chat_id,
+            kind=ArtifactKind.MARKDOWN,
+            limit=min(max(limit, 1), 100),
         )
     return [_view(row.slug, row.title, row.created_at) for row in rows]
 

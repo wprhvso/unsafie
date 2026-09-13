@@ -1,9 +1,9 @@
 import asyncio
-from unsafie.log import get_logger
 from uuid import UUID
 
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.settings import settings
 

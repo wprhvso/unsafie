@@ -62,7 +62,9 @@ def test_title_and_hover():
     with patch.object(actions, "centre", return_value=(50.0, 100.0)):
         coords = actions.hover(mock_cdp, "#target")
         assert coords == (50.0, 100.0)
-        mock_cdp.call.assert_any_call("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": 50.0, "y": 100.0})
+        mock_cdp.call.assert_any_call(
+            "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": 50.0, "y": 100.0}
+        )
 
 
 def test_drag_action():
@@ -71,11 +73,25 @@ def test_drag_action():
         actions.drag(mock_cdp, "#a", "#b", steps=2)
         mock_cdp.call.assert_any_call(
             "Input.dispatchMouseEvent",
-            {"type": "mousePressed", "x": 10.0, "y": 20.0, "button": "left", "clickCount": 1, "buttons": 1},
+            {
+                "type": "mousePressed",
+                "x": 10.0,
+                "y": 20.0,
+                "button": "left",
+                "clickCount": 1,
+                "buttons": 1,
+            },
         )
         mock_cdp.call.assert_any_call(
             "Input.dispatchMouseEvent",
-            {"type": "mouseReleased", "x": 100.0, "y": 200.0, "button": "left", "clickCount": 1, "buttons": 0},
+            {
+                "type": "mouseReleased",
+                "x": 100.0,
+                "y": 200.0,
+                "button": "left",
+                "clickCount": 1,
+                "buttons": 0,
+            },
         )
 
 
@@ -84,7 +100,14 @@ def test_query_elements():
     mock_cdp.call.return_value = {
         "result": {
             "value": [
-                {"index": 0, "tag": "button", "text": "OK", "visible": True, "rect": {"x": 10, "y": 20, "width": 50, "height": 30}, "attributes": {"id": "btn"}},
+                {
+                    "index": 0,
+                    "tag": "button",
+                    "text": "OK",
+                    "visible": True,
+                    "rect": {"x": 10, "y": 20, "width": 50, "height": 30},
+                    "attributes": {"id": "btn"},
+                },
             ],
         },
     }
@@ -95,11 +118,16 @@ def test_query_elements():
 
 def test_scroll_actions():
     mock_cdp = MagicMock()
-    mock_cdp.call.return_value = {"result": {"value": {"x": 0, "y": 200, "maxX": 1000, "maxY": 2000}}}
+    mock_cdp.call.return_value = {
+        "result": {"value": {"x": 0, "y": 200, "maxX": 1000, "maxY": 2000}}
+    }
     res_by = actions.scroll(mock_cdp, by="0,100")
     assert res_by["scrolled"] is True
     assert res_by["scroll_y"] == 200
-    mock_cdp.call.assert_any_call("Input.dispatchMouseEvent", {"type": "mouseWheel", "x": 100, "y": 100, "deltaX": 0.0, "deltaY": 100.0})
+    mock_cdp.call.assert_any_call(
+        "Input.dispatchMouseEvent",
+        {"type": "mouseWheel", "x": 100, "y": 100, "deltaX": 0.0, "deltaY": 100.0},
+    )
 
 
 def test_network_and_blocking():
@@ -111,8 +139,20 @@ def test_network_and_blocking():
     mock_cdp.call.return_value = {
         "result": {
             "value": [
-                {"name": "https://api.com/v1", "type": "fetch", "duration": 45, "size": 200, "start": 10},
-                {"name": "https://img.com/a.png", "type": "img", "duration": 15, "size": 500, "start": 12},
+                {
+                    "name": "https://api.com/v1",
+                    "type": "fetch",
+                    "duration": 45,
+                    "size": 200,
+                    "start": 10,
+                },
+                {
+                    "name": "https://img.com/a.png",
+                    "type": "img",
+                    "duration": 15,
+                    "size": 500,
+                    "start": 12,
+                },
             ],
         },
     }
@@ -192,7 +232,9 @@ def test_intercept_request():
     assert res["blocked"] is True
     assert res["method"] == "POST"
     assert res["body_json"] == {"price": 100}
-    mock_cdp.call.assert_any_call("Fetch.failRequest", {"requestId": "req-123", "errorReason": "BlockedByClient"})
+    mock_cdp.call.assert_any_call(
+        "Fetch.failRequest", {"requestId": "req-123", "errorReason": "BlockedByClient"}
+    )
 
 
 def test_cli_upload(tmp_path: Path):

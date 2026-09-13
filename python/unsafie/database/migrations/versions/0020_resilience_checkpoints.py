@@ -26,8 +26,12 @@ def upgrade() -> None:
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_turn_checkpoints_lookup ON turn_checkpoints (turn_id, step DESC, created_at DESC)",
     )
-    op.execute("ALTER TABLE turns ADD COLUMN IF NOT EXISTS recovery_attempts INTEGER NOT NULL DEFAULT 0")
-    op.execute("ALTER TABLE turns ADD COLUMN IF NOT EXISTS last_checkpoint_step INTEGER NOT NULL DEFAULT 0")
+    op.execute(
+        "ALTER TABLE turns ADD COLUMN IF NOT EXISTS recovery_attempts INTEGER NOT NULL DEFAULT 0"
+    )
+    op.execute(
+        "ALTER TABLE turns ADD COLUMN IF NOT EXISTS last_checkpoint_step INTEGER NOT NULL DEFAULT 0"
+    )
     op.execute("ALTER TABLE turns ADD COLUMN IF NOT EXISTS active_spool_dir VARCHAR(255)")
     op.execute(
         "ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS active_turn_id UUID REFERENCES turns (id) ON DELETE SET NULL",

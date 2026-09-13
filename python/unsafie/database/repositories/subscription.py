@@ -1,10 +1,9 @@
-from unsafie.log import get_logger
-
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.repo import Repo
 from unsafie.database.models.subscription import GithubSubscription
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -35,7 +34,13 @@ class SubscriptionRepository:
         return await self.session.get(GithubSubscription, sub_id)
 
     async def add(
-        self, bot_id: int, chat_id: int, user_id: int, repo_id: int, kind: str, filters: dict,
+        self,
+        bot_id: int,
+        chat_id: int,
+        user_id: int,
+        repo_id: int,
+        kind: str,
+        filters: dict,
     ) -> GithubSubscription:
         sub = GithubSubscription(
             bot_id=bot_id,
@@ -48,7 +53,12 @@ class SubscriptionRepository:
         self.session.add(sub)
         await self.session.commit()
         logger.info(
-            "bot=%s chat=%s repo_id=%s sub=%s kind=%s added", bot_id, chat_id, repo_id, sub.id, kind,
+            "bot=%s chat=%s repo_id=%s sub=%s kind=%s added",
+            bot_id,
+            chat_id,
+            repo_id,
+            sub.id,
+            kind,
         )
         return sub
 
@@ -66,7 +76,8 @@ class SubscriptionRepository:
     async def remove_all(self, bot_id: int, chat_id: int) -> int:
         res = await self.session.execute(
             delete(GithubSubscription).where(
-                GithubSubscription.bot_id == bot_id, GithubSubscription.chat_id == chat_id,
+                GithubSubscription.bot_id == bot_id,
+                GithubSubscription.chat_id == chat_id,
             ),
         )
         await self.session.commit()
@@ -81,7 +92,9 @@ class SubscriptionRepository:
         return True
 
     async def page(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> tuple[list[tuple[GithubSubscription, Repo]], int]:
         total = await self.session.scalar(select(func.count()).select_from(GithubSubscription)) or 0
         rows = await self.session.execute(

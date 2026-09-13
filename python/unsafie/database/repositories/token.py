@@ -1,10 +1,10 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.api_token import ApiToken
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,9 @@ class TokenRepository:
 
     async def by_hash(self, token_hash: str) -> ApiToken | None:
         return await self.session.scalar(
-            select(ApiToken).where(ApiToken.token_hash == token_hash, ApiToken.revoked_at.is_(None)),
+            select(ApiToken).where(
+                ApiToken.token_hash == token_hash, ApiToken.revoked_at.is_(None)
+            ),
         )
 
     async def for_user(self, user_id: int, alive_only: bool = True) -> list[ApiToken]:

@@ -1,8 +1,8 @@
 import hashlib
-from unsafie.log import get_logger
 import re
 from dataclasses import dataclass
 
+from unsafie.log import get_logger
 from unsafie.ssh.errors import SshError
 
 logger = get_logger(__name__)
@@ -103,7 +103,10 @@ def first_number(text: str) -> float | None:
 
 
 def evaluate(
-    condition: Condition, output: str, exit_code: int, previous: str | None,
+    condition: Condition,
+    output: str,
+    exit_code: int,
+    previous: str | None,
 ) -> tuple[bool, str]:
     text = (output or "").strip()
     match condition.kind:

@@ -1,8 +1,8 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.pool.ci import repos
 from unsafie.pool.ci.controller import Controller
@@ -41,7 +41,8 @@ class CiSupervisor(Loop):
                 continue
             controller = Controller(row, token)
             self.tasks[repo_id] = asyncio.create_task(
-                controller.serve(), name=f"pool.ci:{row.slug}",
+                controller.serve(),
+                name=f"pool.ci:{row.slug}",
             )
             logger.info("pool ci %s: controller scheduled", row.slug)
 

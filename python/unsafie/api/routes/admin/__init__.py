@@ -5,6 +5,7 @@ from unsafie.api.routes.admin import (
     artifacts,
     bots,
     chats,
+    ci,
     credentials,
     deliveries,
     events,
@@ -19,7 +20,6 @@ from unsafie.api.routes.admin import (
     turns,
     users,
     watches,
-    ci,
 )
 
 admin_router = APIRouter(prefix="/api/admin", dependencies=[Depends(admin_required)])

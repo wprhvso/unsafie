@@ -1,9 +1,8 @@
-from unsafie.log import get_logger
-
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.github import WorktreeRepository
 from unsafie.github.errors import Conflict, GithubError, NotFound
 from unsafie.github.workspace import Session, default_branch, ensure_worktree, lock_for
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -72,7 +71,9 @@ async def sync(state: Session) -> dict:
         commit = await state.client.commit(remote)
         async with SessionLocal() as session:
             await WorktreeRepository(session).save(
-                worktree.id, base_commit_sha=remote, base_tree_sha=commit["tree"]["sha"],
+                worktree.id,
+                base_commit_sha=remote,
+                base_tree_sha=commit["tree"]["sha"],
             )
         state.tree = None
         return {"changed": True, "sha": remote, "conflicts": []}

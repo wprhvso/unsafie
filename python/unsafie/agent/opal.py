@@ -1,9 +1,8 @@
-from unsafie.log import get_logger
-
 import aiohttp
 
 from unsafie import cluster
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 
@@ -25,7 +24,9 @@ async def refresh_access_token(refresh_token: str) -> str:
     timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as http:
         try:
-            async with http.get(settings.opal_refresh_url, cookies=cookies, headers=headers) as resp:
+            async with http.get(
+                settings.opal_refresh_url, cookies=cookies, headers=headers
+            ) as resp:
                 if resp.status != 200:
                     msg = f"opal refresh returned HTTP {resp.status}"
                     raise OpalRefreshFailed(msg)

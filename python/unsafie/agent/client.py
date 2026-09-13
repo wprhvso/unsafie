@@ -274,7 +274,8 @@ async def _once(
             async with http.post(url, headers=sent, json=body, timeout=timeout) as response:
                 request_id = response.headers.get("x-request-id")
                 telemetry.set_attrs(
-                    span, {attrs.HTTP_STATUS: response.status, attrs.REQUEST_ID: request_id},
+                    span,
+                    {attrs.HTTP_STATUS: response.status, attrs.REQUEST_ID: request_id},
                 )
                 if response.status >= 400:
                     raw = await response.read()
@@ -286,10 +287,14 @@ async def _once(
                     )
                 reply = await _read(response.content, model, on_event)
                 if not reply.text or not reply.text.strip():
-                    raise ApiError(0, "UNAVAILABLE", "model response contained no text blocks", request_id)
+                    raise ApiError(
+                        0, "UNAVAILABLE", "model response contained no text blocks", request_id
+                    )
         except TimeoutError as e:
             raise ApiError(
-                0, "DEADLINE_EXCEEDED", f"no answer in {settings.gemini_timeout:.0f}s",
+                0,
+                "DEADLINE_EXCEEDED",
+                f"no answer in {settings.gemini_timeout:.0f}s",
             ) from e
         except aiohttp.ClientError as e:
             raise ApiError(0, "UNAVAILABLE", f"{type(e).__name__}: {e}") from e

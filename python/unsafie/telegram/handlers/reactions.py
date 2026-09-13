@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import MessageReactionUpdated
@@ -8,6 +6,7 @@ from unsafie import artifacts
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import ResponseKind
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.telegram import sender
 
 logger = get_logger(__name__)

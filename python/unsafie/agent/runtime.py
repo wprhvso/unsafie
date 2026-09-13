@@ -89,10 +89,19 @@ async def _punish(session_row, result: loop.Result) -> None:
         row = await creds.get(session_row.id)
         if row is None:
             return
-        cooldown = credentials.cooldown_for(row.failures + 1, result.failure) if result.failure is not None else None
-        disable = result.failure == credentials.Failure.AUTH if result.failure is not None else False
+        cooldown = (
+            credentials.cooldown_for(row.failures + 1, result.failure)
+            if result.failure is not None
+            else None
+        )
+        disable = (
+            result.failure == credentials.Failure.AUTH if result.failure is not None else False
+        )
         await creds.failed(
-            session_row.id, error=result.error or "", cooldown_until=cooldown, disable=disable,
+            session_row.id,
+            error=result.error or "",
+            cooldown_until=cooldown,
+            disable=disable,
         )
     events.publish(
         "credential.failed",
@@ -125,7 +134,8 @@ async def _execute(
     try:
         with telemetry.span("auth.opal_token", attributes={attrs.TURN_ID: str(ctx.turn_id)}):
             access_token = await opal.get_access_token(
-                session_row.id, session_row.refresh_token,
+                session_row.id,
+                session_row.refresh_token,
             )
     except opal.OpalRefreshFailed as e:
         logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
@@ -176,9 +186,7 @@ async def _execute(
             {
                 attrs.SDK_MESSAGES: len(messages),
                 attrs.NUM_TURNS: result.steps,
-                attrs.GEN_AI_FINISH_REASONS: [result.stop_reason]
-                if result.stop_reason
-                else None,
+                attrs.GEN_AI_FINISH_REASONS: [result.stop_reason] if result.stop_reason else None,
                 attrs.COMPLETION: telemetry.content(result.text),
                 attrs.OUTCOME: result.status,
                 attrs.FAILURE: str(result.failure) if result.failure else None,
@@ -186,7 +194,8 @@ async def _execute(
         )
         if result.status != "ok":
             telemetry.fail(
-                query_span, RuntimeError(short(result.error or result.status, 300)),
+                query_span,
+                RuntimeError(short(result.error or result.status, 300)),
             )
 
     used_cred_id = result.credential_id or session_row.id
@@ -227,7 +236,10 @@ async def _execute(
 
 
 async def notify(
-    bot: Bot, turn: Turn, text: str, reply_markup: InlineKeyboardMarkup | None = None,
+    bot: Bot,
+    turn: Turn,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
     try:
         await sender.send(
@@ -241,7 +253,10 @@ async def notify(
         )
     except TelegramAPIError:
         logger.exception(
-            "bot=%s chat=%s turn=%s notify failed", turn.bot_id, turn.chat_id, turn.id,
+            "bot=%s chat=%s turn=%s notify failed",
+            turn.bot_id,
+            turn.chat_id,
+            turn.id,
         )
 
 
@@ -344,7 +359,9 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                             bot,
                             turn,
                             _failure_text(locale, outcome),
-                            reply_markup=retry_markup(str(turn.id), locale, telemetry_url=telemetry_url),
+                            reply_markup=retry_markup(
+                                str(turn.id), locale, telemetry_url=telemetry_url
+                            ),
                         )
                         return
                     leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)
@@ -559,7 +576,9 @@ async def run_subagent_turn(turn_id: UUID, prompt: str, timeout: float = 600.0) 
                         if isinstance(content, str):
                             fallback_result = content
                     final_result = (
-                        fresh.result if fresh and fresh.result else (fallback_result or note or "done")
+                        fresh.result
+                        if fresh and fresh.result
+                        else (fallback_result or note or "done")
                     )
                     await repo.finish(turn.id, status, final_result)
                     fresh = await repo.get(turn.id)
@@ -704,7 +723,10 @@ async def handle(message: Message, bot_id: int, update_db_id: int | None = None)
 
 
 async def handle_callback(
-    query: CallbackQuery, message: Message | None, bot_id: int, update_db_id: int | None,
+    query: CallbackQuery,
+    message: Message | None,
+    bot_id: int,
+    update_db_id: int | None,
 ) -> None:
     if query.bot is None or update_db_id is None:
         return
@@ -763,7 +785,8 @@ async def retry_turn(bot: Bot, origin: Turn, locale: str) -> None:
 
     if update_row is not None and "message" in update_row.payload:
         msg = Message.model_validate(
-            update_row.payload["message"], context={"bot": bot},
+            update_row.payload["message"],
+            context={"bot": bot},
         ).as_(bot)
         reply_to = msg.reply_to_message.message_id if msg.reply_to_message else origin.reply_to
         await dispatch(
@@ -909,9 +932,7 @@ async def resume_turn(turn_id: UUID) -> None:
                     return
                 if outcome.status != "ok":
                     await queue.clear(turn.id)
-                    note = (
-                        outcome.status if outcome.error is None else short(outcome.error, 1000)
-                    )
+                    note = outcome.status if outcome.error is None else short(outcome.error, 1000)
                     logger.info("%s resume finished with %s", prefix, outcome.status)
                     telemetry_slug = await artifacts.telemetry_for_turn(turn)
                     telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
@@ -919,7 +940,9 @@ async def resume_turn(turn_id: UUID) -> None:
                         bot,
                         turn,
                         _failure_text(locale, outcome),
-                        reply_markup=retry_markup(str(turn.id), locale, telemetry_url=telemetry_url),
+                        reply_markup=retry_markup(
+                            str(turn.id), locale, telemetry_url=telemetry_url
+                        ),
                     )
                     return
                 leftover = await turns.finish_or_continue(turn.id, turn.bot_id, turn.chat_id)

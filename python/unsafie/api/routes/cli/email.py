@@ -14,7 +14,9 @@ from unsafie.settings import settings
 router = APIRouter(prefix="/email", tags=["cli"])
 
 PATTERNS = (
-    re.compile(r"(?i)(?:code|verification|passcode|pin|otp|парол\w*|код|подтвержден\w*)[^\d\n]{0,30}?\b(\d{6})\b"),
+    re.compile(
+        r"(?i)(?:code|verification|passcode|pin|otp|парол\w*|код|подтвержден\w*)[^\d\n]{0,30}?\b(\d{6})\b"
+    ),
     re.compile(r"\b(\d{6})\b[^\d\n]{0,30}?(?:is your|это ваш|твой код|code)"),
     re.compile(r">(?:&nbsp;|\s)*(\d{6})(?:&nbsp;|\s)*<"),
     re.compile(r"\b(\d{6})\b"),
@@ -47,7 +49,9 @@ def _extract_code(text: str) -> str | None:
 
 @router.post("/{secret}")
 async def receive_email(secret: str, request: Request) -> dict:
-    if not settings.email_webhook_secret or not hmac.compare_digest(secret, settings.email_webhook_secret):
+    if not settings.email_webhook_secret or not hmac.compare_digest(
+        secret, settings.email_webhook_secret
+    ):
         raise HTTPException(403, "forbidden")
 
     raw_bytes = await request.body()
@@ -68,7 +72,9 @@ async def receive_email(secret: str, request: Request) -> dict:
     if isinstance(raw_mime, str):
         search_parts.append(raw_mime)
         with contextlib.suppress(Exception):
-            parsed_msg = email.message_from_bytes(raw_mime.encode("utf-8", errors="replace"), policy=default)
+            parsed_msg = email.message_from_bytes(
+                raw_mime.encode("utf-8", errors="replace"), policy=default
+            )
             if not to_addrs:
                 to_addrs = _extract_emails(parsed_msg.get("to"))
             if body_part := parsed_msg.get_body(preferencelist=("plain", "html")):

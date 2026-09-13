@@ -1,5 +1,4 @@
 import json
-from unsafie.log import get_logger
 import os
 import socket
 import time
@@ -7,6 +6,7 @@ from datetime import UTC, datetime
 
 from unsafie import cluster
 from unsafie.agent import turns
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.settings import settings
 from unsafie.ssh.pool import pool

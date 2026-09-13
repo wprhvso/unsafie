@@ -1,6 +1,5 @@
 import asyncio
 import json
-from unsafie.log import get_logger
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -12,6 +11,7 @@ from sqlalchemy import select
 from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.pool import CommandStatus, PoolCommand
+from unsafie.log import get_logger
 from unsafie.pool import keys, registry
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
@@ -116,7 +116,12 @@ async def run_python(
 ) -> Result:
     limit = min(timeout or settings.pool_block_timeout, settings.pool_max_command_timeout)
     block_id = await send_python(
-        machine, code, user_id=user_id, turn_id=turn_id, timeout=limit, reset=reset,
+        machine,
+        code,
+        user_id=user_id,
+        turn_id=turn_id,
+        timeout=limit,
+        reset=reset,
     )
     return await collect(block_id, machine, limit + CHUNK_WAIT * 2)
 
@@ -148,7 +153,10 @@ async def push(command_id: str, frames: list[dict]) -> None:
 
 
 async def collect(
-    command_id: str, machine: str, timeout: float, limit: int | None = None,
+    command_id: str,
+    machine: str,
+    timeout: float,
+    limit: int | None = None,
 ) -> Result:
     redis = cluster.client()
     cap = limit or settings.pool_max_output
@@ -204,7 +212,8 @@ _DRAINS: set[asyncio.Task] = set()
 def drain(command_id: str, machine: str, timeout: float | None = None) -> None:
     limit = min(timeout or settings.pool_max_command_timeout, settings.pool_max_command_timeout)
     task = asyncio.create_task(
-        collect(command_id, machine, limit + CHUNK_WAIT * 2), name=f"pool.drain:{command_id}",
+        collect(command_id, machine, limit + CHUNK_WAIT * 2),
+        name=f"pool.drain:{command_id}",
     )
     _DRAINS.add(task)
     task.add_done_callback(_DRAINS.discard)

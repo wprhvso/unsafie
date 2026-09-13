@@ -1,11 +1,10 @@
-from unsafie.log import get_logger
-
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from unsafie import cluster
 from unsafie.api.dependencies.auth import COOKIE, check_token, issue, verify
 from unsafie.api.schemas.common import Ok
 from unsafie.api.schemas.models import LoginWrite
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -17,9 +16,8 @@ router = APIRouter(prefix="/api", tags=["auth"])
 async def login(body: LoginWrite, response: Response, request: Request):
     if not settings.admin_token:
         raise HTTPException(503, "ADMIN_TOKEN is not configured on the server")
-    client_ip = (
-        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        or (request.client.host if request.client else "unknown")
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+        request.client.host if request.client else "unknown"
     )
     rl_key = cluster.key("ratelimit", "login", client_ip)
     try:

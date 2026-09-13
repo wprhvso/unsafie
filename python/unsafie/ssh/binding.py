@@ -1,9 +1,9 @@
-from unsafie.log import get_logger
 import re
 
 from unsafie.database import SessionLocal
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.repositories.ssh import SshRepository
+from unsafie.log import get_logger
 from unsafie.ssh.errors import SshError
 
 logger = get_logger(__name__)

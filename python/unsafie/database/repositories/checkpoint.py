@@ -1,6 +1,5 @@
 import gzip
 import json
-from unsafie.log import get_logger
 from typing import Any
 from uuid import UUID
 
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.turn import Turn
 from unsafie.database.models.turn_checkpoint import TurnCheckpoint
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -77,7 +77,11 @@ class CheckpointRepository:
             data = json.loads(raw.decode("utf-8"))
             return data if isinstance(data, list) else []
         except Exception:
-            logger.exception("failed to unpack checkpoint messages turn=%s step=%s", checkpoint.turn_id, checkpoint.step)
+            logger.exception(
+                "failed to unpack checkpoint messages turn=%s step=%s",
+                checkpoint.turn_id,
+                checkpoint.step,
+            )
             return []
 
     async def for_step(self, turn_id: UUID, step: int) -> list[TurnCheckpoint]:

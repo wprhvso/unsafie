@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
@@ -11,6 +10,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.api_token import ApiToken
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.telegram import bots
 
 logger = get_logger(__name__)

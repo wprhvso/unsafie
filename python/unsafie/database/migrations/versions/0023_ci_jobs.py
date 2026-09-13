@@ -1,10 +1,12 @@
 from collections.abc import Sequence
+
 from alembic import op
 
 revision: str = "0023"
 down_revision: str | Sequence[str] | None = "0022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
 
 def upgrade() -> None:
     op.execute("""
@@ -25,6 +27,7 @@ def upgrade() -> None:
     );
     """)
     op.execute("CREATE INDEX IF NOT EXISTS ix_ci_jobs_run ON ci_jobs (run_id, id ASC);")
+
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS ci_jobs CASCADE;")

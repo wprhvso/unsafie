@@ -109,6 +109,7 @@ class GithubHTTP:
     @property
     def base(self) -> str:
         return ""
+
     def __init__(
         self,
         token: TokenProvider | str | None = None,
@@ -171,7 +172,11 @@ class GithubHTTP:
         ) as span:
             for attempt in range(1, RETRIES + 1):
                 async with http.request(
-                    method, url, headers=headers, params=params, json=json_body,
+                    method,
+                    url,
+                    headers=headers,
+                    params=params,
+                    json=json_body,
                 ) as r:
                     body = await r.read()
                     ms = (time.perf_counter() - started) * 1000
@@ -199,7 +204,8 @@ class GithubHTTP:
                         delay = _retry_delay(r.headers, attempt)
                         if attempt < RETRIES and delay <= 60:
                             span.add_event(
-                                "github.rate_limited", {"attempt": attempt, "sleep_sec": delay},
+                                "github.rate_limited",
+                                {"attempt": attempt, "sleep_sec": delay},
                             )
                             logger.warning("github rate limited, sleeping %ss", delay)
                             await asyncio.sleep(delay)
@@ -261,7 +267,10 @@ class GithubHTTP:
         metrics.bump("requests")
         metrics.bump("bytes", size)
         logger.info(
-            "github GET %s -> %s bytes (%.0fms)", url, size, (time.perf_counter() - started) * 1000,
+            "github GET %s -> %s bytes (%.0fms)",
+            url,
+            size,
+            (time.perf_counter() - started) * 1000,
         )
         return size
 

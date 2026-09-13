@@ -39,7 +39,9 @@ def _arch() -> str:
 
 def _url() -> str:
     arch = _arch()
-    return f"https://github.com/cli/cli/releases/download/v{VERSION}/gh_{VERSION}_linux_{arch}.tar.gz"
+    return (
+        f"https://github.com/cli/cli/releases/download/v{VERSION}/gh_{VERSION}_linux_{arch}.tar.gz"
+    )
 
 
 def _install() -> str:

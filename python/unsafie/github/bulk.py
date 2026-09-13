@@ -1,5 +1,4 @@
 import asyncio
-from unsafie.log import get_logger
 import tarfile
 import tempfile
 import time
@@ -9,6 +8,7 @@ from unsafie import cluster, telemetry
 from unsafie.github import cache, metrics
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.vfs import SKIP_DIRS
+from unsafie.log import get_logger
 from unsafie.mime import human_size
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
@@ -93,7 +93,10 @@ async def hydrate(client: RepoClient, commit_sha: str) -> int:
     if await cluster.marked(name):
         return 0
     async with cluster.try_lock(
-        name, ttl=settings.snapshot_lock_ttl, wait=settings.snapshot_wait, renew=True,
+        name,
+        ttl=settings.snapshot_lock_ttl,
+        wait=settings.snapshot_wait,
+        renew=True,
     ) as held:
         if held is None:
             logger.info(

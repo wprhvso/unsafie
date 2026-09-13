@@ -1,5 +1,4 @@
 import hashlib
-from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from unsafie import events, telemetry
@@ -8,6 +7,7 @@ from unsafie.database.models.response import ResponseKind
 from unsafie.database.models.ssh_watch import WatchMode
 from unsafie.database.repositories.watch import WatchRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.settings import settings
 from unsafie.ssh import pool, watches
@@ -22,7 +22,10 @@ BATCH = 20
 
 
 async def run_once(
-    watch, host, *, locale: str | None = None,
+    watch,
+    host,
+    *,
+    locale: str | None = None,
 ) -> tuple[bool, str, pool.Result | None]:
     condition = watches.parse(watch.condition)
     result = await pool.run(watch.user_id, host, watch.command, settings.watch_command_timeout)
@@ -71,7 +74,11 @@ class Watchdog(Loop):
             await pool.pool.sweep()
 
     async def _reschedule(
-        self, watch, failed: bool, output: str | None = None, exit_code: int | None = None,
+        self,
+        watch,
+        failed: bool,
+        output: str | None = None,
+        exit_code: int | None = None,
     ) -> None:
         async with SessionLocal() as session:
             repo = WatchRepository(session)
@@ -127,7 +134,10 @@ class Watchdog(Loop):
         telemetry.annotate(**{attrs.WATCH_FIRES: fires, attrs.SSH_EXIT: result.exit_code})
         was_alerting = watch.alerting
         await self._reschedule(
-            watch, failed=False, output=result.output, exit_code=result.exit_code,
+            watch,
+            failed=False,
+            output=result.output,
+            exit_code=result.exit_code,
         )
         async with SessionLocal() as session:
             repo = WatchRepository(session)
@@ -174,7 +184,11 @@ class Watchdog(Loop):
             output=(result.output or "")[-1500:],
         )
         await sender.send(
-            bot, bot_id=watch.bot_id, chat_id=watch.chat_id, markdown=text, kind=ResponseKind.SYSTEM,
+            bot,
+            bot_id=watch.bot_id,
+            chat_id=watch.chat_id,
+            markdown=text,
+            kind=ResponseKind.SYSTEM,
         )
 
 

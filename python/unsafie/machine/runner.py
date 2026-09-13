@@ -57,11 +57,17 @@ def _expected_sha256(version: str, arch: str) -> str | None:
         with urllib.request.urlopen(req, timeout=30) as answer:
             data = json.loads(answer.read().decode())
         body = data.get("body", "")
-        m = re.search(rf"<!-- BEGIN SHA linux-{arch} -->([a-f0-9]{{64}})<!-- END SHA linux-{arch} -->", body, re.IGNORECASE)
+        m = re.search(
+            rf"<!-- BEGIN SHA linux-{arch} -->([a-f0-9]{{64}})<!-- END SHA linux-{arch} -->",
+            body,
+            re.IGNORECASE,
+        )
         if m:
             return m.group(1).lower()
         filename = f"actions-runner-linux-{arch}-{version}.tar.gz"
-        m2 = re.search(rf"{re.escape(filename)}.*?([a-f0-9]{{64}})", body, re.IGNORECASE | re.DOTALL)
+        m2 = re.search(
+            rf"{re.escape(filename)}.*?([a-f0-9]{{64}})", body, re.IGNORECASE | re.DOTALL
+        )
         if m2:
             return m2.group(1).lower()
     except Exception:

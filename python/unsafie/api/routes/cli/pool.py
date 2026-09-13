@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -11,6 +10,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.pool import CommandStatus, PoolCommand, PoolMachine, PoolUsage
 from unsafie.database.models.user import User
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.pool import channel, leases, registry, tunnels
 from unsafie.settings import settings
 
@@ -249,7 +249,11 @@ async def jobs(who: Pool, limit: int = 20, background: bool = True) -> dict:
 @router.get("/jobs/{job_id}")
 async def job(job_id: str, who: Pool, wait: float = 0.0, since: int = 0) -> dict:
     row = await _own_job(job_id, who.user_id)
-    if wait > 0 and row.status not in (CommandStatus.DONE, CommandStatus.FAILED, CommandStatus.LOST):
+    if wait > 0 and row.status not in (
+        CommandStatus.DONE,
+        CommandStatus.FAILED,
+        CommandStatus.LOST,
+    ):
         await channel.collect(job_id, row.machine, wait)
         row = await _own_job(job_id, who.user_id)
     whole = await channel.tail(job_id)

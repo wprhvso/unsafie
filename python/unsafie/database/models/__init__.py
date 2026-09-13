@@ -1,8 +1,8 @@
-from unsafie.database.models.ci import CiApiToken, CiJob, CiRun, CiRunMetric, CiSecret, CiWhitelist
 from unsafie.database.models.api_token import ApiToken, TokenKind
 from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.bot import Bot
 from unsafie.database.models.chat import Chat
+from unsafie.database.models.ci import CiApiToken, CiJob, CiRun, CiRunMetric, CiSecret, CiWhitelist
 from unsafie.database.models.commit_log import CommitLog
 from unsafie.database.models.github_account import GithubAccount
 from unsafie.database.models.github_app import GithubApp
@@ -43,6 +43,12 @@ __all__ = [
     "Bot",
     "Chat",
     "CheckpointPhase",
+    "CiApiToken",
+    "CiJob",
+    "CiRun",
+    "CiRunMetric",
+    "CiSecret",
+    "CiWhitelist",
     "CommandStatus",
     "CommitLog",
     "GithubAccount",
@@ -80,10 +86,4 @@ __all__ = [
     "WatchMode",
     "WebhookDelivery",
     "Worktree",
-    "CiApiToken",
-    "CiJob",
-    "CiRun",
-    "CiRunMetric",
-    "CiSecret",
-    "CiWhitelist",
 ]

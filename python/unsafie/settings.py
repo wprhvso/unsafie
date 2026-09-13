@@ -1,9 +1,9 @@
-import structlog
 import socket
 import uuid
 from pathlib import Path
 from typing import Literal
 
+import structlog
 from pydantic import AliasChoices, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -284,7 +284,9 @@ class Settings(BaseSettings):
     live_image_bytes: int = 262_144
     live_stream_seconds: float = 3_600.0
 
-    @field_validator("fluent_dir", "static_dir", "github_cache_dir", "pool_blob_dir", "chats_dir", mode="before")
+    @field_validator(
+        "fluent_dir", "static_dir", "github_cache_dir", "pool_blob_dir", "chats_dir", mode="before"
+    )
     @classmethod
     def _path(cls, v):
         return Path(v) if isinstance(v, str) else v

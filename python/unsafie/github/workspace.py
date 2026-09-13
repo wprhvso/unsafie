@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -15,6 +14,7 @@ from unsafie.github import bulk, cache, pat
 from unsafie.github.client.repo import RepoClient
 from unsafie.github.errors import GithubError, NotFound
 from unsafie.github.vfs import Overlay, Tree
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -108,7 +108,10 @@ async def ensure_worktree(state: Session) -> Worktree:
     commit = await state.client.commit(sha)
     async with SessionLocal() as session:
         state.worktree = await WorktreeRepository(session).create(
-            state.repo.id, state.branch, sha, commit["tree"]["sha"],
+            state.repo.id,
+            state.branch,
+            sha,
+            commit["tree"]["sha"],
         )
     logger.info("worktree opened %s at %s", state.label, sha[:7])
     return state.worktree

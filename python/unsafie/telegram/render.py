@@ -217,7 +217,9 @@ def describe(message: Message, *, nested: bool = False) -> dict[str, Any]:
         "date": message.date.isoformat(),
         "from": user_info(message.from_user),
         "sender_chat": chat_info(message.sender_chat) if message.sender_chat else None,
-        "edited": datetime.fromtimestamp(message.edit_date, tz=UTC).isoformat() if message.edit_date else None,
+        "edited": datetime.fromtimestamp(message.edit_date, tz=UTC).isoformat()
+        if message.edit_date
+        else None,
         "forwarded": _origin(message),
         "text": to_markdown(text, entities),
     }

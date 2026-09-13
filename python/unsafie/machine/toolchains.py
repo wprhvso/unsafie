@@ -36,7 +36,9 @@ def _toolchain(name: str, timeout: float) -> str:
         if name == "kameleo":
             return _apt(["docker.io"], timeout)
         if name == "tools":
-            return _apt(["ripgrep", "fd-find", "jq", "zstd", "p7zip-full", "imagemagick", "gh"], timeout)
+            return _apt(
+                ["ripgrep", "fd-find", "jq", "zstd", "p7zip-full", "imagemagick", "gh"], timeout
+            )
         if name == "nix":
             return _shell(
                 "curl -fsSL https://nixos.org/nix/install | sh -s -- --daemon --yes --no-channel-add",
@@ -73,19 +75,30 @@ def _apt(packages: list[str], timeout: float) -> str:
     if not shutil.which("apt-get"):
         return "skipped (no apt-get)"
     environment = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
-    lines = (["apt-get", "update"], ["apt-get", "install", "-y", "--no-install-recommends", *packages])
+    lines = (
+        ["apt-get", "update"],
+        ["apt-get", "install", "-y", "--no-install-recommends", *packages],
+    )
     for line in lines:
         done = subprocess.run(
-            _sudo(line), env=environment, capture_output=True, text=True, check=False, timeout=timeout,
+            _sudo(line),
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
         )
         if done.returncode != 0:
             return f"apt failed: {done.stderr.strip()[-300:]}"
     return "installed"
 
 
-
 def _shell(command: str, timeout: float) -> str:
     done = subprocess.run(
-        ["/bin/bash", "-lc", command], capture_output=True, text=True, check=False, timeout=timeout,
+        ["/bin/bash", "-lc", command],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=timeout,
     )
     return "installed" if done.returncode == 0 else f"failed: {done.stderr.strip()[-300:]}"

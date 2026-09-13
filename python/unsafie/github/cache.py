@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import hashlib
 import json
-from unsafie.log import get_logger
 import os
 import stat
 import tempfile
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from unsafie.github import metrics
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.mime import human_size
 from unsafie.settings import settings
@@ -197,7 +197,9 @@ class Sweeper(Loop):
         freed, total = await asyncio.to_thread(_sweep, root, settings.github_cache_disk_bytes)
         if freed:
             logger.info(
-                "github cache swept: %s freed of %s", human_size(freed), human_size(total),
+                "github cache swept: %s freed of %s",
+                human_size(freed),
+                human_size(total),
             )
 
 

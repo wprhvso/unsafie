@@ -1,8 +1,8 @@
-from unsafie.api.routes.public.ci import router as ci_router
 from fastapi import APIRouter
 
 from unsafie.api.routes.public.artifacts import router as artifact_router
 from unsafie.api.routes.public.auth import router as auth_router
+from unsafie.api.routes.public.ci import router as ci_router
 from unsafie.api.routes.public.github import router as github_router
 from unsafie.api.routes.public.live import router as live_router
 from unsafie.api.routes.public.machine import router as machine_router

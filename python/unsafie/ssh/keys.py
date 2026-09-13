@@ -1,9 +1,8 @@
-from unsafie.log import get_logger
-
 import asyncssh
 
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.user import UserRepository
+from unsafie.log import get_logger
 from unsafie.ssh.errors import SshError
 
 logger = get_logger(__name__)

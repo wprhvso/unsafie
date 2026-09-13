@@ -1,6 +1,5 @@
 import asyncio
 import json
-from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 from typing import Annotated
 
@@ -8,6 +7,7 @@ from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import StreamingResponse
 
 from unsafie import events as bus
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -51,7 +51,10 @@ async def recent(kinds: str | None = None, match: str | None = None, limit: int 
 
 
 async def _stream(
-    request: Request, kinds: list[str] | None, match: dict | None, after_id: str | None,
+    request: Request,
+    kinds: list[str] | None,
+    match: dict | None,
+    after_id: str | None,
 ) -> AsyncIterator[str]:
     queue: asyncio.Queue[str] = asyncio.Queue(maxsize=512)
 

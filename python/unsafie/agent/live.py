@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import json
-from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -13,6 +12,7 @@ from redis.exceptions import TimeoutError as RedisTimeout
 
 from unsafie import artifacts, cluster
 from unsafie.database.models.turn import Turn
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -115,7 +115,9 @@ class Live:
                 self._buffer = [f for f in self._buffer if f.kind == "turn.end"]
                 out.append(self._encode(Frame("note", _now(), {"name": TRUNCATED})))
                 logger.warning(
-                    "live: turn=%s wrote %s bytes, stopping there", self.turn_id, self.bytes,
+                    "live: turn=%s wrote %s bytes, stopping there",
+                    self.turn_id,
+                    self.bytes,
                 )
                 break
         return out
@@ -129,13 +131,19 @@ class Live:
                 pipe = cluster.client().pipeline(transaction=False)
                 for body in batch:
                     pipe.xadd(
-                        self.key, {BODY: body}, maxlen=settings.live_buffer, approximate=True,
+                        self.key,
+                        {BODY: body},
+                        maxlen=settings.live_buffer,
+                        approximate=True,
                     )
                 pipe.pexpire(self.key, int(settings.live_ttl * 1000))
                 await pipe.execute()
             except (cluster.Unavailable, RedisError, OSError):
                 logger.warning(
-                    "live: turn=%s lost %s frame(s)", self.turn_id, len(batch), exc_info=True,
+                    "live: turn=%s lost %s frame(s)",
+                    self.turn_id,
+                    len(batch),
+                    exc_info=True,
                 )
 
     async def _pump(self) -> None:
@@ -211,7 +219,10 @@ async def seal(turn_id: UUID, **data: Any) -> None:
         if not await client.exists(stream_key(turn_id)):
             return
         await client.xadd(
-            stream_key(turn_id), {BODY: body}, maxlen=settings.live_buffer, approximate=True,
+            stream_key(turn_id),
+            {BODY: body},
+            maxlen=settings.live_buffer,
+            approximate=True,
         )
         await client.pexpire(stream_key(turn_id), int(settings.live_ttl * 1000))
     except (cluster.Unavailable, RedisError, OSError):
@@ -262,12 +273,17 @@ async def bounds(turn_id: UUID) -> tuple[str | None, str | None]:
     last = await client.xrevrange(stream_key(turn_id), count=1)
     f_id = first[0][0] if first else None
     l_id = last[0][0] if last else None
-    return (f_id.decode() if isinstance(f_id, bytes) else f_id, l_id.decode() if isinstance(l_id, bytes) else l_id)
+    return (
+        f_id.decode() if isinstance(f_id, bytes) else f_id,
+        l_id.decode() if isinstance(l_id, bytes) else l_id,
+    )
 
 
 async def history(turn_id: UUID, after: str | None = None, limit: int | None = None) -> list[dict]:
     raw_entries = await cluster.client().xrange(
-        stream_key(turn_id), min=after or "-", count=limit or settings.live_buffer,
+        stream_key(turn_id),
+        min=after or "-",
+        count=limit or settings.live_buffer,
     )
     out: list[dict] = []
     if not raw_entries:

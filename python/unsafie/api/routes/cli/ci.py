@@ -1,11 +1,10 @@
-from unsafie.log import get_logger
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from unsafie.api.routes.cli.deps import Github
 from unsafie.database.models.pool import PoolCiJob, PoolCiRepo
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.pool import registry
 from unsafie.pool.ci import repos
 
@@ -62,7 +61,12 @@ async def _mine(who: Github, slug: str) -> PoolCiRepo:
 async def add(body: Wire, who: Github) -> dict:
     try:
         row = await repos.add(
-            who.user_id, body.repo, body.label, body.jobs, body.idle, body.lifetime,
+            who.user_id,
+            body.repo,
+            body.label,
+            body.jobs,
+            body.idle,
+            body.lifetime,
         )
     except OpsError as refused:
         raise HTTPException(400, str(refused)) from None

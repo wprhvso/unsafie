@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -8,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.turn_message import TurnMessages
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -77,7 +77,13 @@ class SegmentRepository:
         return Lineage([r.body for r in kept], rows[0].system, len(kept), dropped, total)
 
     async def save(
-        self, turn_id: UUID, *, body: bytes, count: int, size: int, system: str | None,
+        self,
+        turn_id: UUID,
+        *,
+        body: bytes,
+        count: int,
+        size: int,
+        system: str | None,
     ) -> None:
         values = {
             "turn_id": turn_id,

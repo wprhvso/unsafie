@@ -1,13 +1,9 @@
-import asyncio
 import base64
 import binascii
 import hashlib
 import json
-from unsafie.log import get_logger
 from datetime import UTC, datetime
-from typing import Any
 
-from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (
     BufferedInputFile,
@@ -27,9 +23,9 @@ from unsafie.api.routes.cli.deps import Chat
 from unsafie.database import SessionLocal
 from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.update import Update
-from unsafie.database.repositories.chat import ChatRepository
 from unsafie.database.repositories.response import ResponseRepository
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.mime import human_size, sniff_mime
 from unsafie.telegram import sender
 from unsafie.telegram.keyboard import ButtonsError, parse_buttons
@@ -41,7 +37,81 @@ router = APIRouter(prefix="/chat", tags=["cli"])
 MAX_FILE = 20 * 1024 * 1024
 MEDIA = ("document", "photo", "video", "audio", "voice", "animation", "sticker")
 DICE = ("🎲", "🎯", "🏀", "⚽", "🎳", "🎰")
-REACTIONS = ["👍", "👎", "❤", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱", "🤬", "😢", "🎉", "🤩", "🤮", "💩", "🙏", "👌", "🕊", "🤡", "🥱", "🥴", "😍", "🐳", "❤\u200d🔥", "🌚", "🌭", "💯", "🤣", "⚡", "🍌", "🏆", "💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕", "😈", "😴", "😭", "🤓", "👻", "👨\u200d💻", "👀", "🎃", "🙈", "😇", "😨", "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🗿", "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊", "😎", "👾", "🤷\u200d♂", "🤷", "🤷\u200d♀", "😡"]
+REACTIONS = [
+    "👍",
+    "👎",
+    "❤",
+    "🔥",
+    "🥰",
+    "👏",
+    "😁",
+    "🤔",
+    "🤯",
+    "😱",
+    "🤬",
+    "😢",
+    "🎉",
+    "🤩",
+    "🤮",
+    "💩",
+    "🙏",
+    "👌",
+    "🕊",
+    "🤡",
+    "🥱",
+    "🥴",
+    "😍",
+    "🐳",
+    "❤\u200d🔥",
+    "🌚",
+    "🌭",
+    "💯",
+    "🤣",
+    "⚡",
+    "🍌",
+    "🏆",
+    "💔",
+    "🤨",
+    "😐",
+    "🍓",
+    "🍾",
+    "💋",
+    "🖕",
+    "😈",
+    "😴",
+    "😭",
+    "🤓",
+    "👻",
+    "👨\u200d💻",
+    "👀",
+    "🎃",
+    "🙈",
+    "😇",
+    "😨",
+    "🤝",
+    "✍",
+    "🤗",
+    "🫡",
+    "🎅",
+    "🎄",
+    "☃",
+    "💅",
+    "🤪",
+    "🗿",
+    "🆒",
+    "💘",
+    "🙉",
+    "🦄",
+    "😘",
+    "💊",
+    "🙊",
+    "😎",
+    "👾",
+    "🤷\u200d♂",
+    "🤷",
+    "🤷\u200d♀",
+    "😡",
+]
 ACTIONS = frozenset(
     {
         "typing",
@@ -85,7 +155,7 @@ class Invite(BaseModel):
 
 
 def _until(value: str | None):
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
     from unsafie.scheduler.when import WhenError, duration
 
@@ -277,7 +347,9 @@ async def upload(body: Upload, who: Chat) -> dict:
     if not data:
         raise HTTPException(400, "the file is empty")
     if len(data) > MAX_FILE:
-        raise HTTPException(413, f"{human_size(len(data))} is over the {human_size(MAX_FILE)} limit")
+        raise HTTPException(
+            413, f"{human_size(len(data))} is over the {human_size(MAX_FILE)} limit"
+        )
     if body.media not in MEDIA:
         raise HTTPException(400, f"media must be one of {', '.join(MEDIA)}")
     bot = await who.bot()
@@ -372,7 +444,10 @@ async def drop(message_id: int, who: Chat, chat_id: int | None = None) -> dict:
         await who.ensure_admin(target_chat)
     try:
         await sender.delete(
-            bot, bot_id=bot_id, chat_id=target_chat, message_id=message_id,
+            bot,
+            bot_id=bot_id,
+            chat_id=target_chat,
+            message_id=message_id,
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -467,11 +542,18 @@ async def forward(message_id: int, body: Forward, who: Chat) -> dict:
     try:
         if body.duplicate:
             sent = await bot.copy_message(
-                target, source, message_id, caption=body.caption, disable_notification=body.silent,
+                target,
+                source,
+                message_id,
+                caption=body.caption,
+                disable_notification=body.silent,
             )
             return {"message_ids": [sent.message_id], "chat_id": str(target), "copied": True}
         sent = await bot.forward_message(
-            target, source, message_id, disable_notification=body.silent,
+            target,
+            source,
+            message_id,
+            disable_notification=body.silent,
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -531,7 +613,9 @@ async def location(body: Location, who: Chat) -> dict:
             )
         else:
             sent = await bot.send_location(
-                target_chat, latitude=body.latitude, longitude=body.longitude,
+                target_chat,
+                latitude=body.latitude,
+                longitude=body.longitude,
             )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -585,7 +669,13 @@ async def history_search(
 
 @router.get("/history")
 async def history_get(
-    who: Chat, chat_id: int | None = None, message_id: int | None = None, around: int = 5, limit: int = 20, before: int | None = None, since: float | None = None,
+    who: Chat,
+    chat_id: int | None = None,
+    message_id: int | None = None,
+    around: int = 5,
+    limit: int = 20,
+    before: int | None = None,
+    since: float | None = None,
 ) -> dict:
     from unsafie.database import SessionLocal
     from unsafie.database.repositories.history import HistoryRepository
@@ -596,7 +686,9 @@ async def history_get(
     async with SessionLocal() as session:
         repository = HistoryRepository(session)
         if message_id:
-            hits = await repository.around(who.bot_id, target_chat, message_id, max(1, min(around, 30)))
+            hits = await repository.around(
+                who.bot_id, target_chat, message_id, max(1, min(around, 30))
+            )
         else:
             hits = await repository.recent(who.bot_id, target_chat, max(1, min(limit, 100)), before)
         if since is not None:
@@ -673,7 +765,10 @@ async def chat_mute(user_id: int, who: Chat, body: Moderation) -> dict:
     await who.ensure_admin(chat_id)
     try:
         await bot.restrict_chat_member(
-            chat_id, user_id, permissions=allowed, until_date=_until(body.until),
+            chat_id,
+            user_id,
+            permissions=allowed,
+            until_date=_until(body.until),
         )
     except TelegramAPIError as refused:
         raise HTTPException(502, f"telegram refused: {refused}") from None
@@ -713,7 +808,10 @@ async def album(body: Album, who: Chat) -> dict:
         if not data:
             raise HTTPException(400, f"{item.name}: file is empty")
         if len(data) > MAX_FILE:
-            raise HTTPException(413, f"{item.name}: {human_size(len(data))} is over the {human_size(MAX_FILE)} limit")
+            raise HTTPException(
+                413,
+                f"{item.name}: {human_size(len(data))} is over the {human_size(MAX_FILE)} limit",
+            )
         total_size += len(data)
         if total_size > 50 * 1024 * 1024:
             raise HTTPException(413, f"album size {human_size(total_size)} is over the 50 MB limit")
@@ -746,6 +844,7 @@ async def album(body: Album, who: Chat) -> dict:
 @router.get("/files/{file_id}")
 async def download_file(file_id: str, who: Chat, chat_id: int | None = None) -> dict:
     from io import BytesIO
+
     target_chat = await who.target_chat(chat_id)
     bot = await who.bot()
     bot_id = who.bot_id or 0

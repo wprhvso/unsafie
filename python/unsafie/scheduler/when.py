@@ -130,7 +130,11 @@ def absolute(raw: str, tz: ZoneInfo, now: datetime) -> datetime:
             except ValueError:
                 continue
             parsed = local_now.replace(
-                hour=t.hour, minute=t.minute, second=t.second, microsecond=0, tzinfo=None,
+                hour=t.hour,
+                minute=t.minute,
+                second=t.second,
+                microsecond=0,
+                tzinfo=None,
             )
             if not explicit_today and day_shift == 0 and parsed <= local_now.replace(tzinfo=None):
                 day_shift = 1

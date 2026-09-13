@@ -1,11 +1,11 @@
 import base64
 import fnmatch
-from unsafie.log import get_logger
 import posixpath
 from dataclasses import dataclass
 from typing import Any
 
 from unsafie.github.errors import GithubError
+from unsafie.log import get_logger
 from unsafie.mime import human_size, is_text
 from unsafie.settings import settings
 

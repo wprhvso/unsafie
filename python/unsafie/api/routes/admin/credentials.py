@@ -63,7 +63,10 @@ async def refresh_credential(session_id: int):
 async def patch_credential(session_id: int, body: OpalSessionPatch):
     async with SessionLocal() as session:
         row = await OpalSessionRepository(session).update(
-            session_id, enabled=body.enabled, label=body.label, reset=body.reset,
+            session_id,
+            enabled=body.enabled,
+            label=body.label,
+            reset=body.reset,
         )
     if row is None:
         raise HTTPException(404, "no such opal session")

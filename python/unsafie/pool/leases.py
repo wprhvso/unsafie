@@ -1,5 +1,4 @@
 import asyncio
-from unsafie.log import get_logger
 import time
 from datetime import UTC, datetime
 from uuid import UUID
@@ -12,6 +11,7 @@ from unsafie.database.models.api_token import TokenKind
 from unsafie.database.models.pool import MachineState, PoolLease, PoolMachine
 from unsafie.database.models.user import User
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.pool import channel, keys, registry
 from unsafie.settings import settings
 from unsafie_wire import channel as wire
@@ -303,7 +303,7 @@ async def resolve(user_id: int, ref: str | None) -> PoolMachine:
 async def _pick(mine: list[PoolMachine], chat_id: int | None) -> PoolMachine:
     here = [m for m in mine if chat_id is not None and m.chat_id == chat_id] or mine
     ranked = [(await registry.held(m.name), m) for m in here]
-    left, machine = max(ranked, key=lambda row: row[0])
+    _left, machine = max(ranked, key=lambda row: row[0])
     return machine
 
 
@@ -341,7 +341,8 @@ async def reap() -> int:
     async with SessionLocal() as session:
         rows = await session.scalars(
             select(PoolMachine).where(
-                PoolMachine.state == MachineState.LEASED, PoolMachine.gone_at.is_(None),
+                PoolMachine.state == MachineState.LEASED,
+                PoolMachine.gone_at.is_(None),
             ),
         )
         machines = list(rows)

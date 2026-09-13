@@ -62,7 +62,11 @@ def run(
                 out_path = Path("output.md")
             else:
                 in_path = Path(path)
-                out_path = in_path.with_name(f"{in_path.stem}.converted.md") if in_path.suffix.lower() == ".md" else in_path.with_suffix(".md")
+                out_path = (
+                    in_path.with_name(f"{in_path.stem}.converted.md")
+                    if in_path.suffix.lower() == ".md"
+                    else in_path.with_suffix(".md")
+                )
             out_path.write_text(payload.markdown, encoding="utf-8")
             md_file = str(out_path)
 

@@ -39,6 +39,9 @@ async def chat_messages(bot_id: int, chat_id: int, limit: int = 50, before: int 
 async def chat_search(bot_id: int, chat_id: int, query: str, limit: int = 50):
     async with SessionLocal() as session:
         hits, _ = await HistoryRepository(session).search(
-            bot_id, chat_id, query, limit=min(limit, 200),
+            bot_id,
+            chat_id,
+            query,
+            limit=min(limit, 200),
         )
     return [MessageRead(**h.__dict__) for h in hits]

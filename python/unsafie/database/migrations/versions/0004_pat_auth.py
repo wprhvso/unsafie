@@ -52,11 +52,17 @@ def downgrade() -> None:
             nullable=False,
         ),
         sa.Column(
-            "bot_id", sa.Integer(), sa.ForeignKey("bots.id", ondelete="CASCADE"), nullable=False,
+            "bot_id",
+            sa.Integer(),
+            sa.ForeignKey("bots.id", ondelete="CASCADE"),
+            nullable=False,
         ),
         sa.Column("chat_id", sa.BigInteger(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False,
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
         ),
     )

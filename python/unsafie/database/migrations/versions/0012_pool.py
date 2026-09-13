@@ -83,7 +83,9 @@ def upgrade() -> None:
             gone_reason VARCHAR(64)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS ix_pool_machines_state ON pool_machines (state, seen_at)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_pool_machines_state ON pool_machines (state, seen_at)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS ix_pool_machines_user ON pool_machines (user_id, state)")
 
     op.execute("""
@@ -105,7 +107,9 @@ def upgrade() -> None:
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_pool_commands_machine ON pool_commands (machine, created_at)",
     )
-    op.execute("CREATE INDEX IF NOT EXISTS ix_pool_commands_user ON pool_commands (user_id, created_at)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_pool_commands_user ON pool_commands (user_id, created_at)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS pool_blobs (
@@ -180,7 +184,9 @@ def upgrade() -> None:
             finished_at TIMESTAMPTZ
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS ix_pool_ci_jobs_repo ON pool_ci_jobs (repo_id, started_at)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_pool_ci_jobs_repo ON pool_ci_jobs (repo_id, started_at)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS user_secrets (

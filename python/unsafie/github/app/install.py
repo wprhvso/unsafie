@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 import secrets
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +12,7 @@ from unsafie.database.repositories.github import (
 from unsafie.github.app import auth
 from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

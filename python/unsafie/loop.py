@@ -1,9 +1,9 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 import time
 
 from unsafie import telemetry
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -56,6 +56,8 @@ class Loop:
             except Exception:
                 logger.exception("%s tick failed", self.name)
             logger.debug(
-                "%s tick done in %.1fms", self.name, (time.perf_counter() - started) * 1000,
+                "%s tick done in %.1fms",
+                self.name,
+                (time.perf_counter() - started) * 1000,
             )
             await asyncio.sleep(max(self.min_interval, self.interval))

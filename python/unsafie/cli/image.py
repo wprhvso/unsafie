@@ -77,9 +77,7 @@ def generate(
         name_deadline = time.monotonic() + 15.0
         while time.monotonic() < name_deadline:
             time.sleep(1)
-            has_name = browser.evaluate(
-                '!!document.querySelector(\'[name="name"]\')'
-            ).get("result")
+            has_name = browser.evaluate("!!document.querySelector('[name=\"name\"]')").get("result")
             if has_name:
                 browser.click('[name="name"]')
                 time.sleep(0.5)

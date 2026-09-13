@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
@@ -7,6 +5,7 @@ from aiogram.types import Message
 
 from unsafie import tokens
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer

@@ -1,6 +1,5 @@
 import asyncio
 import json
-from unsafie.log import get_logger
 import time
 from collections.abc import AsyncIterator
 from typing import Annotated
@@ -15,6 +14,7 @@ from unsafie.agent import live
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.slugs import is_slug
 

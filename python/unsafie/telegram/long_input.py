@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -9,6 +8,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from unsafie.fluent import t
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

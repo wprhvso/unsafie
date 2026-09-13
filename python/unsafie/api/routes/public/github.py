@@ -1,5 +1,4 @@
 import html
-from unsafie.log import get_logger
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -12,6 +11,7 @@ from unsafie.github.app import install, manifest
 from unsafie.github.errors import GithubError
 from unsafie.github.webhooks import router as webhooks
 from unsafie.github.webhooks.verify import valid
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

@@ -94,9 +94,11 @@ def test_cli_browser_start_and_stop(tmp_path: Path):
     }
     state_file = tmp_path / "kameleo.json"
 
-    with patch.object(browser, "state_file", return_value=state_file), \
-         patch.object(browser, "launch", return_value=fake_state), \
-         patch.object(browser, "_alive", return_value=True):
+    with (
+        patch.object(browser, "state_file", return_value=state_file),
+        patch.object(browser, "launch", return_value=fake_state),
+        patch.object(browser, "_alive", return_value=True),
+    ):
         res_start = cli_browser.start("p1")
         assert res_start["running"] is True
         assert res_start["profile_id"] == "prof-test"
@@ -119,8 +121,13 @@ async def test_machine_stream_local_connect():
     mock_reader.read.return_value = b""
     mock_writer = AsyncMock()
 
-    with patch("unsafie.pool.tunnels.resolve", return_value={"kind": "term", "machine": "local", "port": 5900}), \
-         patch("asyncio.open_connection", return_value=(mock_reader, mock_writer)):
+    with (
+        patch(
+            "unsafie.pool.tunnels.resolve",
+            return_value={"kind": "term", "machine": "local", "port": 5900},
+        ),
+        patch("asyncio.open_connection", return_value=(mock_reader, mock_writer)),
+    ):
         await machine.stream(mock_ws, "test-slug")
 
     mock_ws.accept.assert_called_once_with(subprotocol="binary")

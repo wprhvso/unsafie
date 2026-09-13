@@ -1,10 +1,9 @@
-from unsafie.log import get_logger
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from unsafie.api.routes.cli.deps import Pool
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.ssh import binding, keys
 from unsafie.ssh import pool as ssh_pool

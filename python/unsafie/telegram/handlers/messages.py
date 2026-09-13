@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.enums import ChatType
 from aiogram.types import Message
@@ -9,6 +7,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.chat import GroupMode
 from unsafie.database.repositories.chat import ChatRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.telegram.group import addressed_to_bot, clean_mention
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
@@ -65,13 +64,21 @@ def build_messages_router() -> Router:
                 if not addressed_to_bot(message, tg_bot_id, username):
                     return
                 if message.text and username:
-                    cleaned, new_entities = clean_mention(message.text, username, list(message.entities or []))
+                    cleaned, new_entities = clean_mention(
+                        message.text, username, list(message.entities or [])
+                    )
                     if cleaned != message.text:
-                        message = message.model_copy(update={"text": cleaned, "entities": new_entities}).as_(message.bot)
+                        message = message.model_copy(
+                            update={"text": cleaned, "entities": new_entities}
+                        ).as_(message.bot)
                 elif message.caption and username:
-                    cleaned, new_entities = clean_mention(message.caption, username, list(message.caption_entities or []))
+                    cleaned, new_entities = clean_mention(
+                        message.caption, username, list(message.caption_entities or [])
+                    )
                     if cleaned != message.caption:
-                        message = message.model_copy(update={"caption": cleaned, "caption_entities": new_entities}).as_(message.bot)
+                        message = message.model_copy(
+                            update={"caption": cleaned, "caption_entities": new_entities}
+                        ).as_(message.bot)
 
         logger.info(
             "bot=%s chat=%s(%s) msg=%s from=%s content_type=%s reply_to=%s",

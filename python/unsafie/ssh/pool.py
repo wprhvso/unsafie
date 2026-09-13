@@ -2,7 +2,6 @@ import asyncio
 import base64
 import contextlib
 import hashlib
-from unsafie.log import get_logger
 import time
 from dataclasses import dataclass, field
 
@@ -12,6 +11,7 @@ from unsafie import telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.models.ssh_host import SshHost
 from unsafie.database.repositories.ssh import SshRepository
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.ssh import keys
 from unsafie.ssh.errors import HostKeyChanged, NoKey, SshError
@@ -49,7 +49,9 @@ class _HostKeyValidator(asyncssh.SSHClient):
         self.fingerprint: str | None = None
         self.mismatch = False
 
-    def validate_host_public_key(self, host: str, addr: str, port: int, key: asyncssh.SSHKey) -> bool:
+    def validate_host_public_key(
+        self, host: str, addr: str, port: int, key: asyncssh.SSHKey
+    ) -> bool:
         self.server_key = key
         self.fingerprint = fingerprint(key)
         if self.expected_fingerprint and self.expected_fingerprint != self.fingerprint:
@@ -123,7 +125,9 @@ class Pool:
                 ) from None
             except Exception as e:
                 if validator.mismatch and host.fingerprint and validator.fingerprint:
-                    raise HostKeyChanged(host.alias, host.fingerprint, validator.fingerprint) from None
+                    raise HostKeyChanged(
+                        host.alias, host.fingerprint, validator.fingerprint
+                    ) from None
                 if isinstance(e, (TimeoutError, asyncssh.Error, OSError)):
                     msg = f"{host.alias}: cannot connect ({type(e).__name__}: {e})"
                     raise SshError(msg) from None
@@ -140,7 +144,9 @@ class Pool:
             if not host.fingerprint:
                 async with SessionLocal() as session:
                     await SshRepository(session).set_host_key(
-                        host.id, server_key.export_public_key().decode().strip(), got,
+                        host.id,
+                        server_key.export_public_key().decode().strip(),
+                        got,
                     )
                 host.fingerprint = got
                 logger.info("user=%s ssh %s host key pinned %s", user_id, host.alias, got)
@@ -215,7 +221,8 @@ async def run(user_id: int, host: SshHost, command: str, timeout: float | None =
     ) as span:
         connection = await pool.connect(user_id, host)
         limit = min(
-            float(timeout or settings.ssh_command_timeout), settings.ssh_max_command_timeout,
+            float(timeout or settings.ssh_command_timeout),
+            settings.ssh_max_command_timeout,
         )
         started = time.perf_counter()
         try:

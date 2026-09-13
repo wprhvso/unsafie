@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 import string
 
 from unsafie.database import SessionLocal
@@ -15,6 +14,7 @@ from unsafie.github.app import auth
 from unsafie.github.client.base import ACCEPT, API_VERSION, TokenProvider, session
 from unsafie.github.client.user import UserClient
 from unsafie.github.errors import GithubError, UserAuthRequired
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -59,7 +59,11 @@ async def save(user_id: int, token: str) -> tuple[GithubAccount, list[str]]:
     async with SessionLocal() as db:
         await UserRepository(db).get_or_create(user_id)
         account = await GithubAccountRepository(db).upsert(
-            user_id, int(me["id"]), me["login"], token=token, scopes=", ".join(scopes) or None,
+            user_id,
+            int(me["id"]),
+            me["login"],
+            token=token,
+            scopes=", ".join(scopes) or None,
         )
     logger.info(
         "user=%s token for %s saved (%s)",

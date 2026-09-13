@@ -1,11 +1,11 @@
 import gzip
 import json
-from unsafie.log import get_logger
 from dataclasses import dataclass
 
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.segment import SegmentRepository
+from unsafie.log import get_logger
 from unsafie.mime import human_size
 from unsafie.settings import settings
 
@@ -90,7 +90,11 @@ async def save(turn: Turn, segment: list, system: str | None) -> int:
     raw = encode(kept)
     async with SessionLocal() as session:
         await SegmentRepository(session).save(
-            turn.id, body=gzip.compress(raw), count=len(kept), size=len(raw), system=system,
+            turn.id,
+            body=gzip.compress(raw),
+            count=len(kept),
+            size=len(raw),
+            system=system,
         )
     logger.info(
         "turn=%s stored %s message(s), %s%s",

@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import json
-from unsafie.log import get_logger
 import os
 import shlex
 import shutil
@@ -12,6 +11,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from uuid import UUID
+
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -270,7 +271,9 @@ class BashSpool:
             await asyncio.sleep(poll_interval)
 
     async def tail(
-        self, from_offset: int = 0, poll_interval: float = 0.1,
+        self,
+        from_offset: int = 0,
+        poll_interval: float = 0.1,
     ) -> AsyncIterator[tuple[str, int]]:
         offset = from_offset
         while True:

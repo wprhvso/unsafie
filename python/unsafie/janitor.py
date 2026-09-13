@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from unsafie import events, telemetry
 from unsafie.agent import live
 from unsafie.database import SessionLocal
@@ -7,6 +5,7 @@ from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.delivery import DeliveryRepository
 from unsafie.database.repositories.segment import SegmentRepository
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.settings import settings
 

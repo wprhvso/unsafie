@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import fnmatch
 import json
-from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -11,6 +10,7 @@ from typing import Any
 from redis.exceptions import TimeoutError as RedisTimeout
 
 from unsafie import cluster
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -114,10 +114,16 @@ class Bus:
         last = await client.xrevrange(self.key, count=1)
         f_id = first[0][0] if first else None
         l_id = last[0][0] if last else None
-        return (f_id.decode() if isinstance(f_id, bytes) else f_id, l_id.decode() if isinstance(l_id, bytes) else l_id)
+        return (
+            f_id.decode() if isinstance(f_id, bytes) else f_id,
+            l_id.decode() if isinstance(l_id, bytes) else l_id,
+        )
 
     async def recent(
-        self, kinds: list[str] | None = None, match: dict[str, Any] | None = None, limit: int = 100,
+        self,
+        kinds: list[str] | None = None,
+        match: dict[str, Any] | None = None,
+        limit: int = 100,
     ) -> list[Event]:
         entries = await cluster.client().xrevrange(self.key, count=self._maxlen)
         out: list[Event] = []
@@ -161,7 +167,9 @@ class Bus:
                 if not isinstance(stream_pair, tuple | list) or len(stream_pair) < 2:
                     continue
                 for entry_raw, fields in stream_pair[1]:
-                    entry_id = entry_raw.decode() if isinstance(entry_raw, bytes) else str(entry_raw)
+                    entry_id = (
+                        entry_raw.decode() if isinstance(entry_raw, bytes) else str(entry_raw)
+                    )
                     cursor = entry_id
                     event = _parse(entry_id, fields)
                     if event is not None and event.matches(kinds, match):

@@ -1,10 +1,9 @@
-from unsafie.log import get_logger
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.bot import Bot
 from unsafie.database.repositories.bot import BotRepository
+from unsafie.log import get_logger
 from unsafie.telegram import bots, webhook
 
 logger = get_logger(__name__)

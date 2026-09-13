@@ -23,7 +23,9 @@ def tracer() -> trace.Tracer:
 def _clean_val(v: Any) -> Any:
     if isinstance(v, (bool, str, bytes, int, float)):
         return v
-    if isinstance(v, (list, tuple)) and all(isinstance(x, (bool, str, bytes, int, float)) for x in v):
+    if isinstance(v, (list, tuple)) and all(
+        isinstance(x, (bool, str, bytes, int, float)) for x in v
+    ):
         return v
     return json.dumps(v, ensure_ascii=False, default=str)
 

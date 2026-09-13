@@ -1,6 +1,5 @@
 import asyncio
-from unsafie.log import get_logger
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
@@ -11,7 +10,11 @@ from unsafie.agent.runtime import _ACTIVE_TURNS, prompt_for, run_turn
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.telegram.handlers.locale import locale_for
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 logger = get_logger(__name__)
 

@@ -24,14 +24,20 @@ async def publish(
 ) -> Artifact | None:
     async with SessionLocal() as session:
         return await ArtifactRepository(session).markdown(
-            content=content, title=title, bot_id=bot_id, chat_id=chat_id, turn_id=turn_id,
+            content=content,
+            title=title,
+            bot_id=bot_id,
+            chat_id=chat_id,
+            turn_id=turn_id,
         )
 
 
 async def for_turn(turn: Turn) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).for_turn(
-            turn_id=turn.id, bot_id=turn.bot_id, chat_id=turn.chat_id,
+            turn_id=turn.id,
+            bot_id=turn.bot_id,
+            chat_id=turn.chat_id,
         )
     return artifact.slug if artifact is not None else None
 
@@ -47,7 +53,9 @@ async def telemetry_for_turn(
 ) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).for_telemetry(
-            turn_id=turn_id, bot_id=bot_id, chat_id=chat_id,
+            turn_id=turn_id,
+            bot_id=bot_id,
+            chat_id=chat_id,
         )
     return artifact.slug if artifact is not None else None
 
@@ -61,7 +69,8 @@ async def of_telemetry(turn_id: UUID) -> str | None:
 async def for_ci_run(run_id: int, title: str | None = None) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).for_ci_run(
-            run_id=run_id, title=title,
+            run_id=run_id,
+            title=title,
         )
     return artifact.slug if artifact is not None else None
 
@@ -70,4 +79,3 @@ async def of_ci_run(run_id: int) -> str | None:
     async with SessionLocal() as session:
         artifact = await ArtifactRepository(session).of_ci_run(run_id)
     return artifact.slug if artifact is not None else None
-

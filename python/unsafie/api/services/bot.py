@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,13 +5,16 @@ from unsafie.api.schemas.models import BotRead
 from unsafie.database.models.bot import Bot
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.chat import ChatRepository
+from unsafie.log import get_logger
 from unsafie.telegram import service, webhook
 
 logger = get_logger(__name__)
 
 
 async def read(
-    session: AsyncSession, bot: Bot, polled: dict[int, str | None] | None = None,
+    session: AsyncSession,
+    bot: Bot,
+    polled: dict[int, str | None] | None = None,
 ) -> BotRead:
     _, total = await ChatRepository(session).page(limit=1, bot_id=bot.id)
     if polled is None:

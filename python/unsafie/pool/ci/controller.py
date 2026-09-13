@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import json
-from unsafie.log import get_logger
 import shlex
 from datetime import UTC, datetime
 
@@ -11,6 +10,7 @@ from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.pool import MachineState, PoolCiRepo, PoolMachine
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.pool import channel, keys, registry
 from unsafie.pool.ci import repos
 from unsafie.pool.ci.scaleset import ScaleSet, ScaleSetError, Session
@@ -195,14 +195,19 @@ class Controller:
             self.watchers.add(watcher)
             watcher.add_done_callback(self.watchers.discard)
             logger.info(
-                "pool ci %s: runner %s dispatched to %s", self.repo.slug, runner_name, machine,
+                "pool ci %s: runner %s dispatched to %s",
+                self.repo.slug,
+                runner_name,
+                machine,
             )
         except Exception as e:
             if runner_id is not None:
                 with contextlib.suppress(Exception):
                     await self.api.forget(runner_id)
             await registry.mark(machine, MachineState.IDLE)
-            logger.warning("pool ci %s: failed to launch runner on %s: %s", self.repo.slug, machine, e)
+            logger.warning(
+                "pool ci %s: failed to launch runner on %s: %s", self.repo.slug, machine, e
+            )
             raise
         else:
             return True
@@ -232,7 +237,9 @@ class Controller:
             await repos.finish_job(job_id, "cancelled", None)
             raise
         except Exception as broken:
-            logger.warning("pool ci %s: runner on %s ended badly: %s", self.repo.slug, machine, broken)
+            logger.warning(
+                "pool ci %s: runner on %s ended badly: %s", self.repo.slug, machine, broken
+            )
             await repos.finish_job(job_id, "failed", str(broken)[:200])
         finally:
             await self.api.forget(runner_id)

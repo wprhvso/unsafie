@@ -178,7 +178,9 @@ class Daemon:
         with contextlib.suppress(Exception):
             subprocess.run(["git", "config", "--global", "--unset-all", "user.name"], check=False)
             subprocess.run(["git", "config", "--global", "--unset-all", "user.email"], check=False)
-            subprocess.run(["git", "config", "--global", "--unset-all", "credential.helper"], check=False)
+            subprocess.run(
+                ["git", "config", "--global", "--unset-all", "credential.helper"], check=False
+            )
         with contextlib.suppress(OSError):
             if self.workdir.is_dir():
                 shutil.rmtree(self.workdir)
@@ -190,6 +192,7 @@ class Daemon:
         if kind in (wire.FrameKind.COMMAND, wire.FrameKind.PYTHON):
             if raw.get("tunnel"):
                 from unsafie.machine.tunnel import TunnelError, serve_tunnel
+
                 channel_id = str(raw["tunnel"].get("channel") or "")
                 port = int(raw["tunnel"].get("port") or 0)
                 kind_t = str(raw["tunnel"].get("kind") or "vnc")
@@ -201,7 +204,11 @@ class Daemon:
                         serve_tunnel(url, kind_t, port)
                     except TunnelError as e:
                         with contextlib.suppress(Exception):
-                            self.link.call("POST", f"/machines/{self.name}/tunnel/{channel_id}/failed", body={"error": str(e)})
+                            self.link.call(
+                                "POST",
+                                f"/machines/{self.name}/tunnel/{channel_id}/failed",
+                                body={"error": str(e)},
+                            )
 
                 threading.Thread(target=_tunnel_worker, daemon=True).start()
                 return
@@ -248,7 +255,11 @@ class Daemon:
             bash_bin = shutil.which("bash") or "/bin/bash"
             limit = float(raw.get("timeout") or 600.0)
             kind = str(raw.get("kind") or "")
-            argv = [sys.executable, "-c", cmd] if kind == wire.FrameKind.PYTHON else [bash_bin, "-lc", cmd]
+            argv = (
+                [sys.executable, "-c", cmd]
+                if kind == wire.FrameKind.PYTHON
+                else [bash_bin, "-lc", cmd]
+            )
             proc = None
             try:
                 proc = subprocess.Popen(
@@ -260,8 +271,22 @@ class Daemon:
                 )
                 out, _ = proc.communicate(timeout=limit)
                 text = out.decode(errors="replace")
-                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
-                self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": proc.returncode, "seconds": time.monotonic() - started})
+                self.outbox.put(
+                    {
+                        "kind": str(wire.FrameKind.OUTPUT),
+                        "id": cmd_id,
+                        "stream": "out",
+                        "data": text,
+                    }
+                )
+                self.outbox.put(
+                    {
+                        "kind": str(wire.FrameKind.EXIT),
+                        "id": cmd_id,
+                        "code": proc.returncode,
+                        "seconds": time.monotonic() - started,
+                    }
+                )
             except subprocess.TimeoutExpired:
                 if proc is not None:
                     with contextlib.suppress(Exception):
@@ -270,17 +295,52 @@ class Daemon:
                         out, _ = proc.communicate(timeout=2.0)
                         text = out.decode(errors="replace") if out else ""
                         if text:
-                            self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": text})
+                            self.outbox.put(
+                                {
+                                    "kind": str(wire.FrameKind.OUTPUT),
+                                    "id": cmd_id,
+                                    "stream": "out",
+                                    "data": text,
+                                }
+                            )
                     except Exception:
                         pass
-                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": f"\n[command timed out after {limit:.0f}s]\n"})
-                self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 124, "seconds": time.monotonic() - started})
+                self.outbox.put(
+                    {
+                        "kind": str(wire.FrameKind.OUTPUT),
+                        "id": cmd_id,
+                        "stream": "out",
+                        "data": f"\n[command timed out after {limit:.0f}s]\n",
+                    }
+                )
+                self.outbox.put(
+                    {
+                        "kind": str(wire.FrameKind.EXIT),
+                        "id": cmd_id,
+                        "code": 124,
+                        "seconds": time.monotonic() - started,
+                    }
+                )
             except Exception as e:
                 if proc is not None and proc.poll() is None:
                     with contextlib.suppress(Exception):
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                self.outbox.put({"kind": str(wire.FrameKind.OUTPUT), "id": cmd_id, "stream": "out", "data": str(e)})
-                self.outbox.put({"kind": str(wire.FrameKind.EXIT), "id": cmd_id, "code": 1, "seconds": time.monotonic() - started})
+                self.outbox.put(
+                    {
+                        "kind": str(wire.FrameKind.OUTPUT),
+                        "id": cmd_id,
+                        "stream": "out",
+                        "data": str(e),
+                    }
+                )
+                self.outbox.put(
+                    {
+                        "kind": str(wire.FrameKind.EXIT),
+                        "id": cmd_id,
+                        "code": 1,
+                        "seconds": time.monotonic() - started,
+                    }
+                )
             finally:
                 if proc is not None and proc.poll() is None:
                     with contextlib.suppress(Exception):

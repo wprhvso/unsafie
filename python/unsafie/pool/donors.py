@@ -1,6 +1,5 @@
 import base64
 import hashlib
-from unsafie.log import get_logger
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +12,7 @@ from unsafie.errors import OpsError
 from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError, NotFound
 from unsafie.github.sealed_box import seal
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)

@@ -1,18 +1,17 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from unsafie import cluster
 from unsafie.agent import cancel, queue
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.database.repositories.update import UpdateRepository
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -68,7 +67,9 @@ async def route(
             chat_id=chat_id,
             user_id=user_id,
             parent=owner,
-            reply_to=turn_reply_to if turn_reply_to is not None else (reply_to or (owner.reply_to if owner else None)),
+            reply_to=turn_reply_to
+            if turn_reply_to is not None
+            else (reply_to or (owner.reply_to if owner else None)),
             is_inline=is_inline,
             inline_message_id=inline_message_id,
         )

@@ -1,12 +1,12 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 from uuid import UUID
 
 from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

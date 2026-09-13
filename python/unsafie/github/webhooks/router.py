@@ -1,6 +1,3 @@
-from unsafie.github.ci import service as ci_service
-from unsafie.log import get_logger
-
 from sqlalchemy import select
 
 from unsafie import telemetry
@@ -16,8 +13,10 @@ from unsafie.database.repositories.github import (
 from unsafie.database.repositories.subscription import SubscriptionRepository
 from unsafie.github import subscriptions
 from unsafie.github.app import auth, install
+from unsafie.github.ci import service as ci_service
 from unsafie.github.webhooks import deliveries
 from unsafie.github.webhooks import events as fmt
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telegram import bots, sender
 from unsafie.telemetry import attrs
@@ -51,7 +50,7 @@ async def process(row) -> None:
             if event in LIFECYCLE:
                 await _lifecycle(event, payload)
             else:
-                if event in ('push', 'check_run', 'check_suite'):
+                if event in ("push", "check_run", "check_suite"):
                     await ci_service.enqueue_from_webhook(event, payload)
                 notified = await _notify(event, payload)
         except Exception as e:
@@ -66,7 +65,10 @@ async def process(row) -> None:
         await deliveries.failed(delivery_id, error, row.attempts, give_up)
         if give_up:
             logger.error(
-                "delivery=%s %s given up after %s attempts", delivery_id, event, row.attempts,
+                "delivery=%s %s given up after %s attempts",
+                delivery_id,
+                event,
+                row.attempts,
             )
 
 
@@ -89,14 +91,18 @@ async def _lifecycle(event: str, payload: dict) -> None:
             if action == "unsuspend":
                 await installations.set_suspended(installation_id, False)
             saved = await install.sync_repos(
-                session, installation_id, payload.get("repositories") or [],
+                session,
+                installation_id,
+                payload.get("repositories") or [],
             )
             await _bind_all(session, installation_id, saved)
             return
         if event == "installation_repositories":
             await install.sync_installation(session, data)
             added = await install.sync_repos(
-                session, installation_id, payload.get("repositories_added") or [],
+                session,
+                installation_id,
+                payload.get("repositories_added") or [],
             )
             await _bind_all(session, installation_id, added)
             for item in payload.get("repositories_removed") or []:

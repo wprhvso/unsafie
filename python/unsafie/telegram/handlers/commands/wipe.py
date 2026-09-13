@@ -63,7 +63,9 @@ def build_wipe_router() -> Router:
         if chat_base.exists():
             shutil.rmtree(chat_base, ignore_errors=True)
 
-        logger.info("bot=%s chat=%s user=%s wiped all chat history and artifacts", bot_id, chat_id, user_id)
+        logger.info(
+            "bot=%s chat=%s user=%s wiped all chat history and artifacts", bot_id, chat_id, user_id
+        )
         await answer(message, bot_id, t("commands-wipe-success", locale))
 
     return router

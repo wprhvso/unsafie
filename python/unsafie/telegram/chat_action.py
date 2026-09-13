@@ -1,9 +1,10 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 from collections.abc import AsyncIterator
 
 from aiogram import Bot
+
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

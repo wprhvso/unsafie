@@ -23,13 +23,19 @@ class CiRepository:
     async def is_whitelisted(self, login: str | None) -> bool:
         if not login:
             return False
-        stmt = select(CiWhitelist.github_login).where(func.lower(CiWhitelist.github_login) == login.lower())
+        stmt = select(CiWhitelist.github_login).where(
+            func.lower(CiWhitelist.github_login) == login.lower()
+        )
         res = await self.session.scalar(stmt)
         return res is not None
 
     async def add_to_whitelist(self, login: str, added_by: str) -> CiWhitelist:
         clean = login.strip().lstrip("@").lower()
-        stmt = insert(CiWhitelist).values(github_login=clean, added_by=added_by).on_conflict_do_nothing()
+        stmt = (
+            insert(CiWhitelist)
+            .values(github_login=clean, added_by=added_by)
+            .on_conflict_do_nothing()
+        )
         await self.session.execute(stmt)
         await self.session.commit()
         return CiWhitelist(github_login=clean, added_by=added_by)
@@ -46,8 +52,12 @@ class CiRepository:
         res = await self.session.scalars(stmt)
         return list(res)
 
-    async def create_api_token(self, login: str, name: str, token_hash: str, prefix: str) -> CiApiToken:
-        item = CiApiToken(github_login=login.lower(), name=name, token_hash=token_hash, token_prefix=prefix)
+    async def create_api_token(
+        self, login: str, name: str, token_hash: str, prefix: str
+    ) -> CiApiToken:
+        item = CiApiToken(
+            github_login=login.lower(), name=name, token_hash=token_hash, token_prefix=prefix
+        )
         self.session.add(item)
         await self.session.commit()
         await self.session.refresh(item)
@@ -62,12 +72,18 @@ class CiRepository:
         return item
 
     async def list_api_tokens(self, login: str) -> list[CiApiToken]:
-        stmt = select(CiApiToken).where(func.lower(CiApiToken.github_login) == login.lower()).order_by(CiApiToken.created_at.desc())
+        stmt = (
+            select(CiApiToken)
+            .where(func.lower(CiApiToken.github_login) == login.lower())
+            .order_by(CiApiToken.created_at.desc())
+        )
         res = await self.session.scalars(stmt)
         return list(res)
 
     async def delete_api_token(self, login: str, token_id: int) -> bool:
-        stmt = delete(CiApiToken).where(CiApiToken.id == token_id, func.lower(CiApiToken.github_login) == login.lower())
+        stmt = delete(CiApiToken).where(
+            CiApiToken.id == token_id, func.lower(CiApiToken.github_login) == login.lower()
+        )
         res = await self.session.execute(stmt)
         await self.session.commit()
         return (res.rowcount or 0) > 0
@@ -78,25 +94,35 @@ class CiRepository:
         return {r.key: r.value for r in rows}
 
     async def list_secrets(self, repo_full_name: str) -> list[CiSecret]:
-        stmt = select(CiSecret).where(CiSecret.repo_full_name == repo_full_name).order_by(CiSecret.key.asc())
+        stmt = (
+            select(CiSecret)
+            .where(CiSecret.repo_full_name == repo_full_name)
+            .order_by(CiSecret.key.asc())
+        )
         rows = await self.session.scalars(stmt)
         return list(rows)
 
     async def set_secret(self, repo_full_name: str, key: str, value: str, updated_by: str) -> None:
-        stmt = insert(CiSecret).values(
-            repo_full_name=repo_full_name,
-            key=key,
-            value=value,
-            updated_by=updated_by,
-        ).on_conflict_do_update(
-            index_elements=["repo_full_name", "key"],
-            set_={"value": value, "updated_by": updated_by, "updated_at": func.now()},
+        stmt = (
+            insert(CiSecret)
+            .values(
+                repo_full_name=repo_full_name,
+                key=key,
+                value=value,
+                updated_by=updated_by,
+            )
+            .on_conflict_do_update(
+                index_elements=["repo_full_name", "key"],
+                set_={"value": value, "updated_by": updated_by, "updated_at": func.now()},
+            )
         )
         await self.session.execute(stmt)
         await self.session.commit()
 
     async def delete_secret(self, repo_full_name: str, key: str) -> bool:
-        stmt = delete(CiSecret).where(CiSecret.repo_full_name == repo_full_name, CiSecret.key == key)
+        stmt = delete(CiSecret).where(
+            CiSecret.repo_full_name == repo_full_name, CiSecret.key == key
+        )
         res = await self.session.execute(stmt)
         await self.session.commit()
         return (res.rowcount or 0) > 0
@@ -179,7 +205,11 @@ class CiRepository:
         return (res.rowcount or 0) > 0
 
     async def set_check_run_id(self, run_id: int, check_run_id: int) -> None:
-        stmt = update(CiRun).where(CiRun.id == run_id).values(check_run_id=check_run_id, updated_at=datetime.now(UTC))
+        stmt = (
+            update(CiRun)
+            .where(CiRun.id == run_id)
+            .values(check_run_id=check_run_id, updated_at=datetime.now(UTC))
+        )
         await self.session.execute(stmt)
         await self.session.commit()
 
@@ -218,7 +248,9 @@ class CiRepository:
         stmt = select(CiRun).where(CiRun.id == run_id)
         return await self.session.scalar(stmt)
 
-    async def list_runs(self, repo_full_name: str | None = None, limit: int = 50, offset: int = 0) -> list[CiRun]:
+    async def list_runs(
+        self, repo_full_name: str | None = None, limit: int = 50, offset: int = 0
+    ) -> list[CiRun]:
         stmt = select(CiRun)
         if repo_full_name:
             stmt = stmt.where(CiRun.repo_full_name == repo_full_name)
@@ -226,7 +258,9 @@ class CiRepository:
         res = await self.session.scalars(stmt)
         return list(res)
 
-    async def record_metrics(self, run_id: int, cpu_percent: float, memory_rss_mb: float, rx_kbps: float, tx_kbps: float) -> None:
+    async def record_metrics(
+        self, run_id: int, cpu_percent: float, memory_rss_mb: float, rx_kbps: float, tx_kbps: float
+    ) -> None:
         item = CiRunMetric(
             run_id=run_id,
             cpu_percent=cpu_percent,
@@ -238,7 +272,11 @@ class CiRepository:
         await self.session.commit()
 
     async def get_metrics(self, run_id: int) -> list[CiRunMetric]:
-        stmt = select(CiRunMetric).where(CiRunMetric.run_id == run_id).order_by(CiRunMetric.recorded_at.asc())
+        stmt = (
+            select(CiRunMetric)
+            .where(CiRunMetric.run_id == run_id)
+            .order_by(CiRunMetric.recorded_at.asc())
+        )
         res = await self.session.scalars(stmt)
         return list(res)
 
@@ -259,13 +297,21 @@ class CiRepository:
         return await self.session.scalar(stmt)
 
     async def set_job_check_run_id(self, job_id: int, check_run_id: int) -> None:
-        stmt = update(CiJob).where(CiJob.id == job_id).values(check_run_id=check_run_id, updated_at=datetime.now(UTC))
+        stmt = (
+            update(CiJob)
+            .where(CiJob.id == job_id)
+            .values(check_run_id=check_run_id, updated_at=datetime.now(UTC))
+        )
         await self.session.execute(stmt)
         await self.session.commit()
 
     async def start_job(self, job_id: int) -> None:
         now = datetime.now(UTC)
-        stmt = update(CiJob).where(CiJob.id == job_id).values(status="in_progress", started_at=now, updated_at=now)
+        stmt = (
+            update(CiJob)
+            .where(CiJob.id == job_id)
+            .values(status="in_progress", started_at=now, updated_at=now)
+        )
         await self.session.execute(stmt)
         await self.session.commit()
 

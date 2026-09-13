@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 
 from unsafie import telemetry
 from unsafie.agent import blocks, checkpoints, client, credentials, pricing, queue, request, turns
-from unsafie.telemetry import attrs
 from unsafie.agent.client import ApiError
 from unsafie.agent.parser import extract_code
 from unsafie.agent.session import Ctx
@@ -12,6 +11,7 @@ from unsafie.agent.trace import Recorder
 from unsafie.database.models.turn_checkpoint import CheckpointPhase
 from unsafie.log import bind_contextvars, clear_contextvars, get_logger, short
 from unsafie.settings import settings
+from unsafie.telemetry import attrs
 
 logger = get_logger(__name__)
 
@@ -134,11 +134,17 @@ async def run(
 
     while result.steps < settings.agent_max_steps:
         if turns.is_shutting_down():
-            logger.info("%s pausing turn before step=%s due to graceful shutdown", ctx.prefix, result.steps + 1)
+            logger.info(
+                "%s pausing turn before step=%s due to graceful shutdown",
+                ctx.prefix,
+                result.steps + 1,
+            )
             result.status = "paused"
             return result
         turns.touch(ctx.turn_id)
-        with telemetry.span("checkpoint.save", attributes={attrs.TURN_ID: str(ctx.turn_id), "phase": "llm_query"}):
+        with telemetry.span(
+            "checkpoint.save", attributes={attrs.TURN_ID: str(ctx.turn_id), "phase": "llm_query"}
+        ):
             await checkpoints.save(
                 ctx.turn_id,
                 result.steps + 1,
@@ -202,7 +208,11 @@ async def run(
         if reply.stop_reason and reply.stop_reason != "STOP":
             recorder.note("unsafie.generation_stopped", {"reason": reply.stop_reason})
             logger.warning("%s step=%s stop_reason=%s", ctx.prefix, result.steps, reply.stop_reason)
-            reason_msg = "Generation was cut off due to token limit (MAX_TOKENS)" if reply.stop_reason == "MAX_TOKENS" else f"Generation stopped ({reply.stop_reason})"
+            reason_msg = (
+                "Generation was cut off due to token limit (MAX_TOKENS)"
+                if reply.stop_reason == "MAX_TOKENS"
+                else f"Generation stopped ({reply.stop_reason})"
+            )
             _ask(
                 messages,
                 f"Error: {reason_msg}. Please provide a complete, executable bash code block enclosed in ```bash ... ```.",
@@ -214,9 +224,15 @@ async def run(
         if not code:
             recorder.note("unsafie.no_code_block", reply.dump())
             logger.warning(
-                "%s step=%s model returned zero executable blocks", ctx.prefix, result.steps,
+                "%s step=%s model returned zero executable blocks",
+                ctx.prefix,
+                result.steps,
             )
-            if messages and messages[-1].get("role") == "assistant" and not (reply.text or "").strip():
+            if (
+                messages
+                and messages[-1].get("role") == "assistant"
+                and not (reply.text or "").strip()
+            ):
                 messages.pop()
             _ask(
                 messages,
@@ -226,7 +242,9 @@ async def run(
 
         spool = BashSpool(ctx.turn_id, result.steps)
         active_block = {"index": result.steps, "code": code, "spool_dir": str(spool.dir)}
-        with telemetry.span("checkpoint.save", attributes={attrs.TURN_ID: str(ctx.turn_id), "phase": "tool_exec"}):
+        with telemetry.span(
+            "checkpoint.save", attributes={attrs.TURN_ID: str(ctx.turn_id), "phase": "tool_exec"}
+        ):
             await checkpoints.save(
                 ctx.turn_id,
                 result.steps,
@@ -259,7 +277,8 @@ async def run(
                     else {"messages": injected_data}
                 )
                 recorder.note(
-                    "unsafie.stop_blocked", {"reason": "pending messages", "injected": payload},
+                    "unsafie.stop_blocked",
+                    {"reason": "pending messages", "injected": payload},
                 )
                 logger.info(
                     "%s turn stopped via stop(), but injecting pending messages into next step",
@@ -311,7 +330,9 @@ async def run(
             credential_id=credential_id,
         )
         if turns.is_shutting_down():
-            logger.info("%s pausing turn after step=%s due to graceful shutdown", ctx.prefix, result.steps)
+            logger.info(
+                "%s pausing turn after step=%s due to graceful shutdown", ctx.prefix, result.steps
+            )
             result.status = "paused"
             return result
         continue

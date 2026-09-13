@@ -1,7 +1,7 @@
 import difflib
-from unsafie.log import get_logger
 from dataclasses import dataclass, field
 
+from unsafie.log import get_logger
 from unsafie.mime import is_text
 
 logger = get_logger(__name__)
@@ -24,7 +24,9 @@ class Result:
 
 
 def three_way(
-    base: bytes | None, ours: bytes | None, theirs: bytes | None,
+    base: bytes | None,
+    ours: bytes | None,
+    theirs: bytes | None,
 ) -> tuple[bytes | None, bool]:
     if ours == theirs:
         return ours, False
@@ -53,7 +55,9 @@ class _Chunk:
 
 def _get_chunks(base: list[str], other: list[str]) -> list[_Chunk]:
     chunks = []
-    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, base, other, autojunk=False).get_opcodes():
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
+        None, base, other, autojunk=False
+    ).get_opcodes():
         if tag != "equal":
             chunks.append(_Chunk(i1, i2, other[j1:j2]))
     return chunks
@@ -64,7 +68,7 @@ def _reconstruct_slice(base: list[str], chunks: list[_Chunk], start: int, end: i
     curr = start
     for c in chunks:
         if c.start > curr:
-            res.extend(base[curr:c.start])
+            res.extend(base[curr : c.start])
         res.extend(c.lines)
         curr = max(curr, c.end)
     if curr < end:
@@ -86,7 +90,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
         if idx_a >= len(ours_chunks):
             b = theirs_chunks[idx_b]
             if b.start > curr_base:
-                out.extend(base[curr_base:b.start])
+                out.extend(base[curr_base : b.start])
             out.extend(b.lines)
             curr_base = b.end
             idx_b += 1
@@ -95,7 +99,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
         if idx_b >= len(theirs_chunks):
             a = ours_chunks[idx_a]
             if a.start > curr_base:
-                out.extend(base[curr_base:a.start])
+                out.extend(base[curr_base : a.start])
             out.extend(a.lines)
             curr_base = a.end
             idx_a += 1
@@ -106,7 +110,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
 
         if a.start == b.start and a.end == b.end and a.lines == b.lines:
             if a.start > curr_base:
-                out.extend(base[curr_base:a.start])
+                out.extend(base[curr_base : a.start])
             out.extend(a.lines)
             curr_base = a.end
             idx_a += 1
@@ -115,7 +119,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
 
         if a.end < b.start or (a.end == b.start and (a.start != a.end or b.start != b.end)):
             if a.start > curr_base:
-                out.extend(base[curr_base:a.start])
+                out.extend(base[curr_base : a.start])
             out.extend(a.lines)
             curr_base = a.end
             idx_a += 1
@@ -123,7 +127,7 @@ def _merge_lines(base: list[str], ours: list[str], theirs: list[str]) -> tuple[l
 
         if b.end < a.start or (b.end == a.start and (b.start != b.end or a.start != a.end)):
             if b.start > curr_base:
-                out.extend(base[curr_base:b.start])
+                out.extend(base[curr_base : b.start])
             out.extend(b.lines)
             curr_base = b.end
             idx_b += 1

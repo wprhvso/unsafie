@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 import time
 
 import jwt
@@ -9,6 +8,7 @@ from unsafie.database.models.github_app import GithubApp
 from unsafie.database.repositories.github import GithubAppRepository
 from unsafie.github.client.base import session as http_session
 from unsafie.github.errors import AppNotInstalled, GithubError
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -73,7 +73,9 @@ async def installation_token(installation_id: int) -> str:
         )
     token = data["token"]
     await cluster.client().set(
-        token_key(installation_id), token, px=int(settings.installation_token_ttl * 1000),
+        token_key(installation_id),
+        token,
+        px=int(settings.installation_token_ttl * 1000),
     )
     logger.info("installation=%s token issued", installation_id)
     return token

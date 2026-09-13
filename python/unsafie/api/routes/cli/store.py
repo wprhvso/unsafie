@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import delete, select
@@ -8,6 +6,7 @@ from unsafie.api.routes.cli.deps import Pool, Secrets
 from unsafie.database import SessionLocal
 from unsafie.database.models.pool import UserKv, UserSecret
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.pool import blobs
 from unsafie.settings import settings
 

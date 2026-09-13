@@ -1,5 +1,4 @@
 import asyncio
-from unsafie.log import get_logger
 from dataclasses import dataclass
 
 from unsafie import telemetry
@@ -9,6 +8,7 @@ from unsafie.github import cache, merge
 from unsafie.github.errors import Conflict, GithubError, NotFound
 from unsafie.github.vfs import Entry, Overlay, encode
 from unsafie.github.workspace import Session, author_for, ensure_worktree, load_tree, lock_for, save
+from unsafie.log import get_logger
 from unsafie.mime import is_text
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
@@ -58,7 +58,8 @@ async def _tree_entries(state: Session) -> Upload:
             continue
         size += len(data)
         if inlined_bytes + len(data) <= settings.github_inline_total_bytes and _inlineable(
-            entry, data,
+            entry,
+            data,
         ):
             entries.append(
                 {"path": path, "mode": entry.mode, "type": "blob", "content": data.decode()},
@@ -79,7 +80,11 @@ async def _remote_files(state: Session, base_tree: str, head_tree: str) -> tuple
     base, head = await asyncio.gather(state.client.tree(base_tree), state.client.tree(head_tree))
     base_map = {e["path"]: e["sha"] for e in base.get("tree", []) if e.get("type") == "blob"}
     head_map = {e["path"]: e["sha"] for e in head.get("tree", []) if e.get("type") == "blob"}
-    modes = {e["path"]: e["mode"] for e in head.get("tree", []) if e.get("type") == "blob" and e.get("mode")}
+    modes = {
+        e["path"]: e["mode"]
+        for e in head.get("tree", [])
+        if e.get("type") == "blob" and e.get("mode")
+    }
     for e in base.get("tree", []):
         if e.get("type") == "blob" and e.get("mode") and e["path"] not in modes:
             modes[e["path"]] = e["mode"]
@@ -98,7 +103,9 @@ async def rebase_branch(state: Session, remote_sha: str) -> merge.Result:
     worktree = await ensure_worktree(state)
     remote_commit = await state.client.commit(remote_sha)
     base_map, head_map, modes = await _remote_files(
-        state, worktree.base_tree_sha, remote_commit["tree"]["sha"],
+        state,
+        worktree.base_tree_sha,
+        remote_commit["tree"]["sha"],
     )
     ours: dict[str, bytes | None] = {}
     existing_modes: dict[str, str] = {}
@@ -154,7 +161,8 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
         raise GithubError(msg)
     async with lock_for(state.repo.id, state.branch):
         worktree, remote = await asyncio.gather(
-            ensure_worktree(state), state.client.ref_sha(state.branch),
+            ensure_worktree(state),
+            state.client.ref_sha(state.branch),
         )
         if remote is None:
             msg = f"branch '{state.branch}' has disappeared from the remote"
@@ -186,7 +194,10 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
         tree_sha = await state.client.create_tree(upload.entries, worktree.base_tree_sha)
         author = await author_for(user_id, state.repo)
         created = await state.client.create_commit(
-            message, tree_sha, [worktree.base_commit_sha], author,
+            message,
+            tree_sha,
+            [worktree.base_commit_sha],
+            author,
         )
         await state.client.update_ref(state.branch, created["sha"])
         async with SessionLocal() as session:
@@ -199,7 +210,12 @@ async def commit(state: Session, message: str, user_id: int) -> dict:
                 pending=None,
             )
             await repo.log(
-                worktree.id, user_id, "commit", created["sha"], worktree.base_commit_sha, message,
+                worktree.id,
+                user_id,
+                "commit",
+                created["sha"],
+                worktree.base_commit_sha,
+                message,
             )
         files = len(upload.entries)
         state.overlay.clear()
@@ -261,13 +277,19 @@ async def amend(state: Session, message: str | None, user_id: int) -> dict:
         )
         author = await author_for(user_id, state.repo)
         created = await state.client.create_commit(
-            message or head["message"], tree_sha, [parent], author,
+            message or head["message"],
+            tree_sha,
+            [parent],
+            author,
         )
         await state.client.update_ref(state.branch, created["sha"], force=True)
         async with SessionLocal() as session:
             repo = WorktreeRepository(session)
             await repo.save(
-                worktree.id, changes={}, base_commit_sha=created["sha"], base_tree_sha=tree_sha,
+                worktree.id,
+                changes={},
+                base_commit_sha=created["sha"],
+                base_tree_sha=tree_sha,
             )
             await repo.log(
                 worktree.id,
@@ -310,7 +332,9 @@ async def stash(state: Session) -> int:
         raise GithubError(msg)
     async with SessionLocal() as session:
         await WorktreeRepository(session).save(
-            worktree.id, stash=state.overlay.to_json(), changes={},
+            worktree.id,
+            stash=state.overlay.to_json(),
+            changes={},
         )
     state.overlay.clear()
     return count
@@ -326,7 +350,9 @@ async def unstash(state: Session) -> int:
         state.overlay.changes.setdefault(path, stashed.changes[path])
     async with SessionLocal() as session:
         await WorktreeRepository(session).save(
-            worktree.id, changes=state.overlay.to_json(), stash=None,
+            worktree.id,
+            changes=state.overlay.to_json(),
+            stash=None,
         )
     return len(stashed)
 

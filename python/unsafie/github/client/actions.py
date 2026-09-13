@@ -35,7 +35,10 @@ class ActionsMixin(GithubHTTP):
 
     async def job_logs(self, job_id: int) -> bytes:
         data = await self.request(
-            "GET", f"{self.base}/actions/jobs/{job_id}/logs", raw=True, allow_404=True,
+            "GET",
+            f"{self.base}/actions/jobs/{job_id}/logs",
+            raw=True,
+            allow_404=True,
         )
         return data or b""
 
@@ -59,5 +62,7 @@ class ActionsMixin(GithubHTTP):
 
     async def artifact_zip(self, artifact_id: int) -> bytes:
         return await self.request(
-            "GET", f"{self.base}/actions/artifacts/{artifact_id}/zip", raw=True,
+            "GET",
+            f"{self.base}/actions/artifacts/{artifact_id}/zip",
+            raw=True,
         )

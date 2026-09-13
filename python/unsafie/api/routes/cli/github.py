@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -15,6 +14,7 @@ from unsafie.github import pat
 from unsafie.github.app import auth
 from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -182,7 +182,10 @@ async def call_api(body: ApiCall, who: Github) -> dict:
     path = body.path if body.path.startswith("/") else f"/{body.path}"
     try:
         answer = await GithubHTTP(account.token).request(
-            body.method.upper(), path, params=body.params, json_body=body.body,
+            body.method.upper(),
+            path,
+            params=body.params,
+            json_body=body.body,
         )
     except GithubError as refused:
         raise HTTPException(400, str(refused)) from None

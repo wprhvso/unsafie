@@ -111,7 +111,9 @@ def delete(*message_ids: int, chat: int | str | None = None) -> dict:
     return last or {"deleted": list(message_ids)}
 
 
-def react(message_id: int, emoji: str = "👍", *, big: bool = False, chat: int | str | None = None) -> dict:
+def react(
+    message_id: int, emoji: str = "👍", *, big: bool = False, chat: int | str | None = None
+) -> dict:
     body: dict[str, Any] = {"emoji": emoji, "big": big}
     chat_id = _chat(chat)
     if chat_id is not None:
@@ -119,7 +121,9 @@ def react(message_id: int, emoji: str = "👍", *, big: bool = False, chat: int 
     return client().call("POST", f"/chat/reactions/{message_id}", body)
 
 
-def pin(message_id: int, *, unpin: bool = False, silent: bool = False, chat: int | str | None = None) -> dict:
+def pin(
+    message_id: int, *, unpin: bool = False, silent: bool = False, chat: int | str | None = None
+) -> dict:
     body: dict[str, Any] = {"silent": silent, "unpin": unpin}
     chat_id = _chat(chat)
     if chat_id is not None:
@@ -127,7 +131,14 @@ def pin(message_id: int, *, unpin: bool = False, silent: bool = False, chat: int
     return client().call("POST", f"/chat/pins/{message_id}", body)
 
 
-def history(query: str | None = None, *, limit: int = 20, since: str | None = None, chat: int | str | None = None, **kwargs) -> dict:
+def history(
+    query: str | None = None,
+    *,
+    limit: int = 20,
+    since: str | None = None,
+    chat: int | str | None = None,
+    **kwargs,
+) -> dict:
     chat_id = _chat(chat)
     params = {"limit": limit, **kwargs}
     if chat_id is not None:

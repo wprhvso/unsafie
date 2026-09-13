@@ -26,6 +26,7 @@ LOGS_DIR = BASE_DIR / "logs"
 for d in (CACHE_DIR, WORKSPACES_DIR, LOGS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
+
 async def _sync_repo(installation_id: int, repo_full_name: str) -> Path:
     token = await auth.installation_token(installation_id)
     repo_cache = CACHE_DIR / f"{repo_full_name}.git"
@@ -33,8 +34,13 @@ async def _sync_repo(installation_id: int, repo_full_name: str) -> Path:
     clone_url = f"https://x-access-token:{token}@github.com/{repo_full_name}.git"
     if not (repo_cache / "HEAD").exists():
         proc = await asyncio.create_subprocess_exec(
-            "git", "clone", "--mirror", clone_url, str(repo_cache),
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            "git",
+            "clone",
+            "--mirror",
+            clone_url,
+            str(repo_cache),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
         _, err = await proc.communicate()
         if proc.returncode != 0:
@@ -42,13 +48,25 @@ async def _sync_repo(installation_id: int, repo_full_name: str) -> Path:
             raise RuntimeError(msg)
     else:
         await asyncio.create_subprocess_exec(
-            "git", f"--git-dir={repo_cache}", "remote", "set-url", "origin", clone_url,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            "git",
+            f"--git-dir={repo_cache}",
+            "remote",
+            "set-url",
+            "origin",
+            clone_url,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         proc = await asyncio.create_subprocess_exec(
-            "git", f"--git-dir={repo_cache}", "fetch", "--prune", "origin",
-            "+refs/heads/*:refs/heads/*", "+refs/pull/*:refs/pull/*",
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            "git",
+            f"--git-dir={repo_cache}",
+            "fetch",
+            "--prune",
+            "origin",
+            "+refs/heads/*:refs/heads/*",
+            "+refs/pull/*:refs/pull/*",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
         _, err = await proc.communicate()
         if proc.returncode != 0:
@@ -56,13 +74,21 @@ async def _sync_repo(installation_id: int, repo_full_name: str) -> Path:
             raise RuntimeError(msg)
     return repo_cache
 
+
 async def _create_worktree(repo_cache: Path, run_id: int, commit_sha: str) -> Path:
     ws = WORKSPACES_DIR / str(run_id)
     if ws.exists():
         shutil.rmtree(ws, ignore_errors=True)
     proc = await asyncio.create_subprocess_exec(
-        "git", f"--git-dir={repo_cache}", "worktree", "add", "--detach", str(ws), commit_sha,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        "git",
+        f"--git-dir={repo_cache}",
+        "worktree",
+        "add",
+        "--detach",
+        str(ws),
+        commit_sha,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     _, err = await proc.communicate()
     if proc.returncode != 0:
@@ -70,23 +96,34 @@ async def _create_worktree(repo_cache: Path, run_id: int, commit_sha: str) -> Pa
         raise RuntimeError(msg)
     return ws
 
+
 async def _remove_worktree(repo_cache: Path, run_id: int) -> None:
     ws = WORKSPACES_DIR / str(run_id)
     if not ws.exists():
         return
     proc = await asyncio.create_subprocess_exec(
-        "git", f"--git-dir={repo_cache}", "worktree", "remove", "--force", str(ws),
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        "git",
+        f"--git-dir={repo_cache}",
+        "worktree",
+        "remove",
+        "--force",
+        str(ws),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     await proc.wait()
     shutil.rmtree(ws, ignore_errors=True)
+
 
 async def discover_targets(ws: Path) -> tuple[str, list[str], list[str]]:
     has_just = (ws / "justfile").is_file() or (ws / "Justfile").is_file()
     if has_just and shutil.which("just"):
         proc = await asyncio.create_subprocess_exec(
-            "just", "--summary",
-            cwd=str(ws), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            "just",
+            "--summary",
+            cwd=str(ws),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
         out, _ = await proc.communicate()
         recipes = out.decode("utf-8", "ignore").split()
@@ -112,6 +149,7 @@ async def discover_targets(ws: Path) -> tuple[str, list[str], list[str]]:
         return "make", sorted(ci_targets), sorted(cd_targets)
 
     return "none", [], []
+
 
 async def _run_command_pty(
     run_id: int,
@@ -162,21 +200,27 @@ async def _run_command_pty(
             prev_rx, prev_tx = cur_rx, cur_tx
 
             async with SessionLocal() as session:
-                await CiRepository(session).record_metrics(run_id, cpu_pct, rss_mb, rx_kbps, tx_kbps)
+                await CiRepository(session).record_metrics(
+                    run_id, cpu_pct, rss_mb, rx_kbps, tx_kbps
+                )
 
-            metric_payload = json.dumps({
-                "type": "metric",
-                "job": job_name,
-                "cpu": cpu_pct,
-                "rss": rss_mb,
-                "rx": rx_kbps,
-                "tx": tx_kbps,
-                "ts": int(time.time()),
-            })
+            metric_payload = json.dumps(
+                {
+                    "type": "metric",
+                    "job": job_name,
+                    "cpu": cpu_pct,
+                    "rss": rss_mb,
+                    "rx": rx_kbps,
+                    "tx": tx_kbps,
+                    "ts": int(time.time()),
+                }
+            )
             with contextlib.suppress(Exception):
                 await cluster.client().publish(f"ci:run:{run_id}:stream", metric_payload)
                 if job_name:
-                    await cluster.client().publish(f"ci:run:{run_id}:{job_name}:stream", metric_payload)
+                    await cluster.client().publish(
+                        f"ci:run:{run_id}:{job_name}:stream", metric_payload
+                    )
 
     monitor_task = asyncio.create_task(_heartbeat_and_monitor())
 
@@ -195,7 +239,7 @@ async def _run_command_pty(
                         asyncio.run_coroutine_threadsafe(
                             cluster.client().publish(
                                 f"ci:run:{run_id}:stream",
-                                json.dumps({"type": "log", "chunk": chunk_str, "job": job_name})
+                                json.dumps({"type": "log", "chunk": chunk_str, "job": job_name}),
                             ),
                             loop,
                         )
@@ -203,7 +247,9 @@ async def _run_command_pty(
                             asyncio.run_coroutine_threadsafe(
                                 cluster.client().publish(
                                     f"ci:run:{run_id}:{job_name}:stream",
-                                    json.dumps({"type": "log", "chunk": chunk_str, "job": job_name})
+                                    json.dumps(
+                                        {"type": "log", "chunk": chunk_str, "job": job_name}
+                                    ),
                                 ),
                                 loop,
                             )
@@ -218,6 +264,7 @@ async def _run_command_pty(
     monitor_task.cancel()
     return proc.returncode
 
+
 async def execute_run(run_id: int) -> None:
     async with SessionLocal() as session:
         ci_repo = CiRepository(session)
@@ -227,7 +274,9 @@ async def execute_run(run_id: int) -> None:
 
     main_log_path = LOGS_DIR / f"{run_id}.log"
     with open(main_log_path, "w", encoding="utf-8") as f:
-        f.write(f"=== unsafie ci runner starting for {run.repo_full_name} @ {run.commit_sha[:8]} ===\n")
+        f.write(
+            f"=== unsafie ci runner starting for {run.repo_full_name} @ {run.commit_sha[:8]} ===\n"
+        )
 
     repo_cache = None
     try:
@@ -239,7 +288,11 @@ async def execute_run(run_id: int) -> None:
             f.write(f"\nError during checkout: {e}\n")
         async with SessionLocal() as session:
             await CiRepository(session).finish_run(
-                run.id, status="failure", exit_code=1, error_message=str(e), log_path=str(main_log_path),
+                run.id,
+                status="failure",
+                exit_code=1,
+                error_message=str(e),
+                log_path=str(main_log_path),
             )
         return
 
@@ -250,18 +303,28 @@ async def execute_run(run_id: int) -> None:
                 f.write("\nNo 'ci-*' or 'cd-*' targets found in justfile or Makefile. Skipping.\n")
             async with SessionLocal() as session:
                 await CiRepository(session).finish_run(
-                    run.id, status="success", exit_code=0, log_path=str(main_log_path),
+                    run.id,
+                    status="success",
+                    exit_code=0,
+                    log_path=str(main_log_path),
                 )
             check_run_id = await checks.create_check_run(
-                run.installation_id, run.repo_full_name, run.commit_sha, run.id,
+                run.installation_id,
+                run.repo_full_name,
+                run.commit_sha,
+                run.id,
                 name="ci / check",
                 slug=run.slug,
             )
             if check_run_id:
                 await checks.update_check_run(
-                    run.installation_id, run.repo_full_name, check_run_id,
-                    status="completed", conclusion="neutral",
-                    title="No Targets Found", summary="Neither `justfile` nor `Makefile` had `ci-*` or `cd-*` targets.",
+                    run.installation_id,
+                    run.repo_full_name,
+                    check_run_id,
+                    status="completed",
+                    conclusion="neutral",
+                    title="No Targets Found",
+                    summary="Neither `justfile` nor `Makefile` had `ci-*` or `cd-*` targets.",
                 )
             return
 
@@ -312,12 +375,18 @@ async def execute_run(run_id: int) -> None:
             if exit_code == 0:
                 async with SessionLocal() as session:
                     await CiRepository(session).finish_job(
-                        job_row.id, status="success", exit_code=0, log_path=str(job_log_path),
+                        job_row.id,
+                        status="success",
+                        exit_code=0,
+                        log_path=str(job_log_path),
                     )
                 if check_run_id:
                     await checks.update_check_run(
-                        run.installation_id, run.repo_full_name, check_run_id,
-                        status="completed", conclusion="success",
+                        run.installation_id,
+                        run.repo_full_name,
+                        check_run_id,
+                        status="completed",
+                        conclusion="success",
                         title=f"{target} Succeeded",
                         summary=f"`{tool} {target}` passed successfully.",
                         text=f"```\n{tail_log}\n```",
@@ -325,14 +394,19 @@ async def execute_run(run_id: int) -> None:
             else:
                 async with SessionLocal() as session:
                     await CiRepository(session).finish_job(
-                        job_row.id, status="failure", exit_code=exit_code,
+                        job_row.id,
+                        status="failure",
+                        exit_code=exit_code,
                         error_message=f"`{tool} {target}` exited with code {exit_code}",
                         log_path=str(job_log_path),
                     )
                 if check_run_id:
                     await checks.update_check_run(
-                        run.installation_id, run.repo_full_name, check_run_id,
-                        status="completed", conclusion="failure",
+                        run.installation_id,
+                        run.repo_full_name,
+                        check_run_id,
+                        status="completed",
+                        conclusion="failure",
                         title=f"{target} Failed",
                         summary=f"`{tool} {target}` failed with exit code {exit_code}.",
                         text=f"```\n{tail_log}\n```",
@@ -342,7 +416,9 @@ async def execute_run(run_id: int) -> None:
         ci_codes = []
         if ci_targets:
             async with SessionLocal() as session:
-                await CiRepository(session).finish_run(run.id, status="in_progress", current_stage="ci")
+                await CiRepository(session).finish_run(
+                    run.id, status="in_progress", current_stage="ci"
+                )
             ci_codes = await asyncio.gather(*[_run_job(t, "ci", base_env) for t in ci_targets])
 
         all_ci_ok = all(c == 0 for c in ci_codes) if ci_codes else True
@@ -350,7 +426,9 @@ async def execute_run(run_id: int) -> None:
         cd_codes = []
         if all_ci_ok and run.is_default_branch and cd_targets:
             async with SessionLocal() as session:
-                await CiRepository(session).finish_run(run.id, status="in_progress", current_stage="cd")
+                await CiRepository(session).finish_run(
+                    run.id, status="in_progress", current_stage="cd"
+                )
                 secrets = await CiRepository(session).get_secrets(run.repo_full_name)
 
             cd_env = base_env.copy()

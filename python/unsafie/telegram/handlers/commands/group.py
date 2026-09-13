@@ -32,7 +32,8 @@ def group_mode_keyboard(current_mode: str, locale: str) -> InlineKeyboardMarkup:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=label, callback_data=GroupModeCallback(mode=mode.value).pack(),
+                    text=label,
+                    callback_data=GroupModeCallback(mode=mode.value).pack(),
                 ),
             ],
         )
@@ -64,7 +65,9 @@ def build_group_router() -> Router:
 
     @router.callback_query(GroupModeCallback.filter())
     async def group_mode_callback(
-        query: CallbackQuery, callback_data: GroupModeCallback, bot_id: int,
+        query: CallbackQuery,
+        callback_data: GroupModeCallback,
+        bot_id: int,
     ) -> None:
         if not query.message or not query.bot:
             await query.answer()

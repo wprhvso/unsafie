@@ -12,15 +12,19 @@ class CiWhitelist(Base):
     added_by: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+
 class CiApiToken(Base):
     __tablename__ = "ci_api_tokens"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    github_login: Mapped[str] = mapped_column(String(255), ForeignKey("ci_whitelist.github_login", ondelete="CASCADE"), nullable=False)
+    github_login: Mapped[str] = mapped_column(
+        String(255), ForeignKey("ci_whitelist.github_login", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     token_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 
 class CiSecret(Base):
     __tablename__ = "ci_secrets"
@@ -28,7 +32,10 @@ class CiSecret(Base):
     key: Mapped[str] = mapped_column(String(255), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
     updated_by: Mapped[str] = mapped_column(String(255), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
 
 class CiRun(Base):
     __tablename__ = "ci_runs"
@@ -54,13 +61,20 @@ class CiRun(Base):
     log_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     slug: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
 
 class CiRunMetric(Base):
     __tablename__ = "ci_run_metrics"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("ci_runs.id", ondelete="CASCADE"), nullable=False, index=True)
-    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    run_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ci_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     cpu_percent: Mapped[float] = mapped_column(Float, nullable=False)
     memory_rss_mb: Mapped[float] = mapped_column(Float, nullable=False)
     network_rx_kbps: Mapped[float] = mapped_column(Float, nullable=False)
@@ -71,7 +85,9 @@ class CiJob(Base):
     __tablename__ = "ci_jobs"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("ci_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ci_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     stage: Mapped[str] = mapped_column(String(16), nullable=False)
     check_run_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -83,4 +99,6 @@ class CiJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

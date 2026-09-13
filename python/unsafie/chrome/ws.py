@@ -38,6 +38,7 @@ class WebSocket:
         raw = socket.create_connection((host, port), timeout=timeout)
         if secure:
             import ssl
+
             raw = ssl.create_default_context().wrap_socket(raw, server_hostname=host)
         self.sock = raw
         self.sock.settimeout(timeout)

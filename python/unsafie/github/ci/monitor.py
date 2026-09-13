@@ -28,6 +28,7 @@ def _get_process_tree_pids(root_pid: int) -> set[int]:
         pass
     return pids
 
+
 def get_tree_rss_mb(root_pid: int) -> float:
     pids = _get_process_tree_pids(root_pid)
     total_kb = 0
@@ -44,6 +45,7 @@ def get_tree_rss_mb(root_pid: int) -> float:
             continue
     return round(total_kb / 1024.0, 2)
 
+
 def get_tree_cpu_ticks(root_pid: int) -> int:
     pids = _get_process_tree_pids(root_pid)
     total_ticks = 0
@@ -53,13 +55,14 @@ def get_tree_cpu_ticks(root_pid: int) -> int:
                 content = f.read()
                 idx = content.rfind(")")
                 if idx != -1:
-                    fields = content[idx + 2:].split()
+                    fields = content[idx + 2 :].split()
                     utime = int(fields[11])
                     stime = int(fields[12])
                     total_ticks += utime + stime
         except (FileNotFoundError, ProcessLookupError, PermissionError, IndexError, ValueError):
             continue
     return total_ticks
+
 
 def get_net_bytes() -> tuple[int, int]:
     rx = 0

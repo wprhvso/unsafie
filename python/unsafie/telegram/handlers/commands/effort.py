@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
@@ -7,6 +5,7 @@ from aiogram.types import Message
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.sender import answer
@@ -51,7 +50,9 @@ def build_effort_router() -> Router:
                 await UserRepository(session).set_effort(user_id, None)
             logger.info("bot=%s user=%s effort -> default", bot_id, user_id)
             await answer(
-                message, bot_id, t("commands-effort-reset", locale, effort=DEFAULT_EFFORT),
+                message,
+                bot_id,
+                t("commands-effort-reset", locale, effort=DEFAULT_EFFORT),
             )
             return
         level = ALIASES.get(raw, raw)

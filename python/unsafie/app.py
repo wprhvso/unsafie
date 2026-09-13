@@ -1,5 +1,3 @@
-from unsafie.github.ci.worker import ci_worker
-from unsafie.github.ci.janitor import ci_janitor
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -19,6 +17,8 @@ from unsafie.api.routes.public import artifact_router, public_router
 from unsafie.database import engine
 from unsafie.database.upgrade import upgrade
 from unsafie.github.cache import sweeper
+from unsafie.github.ci.janitor import ci_janitor
+from unsafie.github.ci.worker import ci_worker
 from unsafie.github.client.base import close_session
 from unsafie.github.webhooks.worker import worker
 from unsafie.janitor import janitor
@@ -38,7 +38,20 @@ setup()
 telemetry.setup()
 logger = get_logger(__name__)
 
-LOOPS = (runner, watchdog, sweeper, supervisor, worker, janitor, presence, keeper, ci_supervisor, recovery_supervisor, ci_worker, ci_janitor)
+LOOPS = (
+    runner,
+    watchdog,
+    sweeper,
+    supervisor,
+    worker,
+    janitor,
+    presence,
+    keeper,
+    ci_supervisor,
+    recovery_supervisor,
+    ci_worker,
+    ci_janitor,
+)
 
 
 @asynccontextmanager

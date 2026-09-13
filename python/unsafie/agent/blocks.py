@@ -7,14 +7,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from opentelemetry import trace
+
 from unsafie import telemetry, tokens
-from unsafie.telemetry import attrs
 from unsafie.agent import live
 from unsafie.agent.session import Ctx
 from unsafie.log import get_logger, short
 from unsafie.mime import human_size, image_block, image_problem, sniff_mime
 from unsafie.pool import blobs
 from unsafie.settings import settings
+from unsafie.telemetry import attrs
 from unsafie_wire import markers
 
 logger = get_logger(__name__)
@@ -174,36 +175,91 @@ class Runner:
         resolv_path = Path("/etc/resolv.conf")
         real_resolv = str(resolv_path.resolve()) if resolv_path.exists() else "/etc/resolv.conf"
 
-        argv.extend([
-            bwrap_bin,
-            "--ro-bind", "/usr", "/usr",
-            "--ro-bind", "/lib", "/lib",
-            "--ro-bind-try", "/lib64", "/lib64",
-            "--ro-bind", "/bin", "/bin",
-            "--ro-bind", "/sbin", "/sbin",
-            "--ro-bind", "/etc", "/etc",
-            "--ro-bind-try", "/run/systemd/resolve", "/run/systemd/resolve",
-            "--ro-bind-try", real_resolv, "/etc/resolv.conf",
-            "--ro-bind-try", "/opt", "/opt",
-            "--ro-bind-try", venv_dir, venv_dir,
-            "--ro-bind-try", base_py_dir, base_py_dir,
-            "--ro-bind-try", py_module_dir, py_module_dir,
-            "--ro-bind-try", repo_root_dir, repo_root_dir,
-            "--ro-bind-try", str(Path.home() / ".python"), str(Path.home() / ".python"),
-            "--ro-bind-try", str(Path.home() / ".local"), str(Path.home() / ".local"),
-            "--ro-bind", "/proc", "/proc",
-            "--dev-bind", "/dev", "/dev",
-            "--tmpfs", "/tmp",
-            "--bind", str(workdir), "/work",
-            "--bind", str(homedir), "/home/unsafie",
-            "--setenv", "HOME", "/home/unsafie",
-            "--setenv", "PATH", path_env,
-            "--setenv", "PYTHONPATH", pythonpath_env,
-            "--setenv", "UNSAFIE_API", api_url,
-            "--setenv", "UNSAFIE_TOKEN", token,
-            "--setenv", "UNSAFIE_CHAT", str(self.ctx.chat_id),
-            "--setenv", "UNSAFIE_TURN", str(self.ctx.turn_id),
-        ])
+        argv.extend(
+            [
+                bwrap_bin,
+                "--ro-bind",
+                "/usr",
+                "/usr",
+                "--ro-bind",
+                "/lib",
+                "/lib",
+                "--ro-bind-try",
+                "/lib64",
+                "/lib64",
+                "--ro-bind",
+                "/bin",
+                "/bin",
+                "--ro-bind",
+                "/sbin",
+                "/sbin",
+                "--ro-bind",
+                "/etc",
+                "/etc",
+                "--ro-bind-try",
+                "/run/systemd/resolve",
+                "/run/systemd/resolve",
+                "--ro-bind-try",
+                real_resolv,
+                "/etc/resolv.conf",
+                "--ro-bind-try",
+                "/opt",
+                "/opt",
+                "--ro-bind-try",
+                venv_dir,
+                venv_dir,
+                "--ro-bind-try",
+                base_py_dir,
+                base_py_dir,
+                "--ro-bind-try",
+                py_module_dir,
+                py_module_dir,
+                "--ro-bind-try",
+                repo_root_dir,
+                repo_root_dir,
+                "--ro-bind-try",
+                str(Path.home() / ".python"),
+                str(Path.home() / ".python"),
+                "--ro-bind-try",
+                str(Path.home() / ".local"),
+                str(Path.home() / ".local"),
+                "--ro-bind",
+                "/proc",
+                "/proc",
+                "--dev-bind",
+                "/dev",
+                "/dev",
+                "--tmpfs",
+                "/tmp",
+                "--bind",
+                str(workdir),
+                "/work",
+                "--bind",
+                str(homedir),
+                "/home/unsafie",
+                "--setenv",
+                "HOME",
+                "/home/unsafie",
+                "--setenv",
+                "PATH",
+                path_env,
+                "--setenv",
+                "PYTHONPATH",
+                pythonpath_env,
+                "--setenv",
+                "UNSAFIE_API",
+                api_url,
+                "--setenv",
+                "UNSAFIE_TOKEN",
+                token,
+                "--setenv",
+                "UNSAFIE_CHAT",
+                str(self.ctx.chat_id),
+                "--setenv",
+                "UNSAFIE_TURN",
+                str(self.ctx.turn_id),
+            ]
+        )
 
         with telemetry.span(
             "runner.bwrap",
@@ -214,14 +270,21 @@ class Runner:
         ):
             span_ctx = trace.get_current_span().get_span_context()
             if span_ctx.is_valid:
-                traceparent = f"00-{format(span_ctx.trace_id, '032x')}-{format(span_ctx.span_id, '016x')}-01"
+                traceparent = (
+                    f"00-{format(span_ctx.trace_id, '032x')}-{format(span_ctx.span_id, '016x')}-01"
+                )
                 argv.extend(["--setenv", "TRACEPARENT", traceparent])
 
-            argv.extend([
-                "--die-with-parent",
-                "--chdir", "/work",
-                "bash", "-lc", block.code,
-            ])
+            argv.extend(
+                [
+                    "--die-with-parent",
+                    "--chdir",
+                    "/work",
+                    "bash",
+                    "-lc",
+                    block.code,
+                ]
+            )
 
             try:
                 proc = await asyncio.create_subprocess_exec(

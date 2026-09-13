@@ -376,7 +376,10 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "send-photo":
                 return _out(
                     chat.send_photo(
-                        args.path, caption=args.caption, silent=args.silent, chat=args.chat,
+                        args.path,
+                        caption=args.caption,
+                        silent=args.silent,
+                        chat=args.chat,
                     ),
                 )
             if args.subcmd == "edit":
@@ -387,9 +390,15 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "react":
                 return _out(chat.react(args.message_id, args.emoji, big=args.big, chat=args.chat))
             if args.subcmd == "pin":
-                return _out(chat.pin(args.message_id, unpin=args.unpin, silent=args.silent, chat=args.chat))
+                return _out(
+                    chat.pin(args.message_id, unpin=args.unpin, silent=args.silent, chat=args.chat)
+                )
             if args.subcmd == "history":
-                return _out(chat.history(query=args.query, limit=args.limit, since=args.since, chat=args.chat))
+                return _out(
+                    chat.history(
+                        query=args.query, limit=args.limit, since=args.since, chat=args.chat
+                    )
+                )
             if args.subcmd == "info":
                 return _out(chat.info(args.chat))
             if args.subcmd == "download":
@@ -408,7 +417,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "image":
             from unsafie.cli import image
 
-            return _out(image.generate(prompt=args.prompt, output=args.output, timeout=args.timeout))
+            return _out(
+                image.generate(prompt=args.prompt, output=args.output, timeout=args.timeout)
+            )
 
         if args.cmd in ("pages", "page"):
             if not getattr(args, "subcmd", None):
@@ -495,11 +506,17 @@ def main(argv: list[str] | None = None) -> int:
             if args.subcmd == "query":
                 return _out(browser.query(args.selector, limit=args.limit))
             if args.subcmd == "scroll":
-                return _out(browser.scroll(by=args.by, to=args.to, top=args.top, bottom=args.bottom))
+                return _out(
+                    browser.scroll(by=args.by, to=args.to, top=args.top, bottom=args.bottom)
+                )
             if args.subcmd == "network":
-                return _out(browser.network(pattern=args.pattern, limit=args.limit, clear=args.clear))
+                return _out(
+                    browser.network(pattern=args.pattern, limit=args.limit, clear=args.clear)
+                )
             if args.subcmd == "block":
-                return _out(browser.block(patterns=args.patterns, presets=args.presets, clear=args.clear))
+                return _out(
+                    browser.block(patterns=args.patterns, presets=args.presets, clear=args.clear)
+                )
             if args.subcmd == "tabs":
                 return _out(browser.tabs())
             if args.subcmd == "tab":
@@ -511,7 +528,9 @@ def main(argv: list[str] | None = None) -> int:
                     return _out(browser.tab_close(args.tab_id))
                 return _out(browser.tabs())
             if args.subcmd == "frame":
-                return _out(browser.frame(selector_or_id=args.target, main=args.main, list_frames=args.list))
+                return _out(
+                    browser.frame(selector_or_id=args.target, main=args.main, list_frames=args.list)
+                )
             if args.subcmd == "console":
                 return _out(browser.console(level=args.level, limit=args.limit, clear=args.clear))
             if args.subcmd == "intercept":

@@ -1,7 +1,6 @@
 import base64
 import binascii
 import json
-from unsafie.log import get_logger
 import time
 import urllib.parse
 import uuid
@@ -12,6 +11,7 @@ import aiohttp
 
 from unsafie.errors import OpsError
 from unsafie.github.client.base import GithubHTTP, session
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -74,7 +74,8 @@ class ScaleSet:
 
     async def registration_token(self) -> str:
         answer = await GithubHTTP(self.token).request(
-            "POST", f"/repos/{self.slug}/actions/runners/registration-token",
+            "POST",
+            f"/repos/{self.slug}/actions/runners/registration-token",
         )
         value = str((answer or {}).get("token") or "")
         if not value:
@@ -129,7 +130,8 @@ class ScaleSet:
                 head = raw[:300].decode(errors="replace")
                 msg = f"{method} {url.split('?', maxsplit=1)[0]} -> {answer.status}: {head}"
                 raise ScaleSetError(
-                    msg, answer.status,
+                    msg,
+                    answer.status,
                 )
             if not raw:
                 return None
@@ -156,14 +158,24 @@ class ScaleSet:
             return await self._raw(method, url, auth=auth, body=body, timeout=timeout, extra=extra)
         try:
             return await self._raw(
-                method, url, auth=f"Bearer {self._jwt}", body=body, timeout=timeout, extra=extra,
+                method,
+                url,
+                auth=f"Bearer {self._jwt}",
+                body=body,
+                timeout=timeout,
+                extra=extra,
             )
         except ScaleSetError as refused:
             if refused.status != 401:
                 raise
             await self._authenticate(force=True)
             return await self._raw(
-                method, url, auth=f"Bearer {self._jwt}", body=body, timeout=timeout, extra=extra,
+                method,
+                url,
+                auth=f"Bearer {self._jwt}",
+                body=body,
+                timeout=timeout,
+                extra=extra,
             )
 
     async def find(self, name: str) -> dict | None:
@@ -257,7 +269,9 @@ class ScaleSet:
     async def open(self, scale_set_id: int, owner: str) -> Session:
         opened = self._session(
             await self.call(
-                "POST", f"runnerscalesets/{scale_set_id}/sessions", body={"ownerName": owner},
+                "POST",
+                f"runnerscalesets/{scale_set_id}/sessions",
+                body={"ownerName": owner},
             ),
         )
         logger.info("pool ci %s: message session %s open", self.slug, opened.session_id)
@@ -266,12 +280,16 @@ class ScaleSet:
     async def refresh(self, scale_set_id: int, current: Session) -> Session:
         return self._session(
             await self.call(
-                "PATCH", f"runnerscalesets/{scale_set_id}/sessions/{current.session_id}",
+                "PATCH",
+                f"runnerscalesets/{scale_set_id}/sessions/{current.session_id}",
             ),
         )
 
     async def close(
-        self, scale_set_id: int, current: Session, timeout: float = 2.0,
+        self,
+        scale_set_id: int,
+        current: Session,
+        timeout: float = 2.0,
     ) -> None:
         try:
             await self.call(

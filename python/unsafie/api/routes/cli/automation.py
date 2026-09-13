@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
@@ -14,6 +13,7 @@ from unsafie.database.repositories.watch import WatchRepository
 from unsafie.errors import OpsError
 from unsafie.github import subscriptions
 from unsafie.github.errors import GithubError
+from unsafie.log import get_logger
 from unsafie.scheduler import service as schedules
 from unsafie.scheduler.when import WhenError, duration
 from unsafie.settings import settings
@@ -237,7 +237,12 @@ async def sub_add(body: SubIn, who: Automation) -> dict:
         raise HTTPException(400, str(refused)) from None
     async with SessionLocal() as session:
         sub = await SubscriptionRepository(session).add(
-            bot_id, chat_id, who.user_id, repo.id, body.kind, body.filters or {},
+            bot_id,
+            chat_id,
+            who.user_id,
+            repo.id,
+            body.kind,
+            body.filters or {},
         )
     return {"id": sub.id, "kind": sub.kind, "repo": f"{repo.owner}/{repo.name}"}
 

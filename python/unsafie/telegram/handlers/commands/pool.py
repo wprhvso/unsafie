@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
@@ -7,6 +5,7 @@ from aiogram.types import Message
 
 from unsafie.errors import OpsError
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.pool import leases, registry
 from unsafie.pool.ci import repos
 from unsafie.telegram.group import is_admin

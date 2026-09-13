@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 import re
 from datetime import UTC, datetime
 
@@ -10,6 +9,7 @@ from unsafie.errors import OpsError
 from unsafie.github import pat
 from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError, NotFound, UserAuthRequired
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -166,7 +166,9 @@ async def enable(user_id: int | None, raw_slug: str, on: bool) -> PoolCiRepo | N
     return row
 
 
-async def note(repo_id: int, state: str, error: str | None = None, scale_set: int | None = None) -> None:
+async def note(
+    repo_id: int, state: str, error: str | None = None, scale_set: int | None = None
+) -> None:
     async with SessionLocal() as session:
         row = await session.get(PoolCiRepo, repo_id)
         if row is None:
@@ -203,7 +205,8 @@ async def running_jobs(repo_id: int) -> list[PoolCiJob]:
     async with SessionLocal() as session:
         rows = await session.scalars(
             select(PoolCiJob).where(
-                PoolCiJob.repo_id == repo_id, PoolCiJob.finished_at.is_(None),
+                PoolCiJob.repo_id == repo_id,
+                PoolCiJob.finished_at.is_(None),
             ),
         )
         return list(rows)

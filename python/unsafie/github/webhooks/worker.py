@@ -1,8 +1,7 @@
-from unsafie.log import get_logger
-
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.delivery import DeliveryRepository
 from unsafie.github.webhooks import router
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.settings import settings
 
@@ -25,7 +24,8 @@ class Worker(Loop):
     async def tick(self) -> None:
         async with SessionLocal() as session:
             claimed = await DeliveryRepository(session).claim(
-                settings.webhook_batch, settings.job_lease,
+                settings.webhook_batch,
+                settings.job_lease,
             )
         if not claimed:
             return

@@ -1,5 +1,3 @@
-from unsafie.log import get_logger
-
 from aiogram import Router
 from aiogram.enums import ChatType
 from aiogram.filters import Command
@@ -10,6 +8,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.commands.pipe import cancel_pipeline
 from unsafie.telegram.handlers.locale import locale_for
@@ -57,14 +56,16 @@ def build_stop_router() -> Router:
             if not admin:
                 targets = [turn for turn in targets if turn.user_id == user_id]
         if not targets:
-            key = (
-                "commands-stop-nothing-here" if reply_to is not None else "commands-stop-nothing"
-            )
+            key = "commands-stop-nothing-here" if reply_to is not None else "commands-stop-nothing"
             await answer(message, bot_id, t(key, locale))
             return
         for turn in targets:
             logger.info(
-                "bot=%s chat=%s user=%s stops turn=%s", bot_id, message.chat.id, user_id, turn.id,
+                "bot=%s chat=%s user=%s stops turn=%s",
+                bot_id,
+                message.chat.id,
+                user_id,
+                turn.id,
             )
             await turns.stop(turn.id)
         key = "commands-stop-one" if len(targets) == 1 else "commands-stop-many"

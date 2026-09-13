@@ -173,7 +173,11 @@ class UpdateMiddleware(BaseMiddleware):
             chat = message.chat if message is not None else None
             user_id = event.callback_query.from_user.id
         elif event.chosen_inline_result is not None:
-            user_id = event.chosen_inline_result.from_user.id if event.chosen_inline_result.from_user else None
+            user_id = (
+                event.chosen_inline_result.from_user.id
+                if event.chosen_inline_result.from_user
+                else None
+            )
         elif event.inline_query is not None:
             user_id = event.inline_query.from_user.id if event.inline_query.from_user else None
         return chat, message_id, user_id

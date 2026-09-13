@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 import uuid
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -9,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unsafie.database.models.response import Response
 from unsafie.database.models.turn import Turn, TurnStatus
 from unsafie.database.models.update import Update
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
@@ -99,7 +99,8 @@ class TurnRepository:
 
     async def owner(self, bot_id: int, chat_id: int, message_id: int) -> Turn | None:
         turn_id = await self.session.scalar(
-            OWNER_QUERY, {"bot_id": bot_id, "chat_id": chat_id, "message_id": message_id},
+            OWNER_QUERY,
+            {"bot_id": bot_id, "chat_id": chat_id, "message_id": message_id},
         )
         if turn_id is None:
             return None
@@ -326,7 +327,11 @@ class TurnRepository:
         if turn is None or turn.is_subagent:
             return None
 
-        if stale_after is not None and turn.heartbeat_at is not None and turn.instance_id != instance_id:
+        if (
+            stale_after is not None
+            and turn.heartbeat_at is not None
+            and turn.instance_id != instance_id
+        ):
             cutoff = datetime.now(UTC) - timedelta(seconds=stale_after)
             if turn.heartbeat_at >= cutoff:
                 return None

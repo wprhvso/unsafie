@@ -1,9 +1,8 @@
-from unsafie.log import get_logger
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.user import User
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

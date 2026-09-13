@@ -1,9 +1,8 @@
-from unsafie.log import get_logger
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.bot import Bot
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

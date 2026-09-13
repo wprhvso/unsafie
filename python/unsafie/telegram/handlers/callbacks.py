@@ -1,5 +1,4 @@
 import contextlib
-from unsafie.log import get_logger
 from uuid import UUID
 
 from aiogram import Router
@@ -12,6 +11,7 @@ from unsafie.database import SessionLocal
 from unsafie.database.models.turn import TurnStatus
 from unsafie.database.repositories.turn import TurnRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.telegram.group import is_admin
 from unsafie.telegram.handlers.locale import locale_for
 from unsafie.telegram.retry import RetryCallback, retry_markup
@@ -24,7 +24,9 @@ def build_callbacks_router() -> Router:
 
     @router.callback_query(RetryCallback.filter())
     async def retry_callback_handler(
-        query: CallbackQuery, callback_data: RetryCallback, bot_id: int,
+        query: CallbackQuery,
+        callback_data: RetryCallback,
+        bot_id: int,
     ) -> None:
         message = query.message if isinstance(query.message, Message) else None
         if message is None or query.bot is None:

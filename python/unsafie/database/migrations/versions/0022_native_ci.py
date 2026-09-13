@@ -1,10 +1,12 @@
 from collections.abc import Sequence
+
 from alembic import op
 
 revision: str = "0022"
 down_revision: str | Sequence[str] | None = "0021"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
 
 def upgrade() -> None:
     op.execute("""
@@ -65,8 +67,12 @@ def upgrade() -> None:
     );
     """)
 
-    op.execute("CREATE INDEX IF NOT EXISTS ix_ci_runs_pending ON ci_runs (id ASC) WHERE status = 'pending';")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_ci_runs_stale ON ci_runs (lease_until) WHERE status = 'in_progress';")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_ci_runs_pending ON ci_runs (id ASC) WHERE status = 'pending';"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_ci_runs_stale ON ci_runs (lease_until) WHERE status = 'in_progress';"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS ix_ci_runs_repo ON ci_runs (repo_full_name, id DESC);")
 
     op.execute("""
@@ -80,7 +86,10 @@ def upgrade() -> None:
         network_tx_kbps REAL NOT NULL
     );
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS ix_ci_run_metrics_run ON ci_run_metrics (run_id, recorded_at ASC);")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_ci_run_metrics_run ON ci_run_metrics (run_id, recorded_at ASC);"
+    )
+
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS ci_run_metrics CASCADE;")

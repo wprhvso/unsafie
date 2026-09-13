@@ -30,14 +30,17 @@ router = APIRouter(prefix="/api/ci", tags=["ci"])
 CI_COOKIE = "unsafie_ci_session"
 LOGS_DIR = Path("/var/lib/unsafie/ci/logs")
 
+
 def _ci_callback_url(request: Request) -> str:
     return f"{settings.public_origin}/api/ci/auth/callback"
+
 
 def _sign_session(login: str, avatar: str = "") -> str:
     exp = int(time.time()) + 30 * 86400
     payload = f"{login.lower()}:{exp}:{avatar}"
     sig = hmac.new(settings.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode().rstrip("=")
+
 
 def _verify_session(cookie: str | None) -> tuple[str, str] | None:
     if not cookie:
@@ -49,10 +52,13 @@ def _verify_session(cookie: str | None) -> tuple[str, str] | None:
         return None
     if int(exp_str) < time.time():
         return None
-    expected_sig = hmac.new(settings.secret_key.encode(), f"{login}:{exp_str}:{avatar}".encode(), hashlib.sha256).hexdigest()
+    expected_sig = hmac.new(
+        settings.secret_key.encode(), f"{login}:{exp_str}:{avatar}".encode(), hashlib.sha256
+    ).hexdigest()
     if not hmac.compare_digest(sig, expected_sig):
         return None
     return login, avatar
+
 
 async def get_current_ci_user(request: Request) -> str:
     if verify_admin(request.cookies.get(ADMIN_COOKIE)):
@@ -79,14 +85,18 @@ async def get_current_ci_user(request: Request) -> str:
 
     raise HTTPException(401, "unauthorized or not in ci whitelist")
 
+
 CurrentUser = Annotated[str, Depends(get_current_ci_user)]
+
 
 class SecretSetRequest(BaseModel):
     key: str
     value: str
 
+
 class TokenCreateRequest(BaseModel):
     name: str
+
 
 @router.get("/auth/me")
 async def get_me(request: Request):
@@ -105,6 +115,7 @@ async def get_me(request: Request):
         "avatar_url": avatar,
     }
 
+
 @router.get("/auth/github")
 async def auth_github(request: Request, redirect: str = "/ci"):
     async with SessionLocal() as session:
@@ -118,6 +129,7 @@ async def auth_github(request: Request, redirect: str = "/ci"):
         "scope": "read:user",
     }
     return RedirectResponse(f"https://github.com/login/oauth/authorize?{urlencode(params)}")
+
 
 @router.get("/auth/callback")
 async def auth_callback(request: Request, code: str, state: str = "/ci"):
@@ -163,11 +175,13 @@ async def auth_callback(request: Request, code: str, state: str = "/ci"):
     response.set_cookie(CI_COOKIE, cookie_val, max_age=30 * 86400, httponly=True, samesite="lax")
     return response
 
+
 @router.post("/auth/logout")
 async def auth_logout():
     resp = Response(content=json.dumps({"ok": True}), media_type="application/json")
     resp.delete_cookie(CI_COOKIE)
     return resp
+
 
 @router.get("/runs")
 async def list_runs(
@@ -200,6 +214,7 @@ async def list_runs(
             }
             for r in runs
         ]
+
 
 @router.get("/runs/{run_id}")
 async def get_run(run_id: int, user: CurrentUser):
@@ -242,12 +257,14 @@ async def get_run(run_id: int, user: CurrentUser):
             ],
         }
 
+
 @router.post("/runs/{run_id}/rerun")
 async def rerun(run_id: int, user: CurrentUser):
     new_run = await ci_service.rerequest_run(run_id, triggered_by=user)
     if not new_run:
         raise HTTPException(404, "run not found")
     return {"ok": True, "run_id": new_run.id}
+
 
 @router.get("/runs/{run_id}/metrics")
 async def get_run_metrics(run_id: int, user: CurrentUser):
@@ -264,6 +281,7 @@ async def get_run_metrics(run_id: int, user: CurrentUser):
             for m in metrics
         ]
 
+
 @router.get("/runs/{run_id}/logs/raw")
 async def get_raw_logs(run_id: int, user: CurrentUser, job: str | None = None):
     filename = f"{run_id}_{job}.log" if job else f"{run_id}.log"
@@ -273,6 +291,7 @@ async def get_raw_logs(run_id: int, user: CurrentUser, job: str | None = None):
     if not log_file.is_file():
         raise HTTPException(404, "log not found")
     return PlainTextResponse(log_file.read_text(encoding="utf-8", errors="replace"))
+
 
 @router.get("/runs/{run_id}/stream")
 async def stream_run(run_id: int, request: Request, job: str | None = None):
@@ -322,6 +341,7 @@ async def stream_run(run_id: int, request: Request, job: str | None = None):
 
     return StreamingResponse(_generator(), media_type="text/event-stream")
 
+
 @router.get("/secrets/{owner}/{repo}")
 async def list_secrets(owner: str, repo: str, user: CurrentUser):
     repo_full_name = f"{owner}/{repo}"
@@ -336,6 +356,7 @@ async def list_secrets(owner: str, repo: str, user: CurrentUser):
             for item in items
         ]
 
+
 @router.post("/secrets/{owner}/{repo}")
 async def set_secret(owner: str, repo: str, req: SecretSetRequest, user: CurrentUser):
     repo_full_name = f"{owner}/{repo}"
@@ -345,6 +366,7 @@ async def set_secret(owner: str, repo: str, req: SecretSetRequest, user: Current
     async with SessionLocal() as session:
         await CiRepository(session).set_secret(repo_full_name, key, req.value, updated_by=user)
     return {"ok": True, "key": key}
+
 
 @router.put("/secrets/{owner}/{repo}/bulk")
 async def set_secrets_bulk(owner: str, repo: str, request: Request, user: CurrentUser):
@@ -385,12 +407,14 @@ async def set_secrets_bulk(owner: str, repo: str, request: Request, user: Curren
 
     return {"ok": True, "count": len(secrets_dict), "keys": list(secrets_dict.keys())}
 
+
 @router.delete("/secrets/{owner}/{repo}/{key}")
 async def delete_secret(owner: str, repo: str, key: str, user: CurrentUser):
     repo_full_name = f"{owner}/{repo}"
     async with SessionLocal() as session:
         ok = await CiRepository(session).delete_secret(repo_full_name, key)
     return {"ok": ok}
+
 
 @router.get("/tokens")
 async def list_tokens(user: CurrentUser):
@@ -406,6 +430,7 @@ async def list_tokens(user: CurrentUser):
             }
             for t in tokens
         ]
+
 
 @router.post("/tokens")
 async def create_token(req: TokenCreateRequest, user: CurrentUser):
@@ -425,6 +450,7 @@ async def create_token(req: TokenCreateRequest, user: CurrentUser):
         "name": item.name,
         "prefix": item.token_prefix,
     }
+
 
 @router.delete("/tokens/{token_id}")
 async def delete_token(token_id: int, user: CurrentUser):

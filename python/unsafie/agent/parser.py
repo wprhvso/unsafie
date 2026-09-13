@@ -1,6 +1,8 @@
 import re
 
-BLOCK_RE = re.compile(r"```(?:bash|sh|shell)?[^\S\r\n]*\r?\n?(.*?)(?:\r?\n)?[^\S\r\n]*```", re.IGNORECASE | re.DOTALL)
+BLOCK_RE = re.compile(
+    r"```(?:bash|sh|shell)?[^\S\r\n]*\r?\n?(.*?)(?:\r?\n)?[^\S\r\n]*```", re.IGNORECASE | re.DOTALL
+)
 STRIP_START_RE = re.compile(r"^\s*```(?:bash|sh|shell)?[^\S\r\n]*\r?\n?", re.IGNORECASE)
 STRIP_END_RE = re.compile(r"\r?\n?[^\S\r\n]*```\s*$", re.IGNORECASE)
 

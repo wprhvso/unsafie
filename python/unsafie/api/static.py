@@ -1,8 +1,8 @@
 import html
 import json
-from unsafie.log import get_logger
 from pathlib import Path
 
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)

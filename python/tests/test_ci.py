@@ -20,6 +20,7 @@ def test_monitor_helpers():
     assert rx >= 0
     assert tx >= 0
 
+
 @pytest.mark.anyio
 async def test_target_discovery():
     with tempfile.TemporaryDirectory() as tmp:
@@ -29,25 +30,31 @@ async def test_target_discovery():
         assert ci == []
         assert cd == []
 
-        (td / "Makefile").write_text("ci:\n\techo ignore\nci-test:\n\techo test\ncd-deploy:\n\techo deploy\n")
+        (td / "Makefile").write_text(
+            "ci:\n\techo ignore\nci-test:\n\techo test\ncd-deploy:\n\techo deploy\n"
+        )
         if shutil.which("make"):
             t, ci, cd = await runner.discover_targets(td)
             assert t == "make"
             assert ci == ["ci-test"]
             assert cd == ["cd-deploy"]
 
-        (td / "justfile").write_text("ci:\n  echo ignore\nci-lint:\n  echo lint\nci-test:\n  echo test\ncd-prod:\n  echo prod\n")
+        (td / "justfile").write_text(
+            "ci:\n  echo ignore\nci-lint:\n  echo lint\nci-test:\n  echo test\ncd-prod:\n  echo prod\n"
+        )
         if shutil.which("just"):
             t, ci, cd = await runner.discover_targets(td)
             assert t == "just"
             assert ci == ["ci-lint", "ci-test"]
             assert cd == ["cd-prod"]
 
+
 def test_api_token_hashing():
     raw = f"uci_live_{secrets.token_hex(24)}"
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
     assert len(token_hash) == 64
     assert raw.startswith("uci_live_")
+
 
 def test_bulk_secrets_parsing():
     raw_env = """

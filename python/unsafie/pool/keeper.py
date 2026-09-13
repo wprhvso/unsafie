@@ -1,10 +1,10 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from unsafie import cluster
 from unsafie.database.models.pool import PoolDonor
 from unsafie.github.client.base import GithubHTTP
 from unsafie.github.errors import GithubError
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.pool import donors, keys, leases, registry
 from unsafie.settings import settings

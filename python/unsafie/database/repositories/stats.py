@@ -51,12 +51,12 @@ class StatsRepository:
                 .order_by(day),
             )
         ).all()
-        return [
-            DayPoint(r[0].strftime("%Y-%m-%d"), int(r[1])) for r in rows
-        ]
+        return [DayPoint(r[0].strftime("%Y-%m-%d"), int(r[1])) for r in rows]
 
     async def top_chats(
-        self, since: datetime, limit: int = 10,
+        self,
+        since: datetime,
+        limit: int = 10,
     ) -> list[tuple[int, int, int]]:
         rows = (
             await self.session.execute(
@@ -77,7 +77,8 @@ class StatsRepository:
         rows = (
             await self.session.execute(
                 select(
-                    Turn.credential_id, func.count(),
+                    Turn.credential_id,
+                    func.count(),
                 )
                 .where(Turn.created_at >= since)
                 .group_by(Turn.credential_id)
@@ -97,9 +98,7 @@ class StatsRepository:
         )
         creds = (
             await self.session.scalar(
-                select(func.count())
-                .select_from(OpalSession)
-                .where(OpalSession.enabled.is_(True)),
+                select(func.count()).select_from(OpalSession).where(OpalSession.enabled.is_(True)),
             )
             or 0
         )

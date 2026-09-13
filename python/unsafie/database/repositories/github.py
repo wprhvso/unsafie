@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
@@ -10,6 +9,7 @@ from unsafie.database.models.github_app import GithubApp
 from unsafie.database.models.installation import Installation, InstallationAccount
 from unsafie.database.models.repo import Repo, UserRepo
 from unsafie.database.models.worktree import Worktree
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -61,14 +61,16 @@ class GithubAccountRepository:
     async def by_github_id(self, user_id: int, github_id: int) -> GithubAccount | None:
         return await self.session.scalar(
             select(GithubAccount).where(
-                GithubAccount.user_id == user_id, GithubAccount.github_id == github_id,
+                GithubAccount.user_id == user_id,
+                GithubAccount.github_id == github_id,
             ),
         )
 
     async def by_login(self, user_id: int, login: str) -> GithubAccount | None:
         return await self.session.scalar(
             select(GithubAccount).where(
-                GithubAccount.user_id == user_id, func.lower(GithubAccount.login) == login.lower(),
+                GithubAccount.user_id == user_id,
+                func.lower(GithubAccount.login) == login.lower(),
             ),
         )
 
@@ -176,7 +178,8 @@ class InstallationRepository:
         if exists is None:
             self.session.add(
                 InstallationAccount(
-                    installation_id=installation_id, github_account_id=github_account_id,
+                    installation_id=installation_id,
+                    github_account_id=github_account_id,
                 ),
             )
             await self.session.commit()
@@ -223,7 +226,8 @@ class RepoRepository:
     async def by_full_name(self, owner: str, name: str) -> Repo | None:
         return await self.session.scalar(
             select(Repo).where(
-                func.lower(Repo.owner) == owner.lower(), func.lower(Repo.name) == name.lower(),
+                func.lower(Repo.owner) == owner.lower(),
+                func.lower(Repo.name) == name.lower(),
             ),
         )
 
@@ -387,7 +391,11 @@ class WorktreeRepository:
 
     async def create(self, repo_id: int, branch: str, commit: str, tree: str) -> Worktree:
         wt = Worktree(
-            repo_id=repo_id, branch=branch, base_commit_sha=commit, base_tree_sha=tree, changes={},
+            repo_id=repo_id,
+            branch=branch,
+            base_commit_sha=commit,
+            base_tree_sha=tree,
+            changes={},
         )
         self.session.add(wt)
         await self.session.commit()
@@ -409,7 +417,9 @@ class WorktreeRepository:
         await self.session.commit()
 
     async def page(
-        self, offset: int = 0, limit: int = 50,
+        self,
+        offset: int = 0,
+        limit: int = 50,
     ) -> tuple[list[tuple[Worktree, Repo]], int]:
         total = await self.session.scalar(select(func.count()).select_from(Worktree)) or 0
         rows = await self.session.execute(

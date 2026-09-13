@@ -24,7 +24,9 @@ def _without_command(message: Message) -> Message:
     text = (message.text or message.caption or "").strip()
     parts = text.split(maxsplit=1)
     cleaned = parts[1] if len(parts) > 1 else ""
-    update = {"text": cleaned} if message.text is not None else {"caption": cleaned, "text": cleaned}
+    update = (
+        {"text": cleaned} if message.text is not None else {"caption": cleaned, "text": cleaned}
+    )
     return message.model_copy(update=update).as_(message.bot)
 
 
@@ -45,7 +47,13 @@ def build_long_router() -> Router:
         cleaned = _without_command(message)
         initial = cleaned if cleaned.text else None
         await long_input_service.start(
-            message.bot, bot_id, message.chat.id, user_id, initial, LongTarget.CHAT, locale,
+            message.bot,
+            bot_id,
+            message.chat.id,
+            user_id,
+            initial,
+            LongTarget.CHAT,
+            locale,
         )
 
     @router.message(Command("system_long"))
@@ -54,13 +62,21 @@ def build_long_router() -> Router:
             return
         user_id = message.from_user.id if message.from_user else 0
         locale = await locale_for(user_id, message.from_user)
-        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and not await is_admin(message.bot, message.chat.id, user_id):
+        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and not await is_admin(
+            message.bot, message.chat.id, user_id
+        ):
             await answer(message, bot_id, t("commands-group-admin-only", locale))
             return
         cleaned = _without_command(message)
         initial = cleaned if cleaned.text else None
         await long_input_service.start(
-            message.bot, bot_id, message.chat.id, user_id, initial, LongTarget.SYSTEM, locale,
+            message.bot,
+            bot_id,
+            message.chat.id,
+            user_id,
+            initial,
+            LongTarget.SYSTEM,
+            locale,
         )
 
     @router.callback_query(LongCallback.filter())
@@ -102,7 +118,10 @@ def build_long_router() -> Router:
             return
 
         if collected.target == LongTarget.SYSTEM:
-            if query.message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and not await is_admin(query.bot, chat_id, user_id):
+            if query.message.chat.type in (
+                ChatType.GROUP,
+                ChatType.SUPERGROUP,
+            ) and not await is_admin(query.bot, chat_id, user_id):
                 await query.answer(t("commands-group-admin-only", locale), show_alert=True)
                 return
             async with SessionLocal() as session:

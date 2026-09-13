@@ -7,6 +7,7 @@ from unsafie.settings import settings
 
 logger = get_logger(__name__)
 
+
 async def _headers(installation_id: int) -> dict[str, str]:
     token = await auth.installation_token(installation_id)
     return {
@@ -15,6 +16,7 @@ async def _headers(installation_id: int) -> dict[str, str]:
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "unsafie-ci",
     }
+
 
 async def create_check_run(
     installation_id: int,
@@ -27,7 +29,9 @@ async def create_check_run(
 ) -> int | None:
     headers = await _headers(installation_id)
     now = datetime.now(UTC).isoformat()
-    base = f"{settings.public_origin}/{slug}" if slug else f"{settings.public_origin}/ci/runs/{run_id}"
+    base = (
+        f"{settings.public_origin}/{slug}" if slug else f"{settings.public_origin}/ci/runs/{run_id}"
+    )
     details_url = f"{base}?job={job_name}" if job_name else base
     payload = {
         "name": name,
@@ -45,6 +49,7 @@ async def create_check_run(
         text = await resp.text()
         logger.error("failed to create check run: %s %s", resp.status, text)
         return None
+
 
 async def update_check_run(
     installation_id: int,

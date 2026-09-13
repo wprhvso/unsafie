@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 import os
 import socket
 
@@ -8,6 +7,7 @@ from opentelemetry.sdk.trace import SpanLimits, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON, ParentBased, Sampler, TraceIdRatioBased
 
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
@@ -64,7 +64,10 @@ def exporter():
     if settings.otel_protocol.startswith("http"):
         try:
             import importlib
-            exporter_mod = importlib.import_module("opentelemetry.exporter.otlp.proto.http.trace_exporter")
+
+            exporter_mod = importlib.import_module(
+                "opentelemetry.exporter.otlp.proto.http.trace_exporter"
+            )
             otlp_exporter = exporter_mod.OTLPSpanExporter
         except (ImportError, AttributeError) as e:
             msg = "OTEL_PROTOCOL=http needs the opentelemetry-exporter-otlp-proto-http package"
@@ -76,7 +79,9 @@ def exporter():
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as Grpc
 
     return Grpc(
-        endpoint=url, insecure=url.startswith("http://"), timeout=settings.otel_export_timeout,
+        endpoint=url,
+        insecure=url.startswith("http://"),
+        timeout=settings.otel_export_timeout,
     )
 
 

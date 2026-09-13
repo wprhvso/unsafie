@@ -51,7 +51,9 @@ def setting(key: str, override: str | None = None) -> str | None:
 
 
 class Client:
-    def __init__(self, api: str | None = None, token: str | None = None, prefix: str = "/api/v1") -> None:
+    def __init__(
+        self, api: str | None = None, token: str | None = None, prefix: str = "/api/v1"
+    ) -> None:
         self.api = (setting("api", api) or DEFAULT_API).rstrip("/")
         self._token = token
         self.prefix = prefix
@@ -77,7 +79,9 @@ class Client:
         clean = {k: v for k, v in (params or {}).items() if v not in (None, "")}
         if clean:
             url = f"{url}?{urllib.parse.urlencode(clean)}"
-        payload = None if body is None else json.dumps(body, ensure_ascii=False, default=str).encode()
+        payload = (
+            None if body is None else json.dumps(body, ensure_ascii=False, default=str).encode()
+        )
         request = urllib.request.Request(url, data=payload, method=method.upper())
         request.add_header("Authorization", f"Bearer {self.token}")
         request.add_header("User-Agent", USER_AGENT)

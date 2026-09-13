@@ -35,7 +35,9 @@ class TurnCheckpoint(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     turn_id: Mapped[UUID] = mapped_column(
-        SQL_UUID(as_uuid=True), ForeignKey("turns.id", ondelete="CASCADE"), index=True,
+        SQL_UUID(as_uuid=True),
+        ForeignKey("turns.id", ondelete="CASCADE"),
+        index=True,
     )
     step: Mapped[int] = mapped_column(Integer)
     phase: Mapped[str] = mapped_column(String(32))
@@ -43,8 +45,10 @@ class TurnCheckpoint(Base):
     active_block: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     injected: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
     credential_id: Mapped[int | None] = mapped_column(
-        ForeignKey("opal_sessions.id", ondelete="SET NULL"), nullable=True,
+        ForeignKey("opal_sessions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
     )

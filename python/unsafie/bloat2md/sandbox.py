@@ -1,7 +1,6 @@
 import asyncio
 import contextlib
 import json
-from unsafie.log import get_logger
 import os
 import signal
 import sys
@@ -9,6 +8,7 @@ from typing import Any, Final
 
 from unsafie.bloat2md.config import settings
 from unsafie.bloat2md.domain import ConversionError, Image, Payload, UnsupportedFile
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

@@ -185,7 +185,14 @@ def drag(cdp: Cdp, from_selector: str, to_selector: str, steps: int = 5) -> None
         time.sleep(0.015)
     cdp.call(
         "Input.dispatchMouseEvent",
-        {"type": "mouseReleased", "x": x2, "y": y2, "button": "left", "clickCount": 1, "buttons": 0},
+        {
+            "type": "mouseReleased",
+            "x": x2,
+            "y": y2,
+            "button": "left",
+            "clickCount": 1,
+            "buttons": 0,
+        },
     )
 
 
@@ -208,7 +215,10 @@ def scroll(
     elif top:
         evaluate(cdp, "window.scrollTo({top: 0, left: 0, behavior: 'instant'})")
     elif bottom:
-        evaluate(cdp, "window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'})")
+        evaluate(
+            cdp,
+            "window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'})",
+        )
     elif by:
         parts = [float(p.strip()) for p in by.split(",") if p.strip()]
         dx = parts[0] if len(parts) > 0 else 0.0
@@ -217,10 +227,13 @@ def scroll(
             "Input.dispatchMouseEvent",
             {"type": "mouseWheel", "x": 100, "y": 100, "deltaX": dx, "deltaY": dy},
         )
-    info = evaluate(
-        cdp,
-        "({x: window.scrollX, y: window.scrollY, maxX: document.documentElement.scrollWidth, maxY: document.documentElement.scrollHeight})",
-    ) or {}
+    info = (
+        evaluate(
+            cdp,
+            "({x: window.scrollX, y: window.scrollY, maxX: document.documentElement.scrollWidth, maxY: document.documentElement.scrollHeight})",
+        )
+        or {}
+    )
     return {
         "scrolled": True,
         "scroll_x": info.get("x", 0),
@@ -434,12 +447,7 @@ def console_logs(
     if clear:
         evaluate(cdp, "window.__unsafie_logs = []")
         return {"count": 0, "messages": [], "cleared": True}
-    script = (
-        "(() => {"
-        " if (!window.__unsafie_logs) return [];"
-        " return window.__unsafie_logs;"
-        "})()"
-    )
+    script = "(() => { if (!window.__unsafie_logs) return []; return window.__unsafie_logs;})()"
     logs = list(evaluate(cdp, script) or [])
     if level and level != "all":
         logs = [item for item in logs if item.get("level") == level]
@@ -451,11 +459,13 @@ def list_tabs(cdp: Cdp) -> list[dict]:
     items = []
     for t in targets.get("targetInfos", []):
         if t.get("type") == "page":
-            items.append({
-                "id": t["targetId"],
-                "title": t.get("title", ""),
-                "url": t.get("url", ""),
-            })
+            items.append(
+                {
+                    "id": t["targetId"],
+                    "title": t.get("title", ""),
+                    "url": t.get("url", ""),
+                }
+            )
     return items
 
 
@@ -537,7 +547,11 @@ def intercept_request(
                         body_json = json.loads(body)
                 target_session = ev.get("sessionId") or cdp.session_id
                 if block:
-                    cdp.call("Fetch.failRequest", {"requestId": req_id, "errorReason": "BlockedByClient"}, session=target_session)
+                    cdp.call(
+                        "Fetch.failRequest",
+                        {"requestId": req_id, "errorReason": "BlockedByClient"},
+                        session=target_session,
+                    )
                 else:
                     cdp.call("Fetch.continueRequest", {"requestId": req_id}, session=target_session)
                 return {

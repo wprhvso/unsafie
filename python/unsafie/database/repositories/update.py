@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -7,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.update import Update
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -30,7 +30,13 @@ class UpdateRepository:
             chat_id = None
             msg_id = None
             user_id = None
-            for key in ("message", "edited_message", "callback_query", "channel_post", "edited_channel_post"):
+            for key in (
+                "message",
+                "edited_message",
+                "callback_query",
+                "channel_post",
+                "edited_channel_post",
+            ):
                 sub = item.get(key)
                 if isinstance(sub, dict):
                     if "chat" in sub and isinstance(sub["chat"], dict):
@@ -46,16 +52,20 @@ class UpdateRepository:
                     if isinstance(sub, dict) and "from" in sub and isinstance(sub["from"], dict):
                         user_id = sub["from"].get("id")
                         break
-            rows.append({
-                "bot_id": bot_id,
-                "update_id": upd_id,
-                "chat_id": chat_id,
-                "message_id": msg_id,
-                "user_id": user_id,
-                "payload": item,
-                "status": "pending",
-            })
-        stmt = insert(Update).values(rows).on_conflict_do_nothing(constraint="uq_updates_bot_update")
+            rows.append(
+                {
+                    "bot_id": bot_id,
+                    "update_id": upd_id,
+                    "chat_id": chat_id,
+                    "message_id": msg_id,
+                    "user_id": user_id,
+                    "payload": item,
+                    "status": "pending",
+                }
+            )
+        stmt = (
+            insert(Update).values(rows).on_conflict_do_nothing(constraint="uq_updates_bot_update")
+        )
         res = await self.session.execute(stmt)
         await self.session.commit()
         return int(getattr(res, "rowcount", 0) or 0)
@@ -126,7 +136,9 @@ class UpdateRepository:
             select(func.coalesce(func.max(Update.ordinal) + 1, 0)).where(Update.turn_id == turn_id),
         )
         await self.session.execute(
-            update(Update).where(Update.id == update_db_id).values(turn_id=turn_id, ordinal=ordinal),
+            update(Update)
+            .where(Update.id == update_db_id)
+            .values(turn_id=turn_id, ordinal=ordinal),
         )
         await self.session.commit()
         return int(ordinal or 0)

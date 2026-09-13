@@ -1,10 +1,10 @@
-from unsafie.log import get_logger
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.response import Response, ResponseKind
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -53,7 +53,11 @@ class ResponseRepository:
         )
 
     async def set_content(
-        self, bot_id: int, chat_id: int, message_id: int, content: str,
+        self,
+        bot_id: int,
+        chat_id: int,
+        message_id: int,
+        content: str,
     ) -> Response | None:
         response = await self.by_message(bot_id, chat_id, message_id)
         if response is None or len(response.message_ids) != 1:

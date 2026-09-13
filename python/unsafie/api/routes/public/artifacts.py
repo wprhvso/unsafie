@@ -37,7 +37,9 @@ async def page_json(slug: str):
             payload["turn_id"] = str(artifact.turn_id)
             if artifact.kind == ArtifactKind.TURN:
                 telem = await repo.for_telemetry(
-                    turn_id=artifact.turn_id, bot_id=artifact.bot_id, chat_id=artifact.chat_id,
+                    turn_id=artifact.turn_id,
+                    bot_id=artifact.bot_id,
+                    chat_id=artifact.chat_id,
                 )
                 if telem:
                     payload["telemetry_slug"] = telem.slug
@@ -62,6 +64,7 @@ async def page_trace(slug: str):
     if artifact is None or artifact.turn_id is None:
         raise HTTPException(404, "Not Found")
     from unsafie.api.routes.admin.turns import get_turn_trace
+
     return await get_turn_trace(artifact.turn_id)
 
 
@@ -94,7 +97,9 @@ async def spa(path: str, request: Request):
             payload["turn_id"] = str(artifact.turn_id)
             if artifact.kind == ArtifactKind.TURN:
                 telem = await repo.for_telemetry(
-                    turn_id=artifact.turn_id, bot_id=artifact.bot_id, chat_id=artifact.chat_id,
+                    turn_id=artifact.turn_id,
+                    bot_id=artifact.bot_id,
+                    chat_id=artifact.chat_id,
                 )
                 if telem:
                     payload["telemetry_slug"] = telem.slug

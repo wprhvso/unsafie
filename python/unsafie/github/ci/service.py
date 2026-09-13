@@ -9,8 +9,10 @@ logger = get_logger(__name__)
 
 ci_event = asyncio.Event()
 
+
 def notify_worker() -> None:
     ci_event.set()
+
 
 async def enqueue_from_webhook(event: str, payload: dict) -> CiRun | None:
     repo_data = payload.get("repository") or {}
@@ -27,7 +29,9 @@ async def enqueue_from_webhook(event: str, payload: dict) -> CiRun | None:
         is_sender_ok = await ci_repo.is_whitelisted(sender)
         is_owner_ok = await ci_repo.is_whitelisted(owner)
         if not (is_sender_ok or is_owner_ok):
-            logger.warning("sender %s and owner %s are not in ci_whitelist, ignoring ci", sender, owner)
+            logger.warning(
+                "sender %s and owner %s are not in ci_whitelist, ignoring ci", sender, owner
+            )
             return None
 
     installation_id = int((payload.get("installation") or {}).get("id") or 0)
@@ -44,7 +48,7 @@ async def enqueue_from_webhook(event: str, payload: dict) -> CiRun | None:
             return None
         ref = payload.get("ref") or "refs/heads/main"
         branch = ref.removeprefix("refs/heads/")
-        is_default_branch = (branch == default_branch)
+        is_default_branch = branch == default_branch
         head_commit = payload.get("head_commit") or {}
         commit_message = head_commit.get("message")
 
@@ -72,7 +76,7 @@ async def enqueue_from_webhook(event: str, payload: dict) -> CiRun | None:
             return None
         branch = check_run.get("head_branch") or check_suite.get("head_branch") or default_branch
         ref = f"refs/heads/{branch}"
-        is_default_branch = (branch == default_branch)
+        is_default_branch = branch == default_branch
 
         async with SessionLocal() as session:
             run = await CiRepository(session).enqueue_run(
@@ -90,6 +94,7 @@ async def enqueue_from_webhook(event: str, payload: dict) -> CiRun | None:
         return run
 
     return None
+
 
 async def rerequest_run(run_id: int, triggered_by: str | None = None) -> CiRun | None:
     async with SessionLocal() as session:

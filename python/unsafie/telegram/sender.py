@@ -1,5 +1,4 @@
 import functools
-from unsafie.log import get_logger
 from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot
@@ -21,6 +20,7 @@ from unsafie.database.models.response import Response, ResponseKind
 from unsafie.database.models.turn import Turn
 from unsafie.database.repositories.response import ResponseRepository
 from unsafie.database.repositories.turn import TurnRepository
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telegram.retry import retry
 from unsafie.telemetry import attrs
@@ -182,7 +182,14 @@ async def send(
         if reply_to is None and turn is not None:
             reply_to = turn.reply_to or (await reply_target(turn))
         ids = await _send_chunks(
-            bot, prefix, chat_id, chunks, reply_to, reply_markup, silent, preview,
+            bot,
+            prefix,
+            chat_id,
+            chunks,
+            reply_to,
+            reply_markup,
+            silent,
+            preview,
         )
         telemetry.set_attrs(
             span,
@@ -410,7 +417,10 @@ async def delete(bot: Bot, *, bot_id: int, chat_id: int, message_id: int) -> Non
 
 
 async def answer(
-    message: Message, bot_id: int, text: str, reply_markup: InlineKeyboardMarkup | None = None,
+    message: Message,
+    bot_id: int,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
 ) -> Response:
     assert message.bot is not None
     return await send(

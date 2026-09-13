@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from aiogram import Router
@@ -6,6 +5,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.scheduler import service
 from unsafie.scheduler.when import WhenError, fmt_local, zone
 from unsafie.telegram.handlers.locale import locale_for

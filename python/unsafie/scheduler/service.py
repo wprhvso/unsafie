@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime, timedelta
 
 from unsafie.database import SessionLocal
@@ -7,6 +6,7 @@ from unsafie.database.repositories.schedule import ScheduleRepository
 from unsafie.database.repositories.user import UserRepository
 from unsafie.errors import OpsError
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.scheduler import cron as cronlib
 from unsafie.scheduler.when import WhenError, absolute, duration, fmt_local, humanize, zone
 from unsafie.settings import settings

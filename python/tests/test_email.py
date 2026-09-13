@@ -54,7 +54,10 @@ def test_extract_emails() -> None:
 @pytest.mark.anyio
 async def test_receive_email_forbidden() -> None:
     req = MagicMock(spec=Request)
-    with patch.object(settings, "email_webhook_secret", "correct_secret"), pytest.raises(HTTPException) as exc_info:
+    with (
+        patch.object(settings, "email_webhook_secret", "correct_secret"),
+        pytest.raises(HTTPException) as exc_info,
+    ):
         await receive_email("wrong_secret", req)
     assert exc_info.value.status_code == 403
 
@@ -72,7 +75,10 @@ async def test_receive_email_json_success() -> None:
     )
 
     mock_redis = AsyncMock()
-    with patch.object(settings, "email_webhook_secret", "test_secret"), patch("unsafie.cluster.client", return_value=mock_redis):
+    with (
+        patch.object(settings, "email_webhook_secret", "test_secret"),
+        patch("unsafie.cluster.client", return_value=mock_redis),
+    ):
         res = await receive_email("test_secret", req)
         assert res["ok"] is True
         assert res["code"] == "654321"

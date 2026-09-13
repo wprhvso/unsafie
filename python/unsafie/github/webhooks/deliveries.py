@@ -1,8 +1,7 @@
-from unsafie.log import get_logger
-
 from unsafie import events, telemetry
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.delivery import DeliveryRepository
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 

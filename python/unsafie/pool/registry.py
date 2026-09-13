@@ -1,5 +1,4 @@
 import json
-from unsafie.log import get_logger
 import secrets
 import time
 from datetime import UTC, datetime
@@ -10,6 +9,7 @@ from sqlalchemy import select, update
 from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.models.pool import MachineState, PoolMachine
+from unsafie.log import get_logger
 from unsafie.pool import keys
 from unsafie.settings import settings
 

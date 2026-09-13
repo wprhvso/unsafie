@@ -22,7 +22,9 @@ _PLACEHOLDER: Final = mammoth.images.img_element(lambda image: {"alt": "embedded
 def docx(raw: bytes) -> Payload:
     try:
         result = mammoth.convert_to_html(
-            io.BytesIO(raw), style_map=_STYLE_MAP, convert_image=_PLACEHOLDER,
+            io.BytesIO(raw),
+            style_map=_STYLE_MAP,
+            convert_image=_PLACEHOLDER,
         )
     except (OSError, ValueError, KeyError) as error:
         msg = "the document could not be read"

@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from typing import Final
 
 from aiogram import Router
@@ -9,6 +8,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.user import UserRepository
 from unsafie.fluent import t
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telegram.handlers.locale import KNOWN, guess
 from unsafie.telegram.sender import answer
@@ -71,7 +71,8 @@ def lang_keyboard(current_code: str | None) -> InlineKeyboardMarkup:
         name = LANGUAGE_NAMES.get(code, code)
         marker = "🔘" if code == current_code else "⚪"
         btn = InlineKeyboardButton(
-            text=f"{marker} {name}", callback_data=LangCallback(code=code).pack(),
+            text=f"{marker} {name}",
+            callback_data=LangCallback(code=code).pack(),
         )
         pair.append(btn)
         if len(pair) == 2:

@@ -1,10 +1,10 @@
-from unsafie.log import get_logger
 from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.opal_session import OpalSession
+from unsafie.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -125,7 +125,12 @@ class OpalSessionRepository:
         await self.session.commit()
 
     async def failed(
-        self, session_id: int, *, error: str, cooldown_until: datetime | None, disable: bool,
+        self,
+        session_id: int,
+        *,
+        error: str,
+        cooldown_until: datetime | None,
+        disable: bool,
     ) -> None:
         row = await self.get(session_id)
         if row is None:

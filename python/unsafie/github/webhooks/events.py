@@ -1,6 +1,5 @@
-from unsafie.log import get_logger
-
 from unsafie.github import icons
+from unsafie.log import get_logger
 from unsafie.mime import human_size
 
 logger = get_logger(__name__)
@@ -106,7 +105,8 @@ def pull_request_review(payload: dict) -> str | None:
     review = payload.get("review") or {}
     pr = payload.get("pull_request") or {}
     state = {"approved": "✅", "changes_requested": "🛠", "commented": "💬"}.get(
-        (review.get("state") or "").lower(), "🔍",
+        (review.get("state") or "").lower(),
+        "🔍",
     )
     return "\n".join(
         x

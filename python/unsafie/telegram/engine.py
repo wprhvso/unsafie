@@ -1,14 +1,14 @@
 import asyncio
 import contextlib
 import json
-from unsafie.log import get_logger
 
 import aiohttp
 
-from unsafie import cluster, events
+from unsafie import cluster
 from unsafie.database import SessionLocal
 from unsafie.database.repositories.bot import BotRepository
 from unsafie.database.repositories.update import UpdateRepository
+from unsafie.log import get_logger
 from unsafie.loop import Loop
 from unsafie.settings import settings
 from unsafie.telegram import bots
@@ -59,7 +59,9 @@ class TelegramEngine(Loop):
         if settings.runs_poller:
             await self._sync_pollers()
         if settings.runs_worker and (self._worker_task is None or self._worker_task.done()):
-            self._worker_task = asyncio.create_task(self._worker_loop(), name="telegram-inbox-worker")
+            self._worker_task = asyncio.create_task(
+                self._worker_loop(), name="telegram-inbox-worker"
+            )
 
     async def _sync_pollers(self) -> None:
         async with SessionLocal() as session:
@@ -76,7 +78,9 @@ class TelegramEngine(Loop):
                 self._start_bot_poller(bot.id, bot.token)
 
     def _start_bot_poller(self, bot_id: int, token: str) -> None:
-        poller_task = asyncio.create_task(self._poller_loop(bot_id, token), name=f"tg-poller:{bot_id}")
+        poller_task = asyncio.create_task(
+            self._poller_loop(bot_id, token), name=f"tg-poller:{bot_id}"
+        )
         self._poller_tasks[bot_id] = poller_task
 
     async def _stop_bot_poller(self, bot_id: int) -> None:
@@ -91,7 +95,9 @@ class TelegramEngine(Loop):
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
-    async def _listen_evictions(self, bot_id: int, my_epoch: int, poller_task: asyncio.Task) -> None:
+    async def _listen_evictions(
+        self, bot_id: int, my_epoch: int, poller_task: asyncio.Task
+    ) -> None:
         pubsub = cluster.client().pubsub()
         ch = channel_key(bot_id)
         await pubsub.subscribe(ch)
@@ -103,7 +109,12 @@ class TelegramEngine(Loop):
                     payload = json.loads(raw.get("data", "{}"))
                     incoming_epoch = int(payload.get("epoch", 0))
                     if incoming_epoch > my_epoch:
-                        logger.info("bot=%s superseded by epoch %s (mine=%s), yielding leadership", bot_id, incoming_epoch, my_epoch)
+                        logger.info(
+                            "bot=%s superseded by epoch %s (mine=%s), yielding leadership",
+                            bot_id,
+                            incoming_epoch,
+                            my_epoch,
+                        )
                         poller_task.cancel()
                         break
                 except Exception:
@@ -149,13 +160,29 @@ class TelegramEngine(Loop):
             try:
                 async with http.post(
                     get_url,
-                    json={"offset": offset, "timeout": settings.poll_timeout, "allowed_updates": ["message", "edited_message", "callback_query", "inline_query", "chosen_inline_result", "message_reaction"]},
+                    json={
+                        "offset": offset,
+                        "timeout": settings.poll_timeout,
+                        "allowed_updates": [
+                            "message",
+                            "edited_message",
+                            "callback_query",
+                            "inline_query",
+                            "chosen_inline_result",
+                            "message_reaction",
+                        ],
+                    },
                 ) as resp:
                     if resp.status == 409:
                         curr_epoch_raw = await redis.get(epoch_key(bot_id))
                         curr_epoch = int(curr_epoch_raw or 0)
                         if curr_epoch > my_epoch:
-                            logger.info("bot=%s 409 Conflict detected with curr_epoch=%s > my_epoch=%s, stepping down", bot_id, curr_epoch, my_epoch)
+                            logger.info(
+                                "bot=%s 409 Conflict detected with curr_epoch=%s > my_epoch=%s, stepping down",
+                                bot_id,
+                                curr_epoch,
+                                my_epoch,
+                            )
                             break
                         await asyncio.sleep(1.0)
                         continue
@@ -206,11 +233,17 @@ class TelegramEngine(Loop):
                                 await UpdateRepository(session).mark_failed(item.id)
                             continue
                         try:
-                            await dispatcher.feed_raw_update(bot, item.payload, bot_id=item.bot_id, update_db_id=item.id)
+                            await dispatcher.feed_raw_update(
+                                bot, item.payload, bot_id=item.bot_id, update_db_id=item.id
+                            )
                             async with SessionLocal() as session:
                                 await UpdateRepository(session).mark_done(item.id)
                         except Exception:
-                            logger.exception("inbox worker: failed to feed update_db_id=%s bot_id=%s", item.id, item.bot_id)
+                            logger.exception(
+                                "inbox worker: failed to feed update_db_id=%s bot_id=%s",
+                                item.id,
+                                item.bot_id,
+                            )
                             async with SessionLocal() as session:
                                 await UpdateRepository(session).mark_failed(item.id)
             except asyncio.CancelledError:

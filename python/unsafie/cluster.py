@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-from unsafie.log import get_logger
 import secrets
 import time
 from collections.abc import AsyncIterator, Iterable
@@ -11,6 +10,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from unsafie import telemetry
+from unsafie.log import get_logger
 from unsafie.settings import settings
 from unsafie.telemetry import attrs
 
@@ -271,7 +271,11 @@ def _note(name: str, waited: float, taken: bool) -> None:
 
 @contextlib.asynccontextmanager
 async def lock(
-    name: str, *, ttl: float | None = None, wait: float | None = None, renew: bool = False,
+    name: str,
+    *,
+    ttl: float | None = None,
+    wait: float | None = None,
+    renew: bool = False,
 ) -> AsyncIterator[Held]:
     started = time.perf_counter()
     held = await acquire(name, ttl=ttl, wait=settings.lock_wait if wait is None else wait)
@@ -285,7 +289,11 @@ async def lock(
 
 @contextlib.asynccontextmanager
 async def try_lock(
-    name: str, *, ttl: float | None = None, wait: float = 0.0, renew: bool = False,
+    name: str,
+    *,
+    ttl: float | None = None,
+    wait: float = 0.0,
+    renew: bool = False,
 ) -> AsyncIterator[Held | None]:
     started = time.perf_counter()
     held = await acquire(name, ttl=ttl, wait=wait)

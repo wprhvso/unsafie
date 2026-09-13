@@ -53,10 +53,7 @@ def convert(raw: bytes, name: str) -> tuple[Kind, Payload]:
         raise UnsupportedFile(msg)
 
     try:
-        if kind is Kind.LEGACY:
-            payload = legacy.convert(raw, name)
-        else:
-            payload = handler(raw)
+        payload = legacy.convert(raw, name) if kind is Kind.LEGACY else handler(raw)
     except ConversionError as error:
         payload = _fallback(kind, raw, error, name)
 

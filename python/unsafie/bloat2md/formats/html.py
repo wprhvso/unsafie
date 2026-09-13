@@ -66,7 +66,7 @@ def to_markdown(source: str) -> tuple[str, int]:
 
 
 def _decode_html(raw: bytes) -> str:
-    meta_m = re.search(rb'''<meta[^>]+charset=["']?([-_a-zA-Z0-9]+)''', raw, re.IGNORECASE)
+    meta_m = re.search(rb"""<meta[^>]+charset=["']?([-_a-zA-Z0-9]+)""", raw, re.IGNORECASE)
     if meta_m:
         encoding = meta_m.group(1).decode("ascii", "ignore").strip()
         try:
@@ -79,6 +79,7 @@ def _decode_html(raw: bytes) -> str:
         pass
     try:
         import charset_normalizer
+
         result = charset_normalizer.from_bytes(raw).best()
         if result and result.encoding:
             return str(result)

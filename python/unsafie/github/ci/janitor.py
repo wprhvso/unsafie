@@ -12,6 +12,7 @@ logger = get_logger(__name__)
 
 WORKSPACES_DIR = Path("/var/lib/unsafie/ci/workspaces")
 
+
 class CiJanitor(Loop):
     name = "ci-janitor"
     startup_delay = 10.0
@@ -56,5 +57,6 @@ class CiJanitor(Loop):
             ws = WORKSPACES_DIR / str(run.id)
             if ws.exists():
                 shutil.rmtree(ws, ignore_errors=True)
+
 
 ci_janitor = CiJanitor()

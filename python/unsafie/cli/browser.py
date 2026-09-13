@@ -31,7 +31,11 @@ def _session() -> Cdp:
     state = _state()
     cached = _open.get("cdp")
     target_id = state.get("active_target_id")
-    if cached is not None and _open.get("endpoint") == state.get("endpoint") and _open.get("target_id") == target_id:
+    if (
+        cached is not None
+        and _open.get("endpoint") == state.get("endpoint")
+        and _open.get("target_id") == target_id
+    ):
         return cached
     detach()
     cdp, _ = engine.session(state)
@@ -216,7 +220,9 @@ def network(pattern: str | None = None, limit: int = 50, *, clear: bool = False)
     return _act(actions.network_log, pattern, limit, clear)
 
 
-def block(patterns: list[str] | None = None, presets: str | None = None, *, clear: bool = False) -> dict:
+def block(
+    patterns: list[str] | None = None, presets: str | None = None, *, clear: bool = False
+) -> dict:
     state = _state()
     active_patterns = set() if clear else set(state.get("blocked_patterns") or [])
     if presets:
@@ -277,7 +283,9 @@ def tab_close(target_id: str | None = None) -> dict:
     return {"closed": tid, "remaining": len(remaining)}
 
 
-def frame(selector_or_id: str | None = None, *, main: bool = False, list_frames: bool = False) -> dict:
+def frame(
+    selector_or_id: str | None = None, *, main: bool = False, list_frames: bool = False
+) -> dict:
     state = _state()
     if list_frames:
         return {"frames": _act(actions.frame_tree)}

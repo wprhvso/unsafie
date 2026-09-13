@@ -1,4 +1,3 @@
-from unsafie.log import get_logger
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, WebSocket
@@ -6,6 +5,7 @@ from pydantic import BaseModel
 
 from unsafie import tokens
 from unsafie.database.models.api_token import TokenKind
+from unsafie.log import get_logger
 from unsafie.pool import channel, donors, registry, tunnels
 from unsafie.settings import settings
 

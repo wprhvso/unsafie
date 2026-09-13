@@ -55,10 +55,14 @@ async def overview():
             instances=len(alive),
             ssh_connections=sum(int(i.get("ssh_connections") or 0) for i in alive),
             deliveries_pending=await _count(
-                session, WebhookDelivery, WebhookDelivery.processed_at.is_(None),
+                session,
+                WebhookDelivery,
+                WebhookDelivery.processed_at.is_(None),
             ),
             deliveries_failed=await _count(
-                session, WebhookDelivery, WebhookDelivery.error.is_not(None),
+                session,
+                WebhookDelivery,
+                WebhookDelivery.error.is_not(None),
             ),
             history_bytes=await SegmentRepository(session).total_bytes(),
             github_app=app.slug if app else None,

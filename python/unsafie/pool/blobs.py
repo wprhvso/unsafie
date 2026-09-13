@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-from unsafie.log import get_logger
 from pathlib import Path
 
 from sqlalchemy import delete, func, select
@@ -8,6 +7,7 @@ from sqlalchemy import delete, func, select
 from unsafie.database import SessionLocal
 from unsafie.database.models.pool import PoolBlob
 from unsafie.errors import OpsError
+from unsafie.log import get_logger
 from unsafie.settings import settings
 
 logger = get_logger(__name__)
