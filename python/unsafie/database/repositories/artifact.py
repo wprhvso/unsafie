@@ -17,6 +17,21 @@ class ArtifactRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def of_ci_run(self, run_id: int) -> Artifact | None:
+        return await self.session.scalar(
+            select(Artifact).where(Artifact.ci_run_id == run_id, Artifact.kind == ArtifactKind.CI),
+        )
+
+    async def for_ci_run(self, *, run_id: int, title: str | None = None) -> Artifact | None:
+        existing = await self.of_ci_run(run_id)
+        if existing is not None:
+            return existing
+        return await self._add(
+            kind=ArtifactKind.CI,
+            title=title,
+            ci_run_id=run_id,
+        )
+
     async def by_slug(self, slug: str) -> Artifact | None:
         return await self.session.scalar(select(Artifact).where(Artifact.slug == slug))
 
@@ -45,6 +60,11 @@ class ArtifactRepository:
                         return existing
                 if fields.get("kind") == ArtifactKind.TELEMETRY and taken is not None:
                     existing = await self.telemetry_of_turn(taken)
+                    if existing is not None:
+                        return existing
+                taken_ci = fields.get("ci_run_id")
+                if fields.get("kind") == ArtifactKind.CI and taken_ci is not None:
+                    existing = await self.of_ci_run(taken_ci)
                     if existing is not None:
                         return existing
                 continue

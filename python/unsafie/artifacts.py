@@ -84,3 +84,17 @@ def publish_desktop_sync(
         session.add(artifact)
         session.commit()
     return slug
+
+
+async def for_ci_run(run_id: int, title: str | None = None) -> str | None:
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).for_ci_run(
+            run_id=run_id, title=title,
+        )
+    return artifact.slug if artifact is not None else None
+
+
+async def of_ci_run(run_id: int) -> str | None:
+    async with SessionLocal() as session:
+        artifact = await ArtifactRepository(session).of_ci_run(run_id)
+    return artifact.slug if artifact is not None else None

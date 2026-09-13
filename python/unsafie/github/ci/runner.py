@@ -255,6 +255,7 @@ async def execute_run(run_id: int) -> None:
             check_run_id = await checks.create_check_run(
                 run.installation_id, run.repo_full_name, run.commit_sha, run.id,
                 name="ci / check",
+                slug=run.slug,
             )
             if check_run_id:
                 await checks.update_check_run(
@@ -284,6 +285,7 @@ async def execute_run(run_id: int) -> None:
                 run.id,
                 name=display_name,
                 job_name=target,
+                slug=run.slug,
             )
             if check_run_id:
                 async with SessionLocal() as session:
