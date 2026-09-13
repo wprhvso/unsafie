@@ -3,6 +3,7 @@
   import { api } from '$lib/api.js';
   import { when } from '$lib/format.js';
   import Loader from '$lib/components/Loader.svelte';
+  import { ansiToHtml } from '$lib/ansi.js';
 
   let { runId } = $props();
 
@@ -99,6 +100,8 @@
       ? logs.split('\n').filter(l => l.toLowerCase().includes(search.toLowerCase())).join('\n')
       : logs
   );
+
+  const renderedLogs = $derived(ansiToHtml(filteredLogs));
 </script>
 
 {#if !run}
@@ -200,7 +203,7 @@
           </label>
         </div>
       </div>
-      <pre bind:this={terminalEl} class="term-body">{filteredLogs || 'Waiting for runner process output…'}</pre>
+      <pre bind:this={terminalEl} class="term-body">{@html renderedLogs || 'Waiting for runner process output…'}</pre>
     </div>
   </div>
 {/if}
