@@ -32,7 +32,7 @@
     : 'bad';
 </script>
 
-<svelte:head><title>CI/CD Pipelines — ci.unsafie.com</title></svelte:head>
+<svelte:head><title>CI/CD Pipelines — unsafie.com</title></svelte:head>
 
 <div class="dash-top">
   <div>

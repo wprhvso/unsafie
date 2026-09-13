@@ -44,7 +44,7 @@
 
 <div class="header">
   <h2>Native CI/CD Automation</h2>
-  <a href="/ci" class="btn" target="_blank" rel="noreferrer">Open ci.unsafie.com ↗</a>
+  <a href="/ci" class="btn" target="_blank" rel="noreferrer">Open unsafie.com ↗</a>
 </div>
 
 {#if overview.loading && !overview.data}
@@ -85,7 +85,7 @@
 
       <div class="callback-box">
         <span class="muted small">Required Callback URL in GitHub App Settings:</span>
-        <code>https://ci.unsafie.com/api/ci/auth/callback</code>
+        <code>https://unsafie.com/api/ci/auth/callback</code>
       </div>
     </div>
   {/if}

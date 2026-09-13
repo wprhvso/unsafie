@@ -12,6 +12,7 @@
   let autoscroll = $state(true);
   let search = $state('');
   let busy = $state(false);
+  let selectedJob = $state(page.url.searchParams.get('job') || '');
 
   let cpu = $state(0);
   let peakCpu = $state(0);
@@ -20,9 +21,14 @@
   let rx = $state(0);
   let tx = $state(0);
 
+  let evSource = null;
+
   async function fetchRun() {
     try {
       run = await api.get(`/api/ci/runs/${runId}`);
+      if (run?.jobs?.length && !selectedJob) {
+        selectedJob = run.jobs[0].name;
+      }
     } catch {
     }
   }
@@ -39,10 +45,17 @@
     }
   }
 
-  onMount(() => {
-    fetchRun();
+  function setupStream() {
+    if (evSource) {
+      evSource.close();
+      evSource = null;
+    }
+    logs = '';
+    const url = selectedJob
+      ? `/api/ci/runs/${runId}/stream?job=${encodeURIComponent(selectedJob)}`
+      : `/api/ci/runs/${runId}/stream`;
 
-    const evSource = new EventSource(`/api/ci/runs/${runId}/stream`);
+    evSource = new EventSource(url);
 
     evSource.onmessage = (event) => {
       try {
@@ -64,18 +77,20 @@
             run.exit_code = data.exit_code;
           }
           fetchRun();
-          evSource.close();
         }
       } catch {
-        }
+      }
 
       if (autoscroll && terminalEl) {
         terminalEl.scrollTop = terminalEl.scrollHeight;
       }
     };
+  }
 
+  onMount(() => {
+    fetchRun().then(setupStream);
     return () => {
-      evSource.close();
+      if (evSource) evSource.close();
     };
   });
 
@@ -115,10 +130,14 @@
 
     <div class="actions-col">
       <button class="btn ok" onclick={rerun} disabled={busy}>
-        {busy ? 'Triggering…' : '↻ Re-run Job'}
+        {busy ? 'Triggering…' : '↻ Re-run Workflow'}
       </button>
-      <a href="/api/ci/runs/{run.id}/logs/raw" download="run-{run.id}.log" class="btn outline">
-        ⬇ Download Raw Log
+      <a
+        href="/api/ci/runs/{run.id}/logs/raw{selectedJob ? `?job=${encodeURIComponent(selectedJob)}` : ''}"
+        download="run-{run.id}{selectedJob ? `-${selectedJob}` : ''}.log"
+        class="btn outline"
+      >
+        ⬇ Download {selectedJob || 'All'} Log
       </a>
     </div>
   </div>
@@ -140,15 +159,40 @@
       <div class="metric-sub">{tx} KB/s ↑</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Execution Stage</div>
-      <div class="metric-val">{run.current_stage ? run.current_stage.toUpperCase() : (run.status === 'success' ? 'DONE' : 'WAIT')}</div>
-      <div class="metric-sub">{run.is_default_branch ? 'Default Branch (ci + cd)' : 'Feature Branch (ci only)'}</div>
+      <div class="metric-label">Parallel Jobs</div>
+      <div class="metric-val">{run.jobs ? run.jobs.length : 0}</div>
+      <div class="metric-sub">{run.is_default_branch ? 'Default Branch (ci-* & cd-*)' : 'Feature Branch (ci-* only)'}</div>
     </div>
   </div>
 
+  {#if run.jobs && run.jobs.length}
+    <div class="job-tabs">
+      {#each run.jobs as j (j.name)}
+        <button
+          class="job-tab"
+          class:active={selectedJob === j.name}
+          onclick={() => { selectedJob = j.name; setupStream(); }}
+        >
+          <span class="status-dot small {j.status}"></span>
+          <span class="job-title">{j.name}</span>
+          {#if j.exit_code !== null}
+            <span class="job-code" class:bad={j.exit_code !== 0}>[{j.exit_code}]</span>
+          {/if}
+        </button>
+      {/each}
+      <button
+        class="job-tab"
+        class:active={selectedJob === ''}
+        onclick={() => { selectedJob = ''; setupStream(); }}
+      >
+        <span>All Combined Logs</span>
+      </button>
+    </div>
+  {/if}
+
   <div class="terminal-box">
     <div class="term-bar">
-      <div class="term-title">Console Output</div>
+      <div class="term-title">Console Output: {selectedJob || 'All Jobs'}</div>
       <div class="term-controls">
         <input type="text" placeholder="Search logs…" bind:value={search} class="term-search" />
         <label class="term-check">
@@ -167,7 +211,8 @@
   .crumbs a { color: #38bdf8; text-decoration: none; }
   h1 { font-size: 1.5rem; margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.6rem; }
   h1 code { background: rgba(255,255,255,0.06); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 1.2rem; color: #38bdf8; }
-  .status-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .status-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .status-dot.small { width: 8px; height: 8px; }
   .status-dot.in_progress { background: #facc15; box-shadow: 0 0 8px #facc15; }
   .status-dot.success { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
   .status-dot.failure, .status-dot.crash { background: #f87171; box-shadow: 0 0 8px #f87171; }
@@ -186,6 +231,11 @@
   .metric-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #94a3b8); font-weight: 600; margin-bottom: 0.3rem; }
   .metric-val { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
   .metric-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+  .job-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; overflow-x: auto; padding-bottom: 0.2rem; }
+  .job-tab { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; border-radius: 6px; border: 1px solid var(--border, #334155); background: var(--panel, #111827); color: #cbd5e1; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .job-tab:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .job-tab.active { background: color-mix(in srgb, var(--accent, #3b82f6) 20%, transparent); border-color: var(--accent, #3b82f6); color: #38bdf8; }
+  .job-code.bad { color: #f87171; }
   .terminal-box { background: #000; border: 1px solid var(--border, #1e293b); border-radius: 8px; overflow: hidden; }
   .term-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 0.6rem 1rem; border-bottom: 1px solid #1e293b; font-size: 0.85rem; }
   .term-title { font-weight: 600; color: #94a3b8; }

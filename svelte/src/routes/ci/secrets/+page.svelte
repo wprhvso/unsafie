@@ -163,7 +163,7 @@
   <div class="card curl-card">
     <h3>Managing Secrets via <code>curl</code> API</h3>
     <p class="muted">You can update secrets directly from your terminal or CI scripts using your API Bearer token:</p>
-    <pre class="code-box">curl -X PUT https://ci.unsafie.com/api/ci/secrets/{repo}/bulk   -H "Authorization: Bearer uci_live_YOUR_TOKEN"   -H "Content-Type: text/plain"   --data-binary @.env.production</pre>
+    <pre class="code-box">curl -X PUT https://unsafie.com/api/ci/secrets/{repo}/bulk   -H "Authorization: Bearer uci_live_YOUR_TOKEN"   -H "Content-Type: text/plain"   --data-binary @.env.production</pre>
   </div>
 {/if}
 
