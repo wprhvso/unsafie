@@ -179,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
     p_bwait.add_argument("--url", default=None)
     p_bwait.add_argument("--js", default=None)
     p_bwait.add_argument("--timeout", type=float, default=30.0)
+    p_bwait.add_argument("--network-idle", action="store_true")
+    p_bwait.add_argument("--idle-time", type=float, default=0.5)
 
     p_btext = s_br.add_parser("text")
     p_btext.add_argument("selector", nargs="?", default="body")
@@ -195,6 +197,79 @@ def main(argv: list[str] | None = None) -> int:
 
     p_bcookies = s_br.add_parser("cookies")
     p_bcookies.add_argument("--set", dest="cookie_json", default=None)
+
+    p_bback = s_br.add_parser("back")
+    p_bback.add_argument("--timeout", type=float, default=30.0)
+
+    p_bforward = s_br.add_parser("forward")
+    p_bforward.add_argument("--timeout", type=float, default=30.0)
+
+    p_breload = s_br.add_parser("reload")
+    p_breload.add_argument("--ignore-cache", action="store_true")
+    p_breload.add_argument("--timeout", type=float, default=30.0)
+
+    s_br.add_parser("url")
+    s_br.add_parser("title")
+
+    p_bhover = s_br.add_parser("hover")
+    p_bhover.add_argument("selector")
+
+    p_bdrag = s_br.add_parser("drag")
+    p_bdrag.add_argument("from_selector")
+    p_bdrag.add_argument("to_selector")
+    p_bdrag.add_argument("--steps", type=int, default=5)
+
+    p_bupload = s_br.add_parser("upload")
+    p_bupload.add_argument("selector")
+    p_bupload.add_argument("path")
+
+    p_bquery = s_br.add_parser("query")
+    p_bquery.add_argument("selector")
+    p_bquery.add_argument("--limit", type=int, default=20)
+
+    p_bscroll = s_br.add_parser("scroll")
+    p_bscroll.add_argument("--by", default=None)
+    p_bscroll.add_argument("--to", default=None)
+    p_bscroll.add_argument("--top", action="store_true")
+    p_bscroll.add_argument("--bottom", action="store_true")
+
+    p_bnet = s_br.add_parser("network")
+    p_bnet.add_argument("--filter", dest="pattern", default=None)
+    p_bnet.add_argument("--limit", type=int, default=50)
+    p_bnet.add_argument("--clear", action="store_true")
+
+    p_bblock = s_br.add_parser("block")
+    p_bblock.add_argument("patterns", nargs="*", default=None)
+    p_bblock.add_argument("--presets", default=None)
+    p_bblock.add_argument("--clear", action="store_true")
+
+    s_br.add_parser("tabs")
+
+    p_btab = s_br.add_parser("tab")
+    s_tab = p_btab.add_subparsers(dest="tab_action")
+    p_tnew = s_tab.add_parser("new")
+    p_tnew.add_argument("url", nargs="?", default=None)
+    p_tswitch = s_tab.add_parser("switch")
+    p_tswitch.add_argument("tab_id")
+    p_tclose = s_tab.add_parser("close")
+    p_tclose.add_argument("tab_id", nargs="?", default=None)
+
+    p_bframe = s_br.add_parser("frame")
+    p_bframe.add_argument("target", nargs="?", default=None)
+    p_bframe.add_argument("--main", action="store_true")
+    p_bframe.add_argument("--list", action="store_true")
+
+    p_bcon = s_br.add_parser("console")
+    p_bcon.add_argument("--level", default=None)
+    p_bcon.add_argument("--limit", type=int, default=50)
+    p_bcon.add_argument("--clear", action="store_true")
+
+    p_bint = s_br.add_parser("intercept")
+    p_bint.add_argument("pattern")
+    p_bint.add_argument("--block", dest="block", action="store_true", default=True)
+    p_bint.add_argument("--no-block", dest="block", action="store_false")
+    p_bint.add_argument("--click", dest="click_selector", default=None)
+    p_bint.add_argument("--timeout", type=float, default=30.0)
 
     p_vision = subs.add_parser("vision")
     p_vision.add_argument("paths", nargs="+")
@@ -382,7 +457,60 @@ def main(argv: list[str] | None = None) -> int:
                 sel = args.sel or args.selector
                 return _out(
                     browser.wait(
-                        selector=sel, state=args.state, url=args.url, js=args.js, timeout=args.timeout,
+                        selector=sel,
+                        state=args.state,
+                        url=args.url,
+                        js=args.js,
+                        timeout=args.timeout,
+                        network_idle=args.network_idle,
+                        idle_time=args.idle_time,
+                    ),
+                )
+            if args.subcmd == "back":
+                return _out(browser.back(timeout=args.timeout))
+            if args.subcmd == "forward":
+                return _out(browser.forward(timeout=args.timeout))
+            if args.subcmd == "reload":
+                return _out(browser.reload(ignore_cache=args.ignore_cache, timeout=args.timeout))
+            if args.subcmd == "url":
+                return _out(browser.url())
+            if args.subcmd == "title":
+                return _out(browser.title())
+            if args.subcmd == "hover":
+                return _out(browser.hover(args.selector))
+            if args.subcmd == "drag":
+                return _out(browser.drag(args.from_selector, args.to_selector, steps=args.steps))
+            if args.subcmd == "upload":
+                return _out(browser.upload(args.selector, args.path))
+            if args.subcmd == "query":
+                return _out(browser.query(args.selector, limit=args.limit))
+            if args.subcmd == "scroll":
+                return _out(browser.scroll(by=args.by, to=args.to, top=args.top, bottom=args.bottom))
+            if args.subcmd == "network":
+                return _out(browser.network(pattern=args.pattern, limit=args.limit, clear=args.clear))
+            if args.subcmd == "block":
+                return _out(browser.block(patterns=args.patterns, presets=args.presets, clear=args.clear))
+            if args.subcmd == "tabs":
+                return _out(browser.tabs())
+            if args.subcmd == "tab":
+                if args.tab_action == "new":
+                    return _out(browser.tab_new(args.url))
+                if args.tab_action == "switch":
+                    return _out(browser.tab_switch(args.tab_id))
+                if args.tab_action == "close":
+                    return _out(browser.tab_close(args.tab_id))
+                return _out(browser.tabs())
+            if args.subcmd == "frame":
+                return _out(browser.frame(selector_or_id=args.target, main=args.main, list_frames=args.list))
+            if args.subcmd == "console":
+                return _out(browser.console(level=args.level, limit=args.limit, clear=args.clear))
+            if args.subcmd == "intercept":
+                return _out(
+                    browser.intercept(
+                        args.pattern,
+                        block=args.block,
+                        click_selector=args.click_selector,
+                        timeout=args.timeout,
                     ),
                 )
             if args.subcmd == "text":

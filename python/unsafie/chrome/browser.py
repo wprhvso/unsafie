@@ -147,23 +147,34 @@ def session(state: dict) -> tuple[Cdp, str]:
         msg = "the browser has no endpoint configured"
         raise BrowserError(msg)
     cdp = connect(endpoint)
+    active_target_id = state.get("active_target_id")
     try:
+        if active_target_id:
+            msg = "switch target"
+            raise CdpError(msg)
         cdp.call("Page.enable")
         cdp.call("Runtime.enable")
         cdp.call("DOM.enable")
     except CdpError:
         targets = cdp.call("Target.getTargets")
         page_targets = [t for t in targets.get("targetInfos", []) if t.get("type") == "page"]
-        if not page_targets:
+        target_id = None
+        if active_target_id and any(t.get("targetId") == active_target_id for t in page_targets):
+            target_id = active_target_id
+        elif page_targets:
+            target_id = page_targets[0]["targetId"]
+        else:
             created = cdp.call("Target.createTarget", {"url": "about:blank"})
             target_id = created.get("targetId")
-        else:
-            target_id = page_targets[0]["targetId"]
         attached = cdp.call("Target.attachToTarget", {"targetId": target_id, "flatten": True})
         cdp.session_id = attached.get("sessionId")
         cdp.call("Page.enable")
         cdp.call("Runtime.enable")
         cdp.call("DOM.enable")
+    if state.get("blocked_patterns"):
+        with contextlib.suppress(Exception):
+            cdp.call("Network.enable")
+            cdp.call("Network.setBlockedURLs", {"urls": state["blocked_patterns"]})
     return cdp, endpoint
 
 
