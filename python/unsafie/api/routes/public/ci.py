@@ -30,6 +30,11 @@ router = APIRouter(prefix="/api/ci", tags=["ci"])
 CI_COOKIE = "unsafie_ci_session"
 LOGS_DIR = Path("/var/lib/unsafie/ci/logs")
 
+def _ci_callback_url(request: Request) -> str:
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "ci.unsafie.com"
+    proto = request.headers.get("x-forwarded-proto") or "https"
+    return f"{proto}://{host}/api/ci/auth/callback"
+
 def _sign_session(login: str, avatar: str = "") -> str:
     exp = int(time.time()) + 30 * 86400
     payload = f"{login.lower()}:{exp}:{avatar}"
@@ -110,7 +115,7 @@ async def auth_github(request: Request, redirect: str = "/ci"):
         raise HTTPException(500, "GitHub App OAuth is not configured")
     params = {
         "client_id": app_row.client_id,
-        "redirect_uri": f"{request.base_url}api/ci/auth/callback",
+        "redirect_uri": _ci_callback_url(request),
         "state": redirect,
         "scope": "read:user",
     }

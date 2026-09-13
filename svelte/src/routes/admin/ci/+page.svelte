@@ -9,6 +9,7 @@
 
   const overview = resource(() => admin.get('/ci/overview'));
   const list = resource(() => admin.get('/ci/whitelist'));
+  const appInfo = resource(() => admin.get('/ci/app'));
 
   let login = $state('');
   let busy = $state(false);
@@ -46,24 +47,49 @@
   <a href="/ci" class="btn" target="_blank" rel="noreferrer">Open ci.unsafie.com ↗</a>
 </div>
 
-{#if overview.loading && !overview.current}
+{#if overview.loading && !overview.data}
   <Loader />
-{:else if overview.current}
+{:else if overview.data}
   <div class="grid">
     <Panel title="Total Runs">
-      <div class="metric">{overview.current.total}</div>
+      <div class="metric">{overview.data.total}</div>
     </Panel>
     <Panel title="Running / Pending">
-      <div class="metric warn">{overview.current.in_progress} / {overview.current.pending}</div>
+      <div class="metric warn">{overview.data.in_progress} / {overview.data.pending}</div>
     </Panel>
     <Panel title="Successful">
-      <div class="metric ok">{overview.current.success}</div>
+      <div class="metric ok">{overview.data.success}</div>
     </Panel>
     <Panel title="Failed / Crashed">
-      <div class="metric bad">{overview.current.failure}</div>
+      <div class="metric bad">{overview.data.failure}</div>
     </Panel>
   </div>
 {/if}
+
+<Panel title="GitHub App & Callback Configuration">
+  {#if appInfo.loading && !appInfo.data}
+    <Loader />
+  {:else if appInfo.data}
+    <div class="app-info">
+      {#if appInfo.data.configured}
+        <div class="app-row">
+          <span>App: <strong>{appInfo.data.name}</strong> (<code>{appInfo.data.slug}</code>)</span>
+          <a href={appInfo.data.settings_url} target="_blank" rel="noreferrer" class="btn small">Edit App Settings on GitHub ↗</a>
+        </div>
+      {:else}
+        <div class="app-row warn">
+          <span>GitHub App is not configured yet.</span>
+          <a href="/admin/github" class="btn small primary">Configure in GitHub Tab →</a>
+        </div>
+      {/if}
+
+      <div class="callback-box">
+        <span class="muted small">Required Callback URL in GitHub App Settings:</span>
+        <code>https://ci.unsafie.com/api/ci/auth/callback</code>
+      </div>
+    </div>
+  {/if}
+</Panel>
 
 <Panel title="Add GitHub User to Whitelist">
   <form onsubmit={(e) => { e.preventDefault(); add(); }} class="add-form">
@@ -84,9 +110,9 @@
 </Panel>
 
 <Panel title="Trusted GitHub Whitelist (Root Execution Allowed)">
-  {#if list.loading && !list.current}
+  {#if list.loading && !list.data}
     <Loader />
-  {:else if list.current && list.current.length}
+  {:else if list.data && list.data.length}
     <table class="table">
       <thead>
         <tr>
@@ -97,14 +123,14 @@
         </tr>
       </thead>
       <tbody>
-        {#each list.current as item (item.github_login)}
+        {#each list.data as item (item.github_login)}
           <tr>
             <td>
               <a href="https://github.com/{item.github_login}" target="_blank" rel="noreferrer" class="gh-user">
                 @{item.github_login}
               </a>
             </td>
-            <td><Badge text={item.added_by} /></td>
+            <td><Badge tone="ok">{item.added_by}</Badge></td>
             <td class="muted">{when(item.created_at)}</td>
             <td>
               <Confirm onconfirm={() => drop(item.github_login)}>
@@ -127,11 +153,16 @@
   .metric.ok { color: var(--ok, #4ade80); }
   .metric.warn { color: var(--warn, #facc15); }
   .metric.bad { color: var(--bad, #f87171); }
+  .app-info { display: flex; flex-direction: column; gap: 0.8rem; padding: 0.5rem 0; }
+  .app-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; }
+  .callback-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .callback-box code { color: #38bdf8; font-family: monospace; font-size: 0.9rem; }
   .add-form { display: flex; gap: 0.8rem; align-items: center; }
   .add-form input { flex: 1; padding: 0.5rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
   .btn { padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text); text-decoration: none; }
   .btn.ok { background: color-mix(in srgb, var(--ok, #4ade80) 20%, transparent); color: var(--ok, #4ade80); border-color: var(--ok, #4ade80); }
   .btn.bad { background: color-mix(in srgb, var(--bad, #f87171) 20%, transparent); color: var(--bad, #f87171); border-color: var(--bad, #f87171); }
+  .btn.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
   .btn.small { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
   .table { width: 100%; border-collapse: collapse; }
   .table th, .table td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid var(--border); }

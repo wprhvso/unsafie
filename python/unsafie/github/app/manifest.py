@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlsplit
 
 from unsafie.settings import settings
 
@@ -37,14 +38,15 @@ EVENTS = [
     "public",
 ]
 
-
 def webhook_url() -> str:
     return f"{settings.github_origin}/gh/webhook"
-
 
 def redirect_url() -> str:
     return f"{settings.github_origin}/gh/app/created"
 
+def ci_callback_url() -> str:
+    host = urlsplit(settings.public_origin).netloc or "unsafie.com"
+    return f"https://ci.{host}/api/ci/auth/callback"
 
 def build(name: str = NAME) -> dict:
     return {
@@ -52,26 +54,27 @@ def build(name: str = NAME) -> dict:
         "url": settings.public_origin,
         "hook_attributes": {"url": webhook_url(), "active": True},
         "redirect_url": redirect_url(),
+        "callback_urls": [
+            ci_callback_url(),
+            f"{settings.public_origin}/api/ci/auth/callback",
+        ],
+        "request_oauth_on_install": True,
         "setup_on_update": True,
         "public": False,
         "default_events": EVENTS,
         "default_permissions": PERMISSIONS,
     }
 
-
 def as_json(name: str = NAME) -> str:
     return json.dumps(build(name), ensure_ascii=False)
-
 
 def create_url(organization: str | None = None) -> str:
     if organization:
         return f"https://github.com/organizations/{organization}/settings/apps/new"
     return "https://github.com/settings/apps/new"
 
-
 def install_url(slug: str) -> str:
     return f"https://github.com/apps/{slug}/installations/new"
-
 
 def manage_url(installation_id: int) -> str:
     return f"https://github.com/settings/installations/{installation_id}"
