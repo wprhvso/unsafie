@@ -110,30 +110,35 @@ def generate(
                 time.sleep(0.5)
 
                 browser.click('[type="submit"]')
-                time.sleep(3)
+                time.sleep(5)
                 break
 
         set_deadline = time.monotonic() + 20.0
         while time.monotonic() < set_deadline:
             time.sleep(1)
-            res = browser.evaluate("""(() => {
-                const btns = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-                for (const b of btns) {
-                    const t = (b.innerText || b.textContent || "").trim().toLowerCase();
-                    if (t === "continue" || t.includes("continue") || t.includes("продолжить")) {
-                        b.scrollIntoView({block: "center"});
-                        b.click();
-                        return true;
+            has_set = browser.evaluate("""(() => {
+                const bodyText = document.body ? document.body.innerText : "";
+                if (bodyText.includes("You're all set") || bodyText.includes("You are all set") || bodyText.includes("все готово")) {
+                    const btns = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                    for (const b of btns) {
+                        const t = (b.innerText || b.textContent || "").trim().toLowerCase();
+                        if (t === "continue" || t.includes("continue") || t.includes("продолжить")) {
+                            b.scrollIntoView({block: "center"});
+                            b.click();
+                            return true;
+                        }
                     }
                 }
                 return false;
             })()""").get("result")
-            if res:
+            if has_set:
                 time.sleep(4)
                 break
 
-        browser.goto("https://chatgpt.com")
-        time.sleep(5)
+        curr_url = browser.evaluate("window.location.href").get("result") or ""
+        if "chatgpt.com" not in curr_url or "auth" in curr_url:
+            browser.goto("https://chatgpt.com")
+            time.sleep(5)
 
         browser.evaluate("""(() => {
             document.querySelectorAll("dialog[open]").forEach(d => d.close());
@@ -146,14 +151,26 @@ def generate(
             browser.press("escape")
             time.sleep(0.3)
 
-        browser.evaluate("""(() => {
-            const el = document.querySelector('[id="prompt-textarea"], textarea, div[contenteditable="true"]');
-            if (el) el.scrollIntoView({block: "center"});
-        })()""")
+        prompt_sel = None
+        for _ in range(30):
+            prompt_sel = browser.evaluate("""(() => {
+                const el = document.querySelector('[id="prompt-textarea"], textarea, div[contenteditable="true"]');
+                if (el && el.getBoundingClientRect().width > 0) {
+                    el.scrollIntoView({block: "center"});
+                    return el.id ? `[id="${el.id}"]` : el.tagName.toLowerCase();
+                }
+                return null;
+            })()""").get("result")
+            if prompt_sel:
+                break
+            time.sleep(1)
 
-        browser.click('[id="prompt-textarea"]')
+        if not prompt_sel:
+            prompt_sel = '[id="prompt-textarea"]'
+
+        browser.click(prompt_sel)
         time.sleep(1)
-        browser.type_text('[id="prompt-textarea"]', prompt)
+        browser.type_text(prompt_sel, prompt)
         time.sleep(1)
 
         intercept_proc = subprocess.Popen(
@@ -182,7 +199,7 @@ def generate(
         stdout, stderr = intercept_proc.communicate()
         try:
             intercept_data = json.loads(stdout.strip())
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             msg = f"failed to intercept image request: {stdout or stderr}"
             raise RuntimeError(msg) from None
 
