@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     db_pool_pre_ping: bool = True
 
     redis_url: str = "redis://127.0.0.1:6379/0"
-    redis_max_connections: int = 32
+    redis_max_connections: int = 1024
     redis_timeout: float = 5.0
     redis_prefix: str = "unsafie"
     lock_ttl: float = 30.0

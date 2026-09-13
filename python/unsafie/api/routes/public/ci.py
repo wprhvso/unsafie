@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -337,7 +338,10 @@ async def stream_run(run_id: int, request: Request, job: str | None = None):
                         yield f"data: {json.dumps({'type': 'status', 'status': run.status, 'exit_code': run.exit_code})}\n\n"
                         break
         finally:
-            await pubsub.unsubscribe(sub_channel)
+            with contextlib.suppress(Exception):
+                await pubsub.unsubscribe(sub_channel)
+                closer = getattr(pubsub, "aclose", None) or pubsub.close
+                await closer()
 
     return StreamingResponse(_generator(), media_type="text/event-stream")
 

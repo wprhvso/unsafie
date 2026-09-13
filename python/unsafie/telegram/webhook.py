@@ -57,7 +57,9 @@ async def request_restart(bot_id: int) -> None:
 
 
 async def polled_by(bot_ids: list[int]) -> dict[int, str | None]:
-    return dict.fromkeys(bot_ids, "polling")
+    locks = [f"poller:{b}" for b in bot_ids]
+    held = await cluster.owners(locks)
+    return {b: held.get(f"poller:{b}") for b in bot_ids}
 
 
 async def reconcile() -> None:
