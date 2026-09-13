@@ -23,12 +23,12 @@ async def create_check_run(
     run_id: int,
     name: str = "ci",
     job_name: str | None = None,
+    slug: str | None = None,
 ) -> int | None:
     headers = await _headers(installation_id)
     now = datetime.now(UTC).isoformat()
-    details_url = f"{settings.public_origin}/ci/runs/{run_id}"
-    if job_name:
-        details_url += f"?job={job_name}"
+    base = f"{settings.public_origin}/{slug}" if slug else f"{settings.public_origin}/ci/runs/{run_id}"
+    details_url = f"{base}?job={job_name}" if job_name else base
     payload = {
         "name": name,
         "head_sha": commit_sha,

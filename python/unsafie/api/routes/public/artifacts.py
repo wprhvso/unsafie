@@ -47,6 +47,8 @@ async def page_json(slug: str):
                     payload["turn_slug"] = turn_art.slug
         if artifact.kind == ArtifactKind.MARKDOWN:
             payload["content"] = artifact.content or ""
+        elif artifact.kind == ArtifactKind.CI:
+            payload["run_id"] = artifact.ci_run_id
     return JSONResponse(payload)
 
 
@@ -102,6 +104,8 @@ async def spa(path: str, request: Request):
                     payload["turn_slug"] = turn_art.slug
         if artifact.kind == ArtifactKind.MARKDOWN:
             payload["content"] = artifact.content or ""
+        elif artifact.kind == ArtifactKind.CI:
+            payload["run_id"] = artifact.ci_run_id
     if "application/json" in (request.headers.get("accept") or ""):
         return JSONResponse(payload)
     return HTMLResponse(static.render(payload))

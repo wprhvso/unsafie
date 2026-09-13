@@ -4,6 +4,7 @@ from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from unsafie.database.models.artifact import Artifact, ArtifactKind
 from unsafie.database.models.ci import (
     CiApiToken,
     CiJob,
@@ -12,6 +13,7 @@ from unsafie.database.models.ci import (
     CiSecret,
     CiWhitelist,
 )
+from unsafie.slugs import generate_slug
 
 
 class CiRepository:
@@ -112,6 +114,7 @@ class CiRepository:
         commit_message: str | None = None,
         trigger_event: str = "push",
     ) -> CiRun:
+        slug = generate_slug()
         run = CiRun(
             installation_id=installation_id,
             repo_full_name=repo_full_name,
@@ -123,11 +126,24 @@ class CiRepository:
             commit_message=commit_message,
             trigger_event=trigger_event,
             status="pending",
+            slug=slug,
         )
         self.session.add(run)
+        await self.session.flush()
+        art = Artifact(
+            slug=slug,
+            kind=ArtifactKind.CI,
+            title=f"CI #{run.id} · {repo_full_name}",
+            ci_run_id=run.id,
+        )
+        self.session.add(art)
         await self.session.commit()
         await self.session.refresh(run)
         return run
+
+    async def by_slug(self, slug: str) -> CiRun | None:
+        stmt = select(CiRun).where(CiRun.slug == slug)
+        return await self.session.scalar(stmt)
 
     async def claim_next(self, worker_id: str, lease_seconds: int = 30) -> CiRun | None:
         now = datetime.now(UTC)

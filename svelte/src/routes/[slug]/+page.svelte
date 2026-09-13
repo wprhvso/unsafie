@@ -4,6 +4,7 @@
   import Answer from '$lib/components/Answer.svelte';
   import Turn from '$lib/components/live/Turn.svelte';
   import Telemetry from '$lib/components/live/Telemetry.svelte';
+  import CiRun from '$lib/components/live/CiRun.svelte';
 
   function payload() {
     const el = typeof document === 'undefined' ? null : document.getElementById('payload');
@@ -38,6 +39,16 @@
   <Turn token={slug} telemetrySlug={data?.telemetry_slug} />
 {:else if data?.kind === 'telemetry'}
   <Telemetry token={slug} />
+{:else if data?.kind === 'ci'}
+  <div class="ci-page-pad">
+    <CiRun runId={data?.run_id} />
+  </div>
 {:else}
   <Answer content={typeof data?.content === 'string' ? data.content : null} title={data?.title} />
 {/if}
+
+<style>
+  .ci-page-pad {
+    padding: 1rem 1.5rem;
+  }
+</style>

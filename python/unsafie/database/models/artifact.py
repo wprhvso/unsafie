@@ -15,6 +15,7 @@ class ArtifactKind(StrEnum):
     TURN = "turn"
     TELEMETRY = "telemetry"
     DESKTOP = "desktop"
+    CI = "ci"
 
 
 class Artifact(Base):
@@ -27,6 +28,12 @@ class Artifact(Base):
             "turn_id",
             unique=True,
             postgresql_where=text("kind = 'telemetry'"),
+        ),
+        Index(
+            "ix_artifacts_ci_run",
+            "ci_run_id",
+            unique=True,
+            postgresql_where=text("kind = 'ci'"),
         ),
     )
 
@@ -44,5 +51,11 @@ class Artifact(Base):
         SQL_UUID(as_uuid=True),
         ForeignKey("turns.id", ondelete="CASCADE"),
         nullable=True,
+    )
+    ci_run_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("ci_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
