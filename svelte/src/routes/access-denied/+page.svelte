@@ -8,7 +8,7 @@
   let copied = $state(false);
 
   function copyRequest() {
-    const text = `Прошу добавить @${login} в вайтлист ci.unsafie.com`;
+    const text = `Прошу добавить @${login} в вайтлист unsafie.com`;
     navigator.clipboard.writeText(text);
     copied = true;
     setTimeout(() => { copied = false; }, 2500);
@@ -20,7 +20,7 @@
   }
 </script>
 
-<svelte:head><title>Access Restricted — ci.unsafie.com</title></svelte:head>
+<svelte:head><title>Access Restricted — unsafie.com</title></svelte:head>
 
 <div class="wrap">
   <div class="card">
@@ -37,7 +37,7 @@
     <p class="subtitle">Root Execution Environment</p>
 
     <div class="notice">
-      Воркфлоу на <strong>ci.unsafie.com</strong> выполняются с правами <code>root</code> прямо на хосте сервера.
+      Воркфлоу на <strong>unsafie.com</strong> выполняются с правами <code>root</code> прямо на хосте сервера.
       Доступ к консоли запуска, просмотру логов и управлению деплоем разрешен только для подтвержденных GitHub-аккаунтов из белого списка.
     </div>
 

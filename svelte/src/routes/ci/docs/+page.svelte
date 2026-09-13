@@ -5,65 +5,69 @@
   <p class="subtitle">Zero-YAML native automation using <code>justfile</code> and <code>Makefile</code></p>
 
   <div class="card">
-    <h2>1. Core Concepts</h2>
-    <p>Unlike traditional GitHub Actions, unsafie CI doesn't use complex <code>.github/workflows/*.yml</code> files. Your builds are declared using standard project command runners: <strong>justfile</strong> (preferred) or <strong>Makefile</strong>.</p>
+    <h2>1. Core Concepts & Parallel Execution</h2>
+    <p>Unlike traditional GitHub Actions, unsafie CI uses standard project task runners: <strong>justfile</strong> (preferred) or <strong>Makefile</strong>.</p>
 
     <ul>
-      <li><strong>Target <code>ci</code>:</strong> Runs on <em>every</em> push (branches and pull requests). Runs without production secrets.</li>
-      <li><strong>Target <code>cd</code>:</strong> Runs <em>only</em> on pushes to the default branch (<code>main</code>/<code>master</code>) and <em>only</em> if the <code>ci</code> target succeeds. Injects CD secrets into the environment.</li>
-      <li><strong>Root Execution:</strong> Builds run directly on the host server as root. Compilers and package managers (cargo, uv, npm, docker) maintain hot disk caches between runs.</li>
+      <li><strong>Targets <code>ci-*</code>:</strong> Every recipe matching <code>ci-*</code> (e.g. <code>ci-test</code>, <code>ci-lint</code>, <code>ci-types</code>) runs on <em>every</em> push in <strong>parallel</strong>. Each target is an independent GitHub Check Run! Bare <code>ci</code> is ignored.</li>
+      <li><strong>Targets <code>cd-*</code>:</strong> Every recipe matching <code>cd-*</code> (e.g. <code>cd-deploy</code>, <code>cd-publish</code>) runs in <strong>parallel</strong> <em>only</em> on the default branch (<code>main</code>/<code>master</code>) and <em>only</em> after all <code>ci-*</code> targets succeed. CD secrets are injected. Bare <code>cd</code> is ignored.</li>
+      <li><strong>Root Host Execution:</strong> Builds run directly on the host server as root. Compilers and package caches (cargo, uv, npm, docker) stay hot between runs.</li>
     </ul>
   </div>
 
   <div class="card">
     <h2>2. Example <code>justfile</code> (Recommended)</h2>
-    <p>Create a <code>justfile</code> in the root of your repository:</p>
-    <pre class="code-box"># Run tests, lints and verification (runs on every push)
-ci:
-    cargo check
-    cargo test --workspace
-    cargo clippy -- -D warnings
+    <p>Declare modular targets in your <code>justfile</code>:</p>
+    <pre class="code-box">ci-lint:
+    uv run ruff check .
 
-# Deploy application to production (runs ONLY on push to main)
-cd:
-    echo "Deploying to production..."
-    docker build -t registry.unsafie.com/my-app:latest .
-    docker push registry.unsafie.com/my-app:latest
-    systemctl restart my-app</pre>
+ci-test:
+    uv run pytest tests/
+
+ci-types:
+    uv run basedpyright
+
+cd-deploy:
+    echo "Deploying application to production..."
+    docker compose pull && docker compose up -d
+
+cd-docs:
+    echo "Publishing documentation..."</pre>
   </div>
 
   <div class="card">
     <h2>3. Example <code>Makefile</code> (Fallback)</h2>
-    <p>If you prefer <code>make</code>, define <code>ci</code> and <code>cd</code> targets:</p>
-    <pre class="code-box">.PHONY: ci cd
+    <p>If you prefer <code>make</code>, define <code>ci-*</code> and <code>cd-*</code> targets:</p>
+    <pre class="code-box">.PHONY: ci-lint ci-test cd-deploy
 
-ci:
-	uv run ruff check .
-	uv run pytest
+ci-lint:
+	cargo clippy -- -D warnings
 
-cd:
-	uv build
-	echo "Deploying artifact..."</pre>
+ci-test:
+	cargo test
+
+cd-deploy:
+	cargo build --release
+	systemctl restart my-service</pre>
   </div>
 
   <div class="card">
     <h2>4. Environment Variables Provided</h2>
-    <p>Every step receives standard CI variables:</p>
+    <p>Every job receives standard CI variables:</p>
     <ul>
       <li><code>CI=true</code> and <code>UNSAFIE_CI=true</code></li>
       <li><code>GITHUB_SHA</code> — Commit SHA of the triggered build</li>
       <li><code>GITHUB_REF</code> — Full git ref (e.g. <code>refs/heads/main</code>)</li>
       <li><code>GITHUB_BRANCH</code> — Branch name (e.g. <code>main</code>, <code>feature/login</code>)</li>
       <li><code>GITHUB_REPOSITORY</code> — Repository slug (e.g. <code>wprhvso/my-service</code>)</li>
-      <li><strong>Custom Secrets:</strong> Injected exclusively during the <code>cd</code> target on the default branch.</li>
+      <li><strong>Custom Secrets:</strong> Injected exclusively during <code>cd-*</code> targets on the default branch.</li>
     </ul>
   </div>
 
   <div class="card">
     <h2>5. Managing Secrets via API</h2>
     <p>You can upload and update CD secrets via <code>curl</code> using a Personal CI Token:</p>
-    <pre class="code-box"># Upload .env file
-curl -X PUT https://ci.unsafie.com/api/ci/secrets/owner/repo/bulk \
+    <pre class="code-box">curl -X PUT https://unsafie.com/api/ci/secrets/owner/repo/bulk \
   -H "Authorization: Bearer uci_live_YOUR_TOKEN" \
   -H "Content-Type: text/plain" \
   --data-binary @.env.production</pre>

@@ -64,3 +64,21 @@ class CiRunMetric(Base):
     memory_rss_mb: Mapped[float] = mapped_column(Float, nullable=False)
     network_rx_kbps: Mapped[float] = mapped_column(Float, nullable=False)
     network_tx_kbps: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class CiJob(Base):
+    __tablename__ = "ci_jobs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("ci_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    stage: Mapped[str] = mapped_column(String(16), nullable=False)
+    check_run_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending")
+    exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    log_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

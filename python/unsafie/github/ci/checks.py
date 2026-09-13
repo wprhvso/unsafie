@@ -21,11 +21,14 @@ async def create_check_run(
     repo_full_name: str,
     commit_sha: str,
     run_id: int,
-    name: str = "unsafie / ci",
+    name: str = "ci",
+    job_name: str | None = None,
 ) -> int | None:
     headers = await _headers(installation_id)
     now = datetime.now(UTC).isoformat()
-    details_url = f"https://ci.unsafie.com/runs/{run_id}"
+    details_url = f"{settings.public_origin}/ci/runs/{run_id}"
+    if job_name:
+        details_url += f"?job={job_name}"
     payload = {
         "name": name,
         "head_sha": commit_sha,

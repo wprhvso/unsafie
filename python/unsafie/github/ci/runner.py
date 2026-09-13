@@ -81,7 +81,7 @@ async def _remove_worktree(repo_cache: Path, run_id: int) -> None:
     await proc.wait()
     shutil.rmtree(ws, ignore_errors=True)
 
-async def _discover_targets(ws: Path) -> tuple[str, bool, bool]:
+async def discover_targets(ws: Path) -> tuple[str, list[str], list[str]]:
     has_just = (ws / "justfile").is_file() or (ws / "Justfile").is_file()
     if has_just and shutil.which("just"):
         proc = await asyncio.create_subprocess_exec(
@@ -89,24 +89,29 @@ async def _discover_targets(ws: Path) -> tuple[str, bool, bool]:
             cwd=str(ws), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         )
         out, _ = await proc.communicate()
-        recipes = set(out.decode("utf-8", "ignore").split())
-        return "just", ("ci" in recipes), ("cd" in recipes)
+        recipes = out.decode("utf-8", "ignore").split()
+        ci_targets = sorted([r for r in recipes if r.startswith("ci-")])
+        cd_targets = sorted([r for r in recipes if r.startswith("cd-")])
+        return "just", ci_targets, cd_targets
 
     has_make = (ws / "Makefile").is_file() or (ws / "makefile").is_file()
     if has_make and shutil.which("make"):
-        proc_ci = await asyncio.create_subprocess_exec(
-            "make", "-q", "-n", "ci",
-            cwd=str(ws), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        ret_ci = await proc_ci.wait()
-        proc_cd = await asyncio.create_subprocess_exec(
-            "make", "-q", "-n", "cd",
-            cwd=str(ws), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        ret_cd = await proc_cd.wait()
-        return "make", (ret_ci in (0, 1)), (ret_cd in (0, 1))
+        ci_targets = []
+        cd_targets = []
+        make_file = ws / "Makefile" if (ws / "Makefile").is_file() else ws / "makefile"
+        try:
+            content = make_file.read_text(encoding="utf-8", errors="ignore")
+            for line in content.splitlines():
+                target = line.partition(":")[0].strip()
+                if target.startswith("ci-") and target not in ci_targets:
+                    ci_targets.append(target)
+                elif target.startswith("cd-") and target not in cd_targets:
+                    cd_targets.append(target)
+        except Exception:
+            pass
+        return "make", sorted(ci_targets), sorted(cd_targets)
 
-    return "none", False, False
+    return "none", [], []
 
 async def _run_command_pty(
     run_id: int,
@@ -114,6 +119,7 @@ async def _run_command_pty(
     cwd: Path,
     env: dict[str, str],
     log_file_path: Path,
+    job_name: str | None = None,
 ) -> int:
     loop = asyncio.get_running_loop()
     master_fd, slave_fd = pty.openpty()
@@ -160,6 +166,7 @@ async def _run_command_pty(
 
             metric_payload = json.dumps({
                 "type": "metric",
+                "job": job_name,
                 "cpu": cpu_pct,
                 "rss": rss_mb,
                 "rx": rx_kbps,
@@ -168,6 +175,8 @@ async def _run_command_pty(
             })
             with contextlib.suppress(Exception):
                 await cluster.client().publish(f"ci:run:{run_id}:stream", metric_payload)
+                if job_name:
+                    await cluster.client().publish(f"ci:run:{run_id}:{job_name}:stream", metric_payload)
 
     monitor_task = asyncio.create_task(_heartbeat_and_monitor())
 
@@ -182,13 +191,22 @@ async def _run_command_pty(
                             break
                         lf.write(data)
                         lf.flush()
+                        chunk_str = data.decode("utf-8", "replace")
                         asyncio.run_coroutine_threadsafe(
                             cluster.client().publish(
                                 f"ci:run:{run_id}:stream",
-                                json.dumps({"type": "log", "chunk": data.decode("utf-8", "replace")})
+                                json.dumps({"type": "log", "chunk": chunk_str, "job": job_name})
                             ),
                             loop,
                         )
+                        if job_name:
+                            asyncio.run_coroutine_threadsafe(
+                                cluster.client().publish(
+                                    f"ci:run:{run_id}:{job_name}:stream",
+                                    json.dumps({"type": "log", "chunk": chunk_str, "job": job_name})
+                                ),
+                                loop,
+                            )
                     except OSError:
                         break
                 elif proc.poll() is not None:
@@ -207,19 +225,9 @@ async def execute_run(run_id: int) -> None:
         if not run:
             return
 
-    log_path = LOGS_DIR / f"{run_id}.log"
-    with open(log_path, "w", encoding="utf-8") as f:
+    main_log_path = LOGS_DIR / f"{run_id}.log"
+    with open(main_log_path, "w", encoding="utf-8") as f:
         f.write(f"=== unsafie ci runner starting for {run.repo_full_name} @ {run.commit_sha[:8]} ===\n")
-
-    check_run_id = await checks.create_check_run(
-        run.installation_id,
-        run.repo_full_name,
-        run.commit_sha,
-        run.id,
-    )
-    if check_run_id:
-        async with SessionLocal() as session:
-            await CiRepository(session).set_check_run_id(run.id, check_run_id)
 
     repo_cache = None
     try:
@@ -227,34 +235,32 @@ async def execute_run(run_id: int) -> None:
         ws = await _create_worktree(repo_cache, run.id, run.commit_sha)
     except Exception as e:
         logger.exception("ci preparation failed for run %s", run.id)
-        with open(log_path, "a", encoding="utf-8") as f:
+        with open(main_log_path, "a", encoding="utf-8") as f:
             f.write(f"\nError during checkout: {e}\n")
         async with SessionLocal() as session:
             await CiRepository(session).finish_run(
-                run.id, status="failure", exit_code=1, error_message=str(e), log_path=str(log_path),
-            )
-        if check_run_id:
-            await checks.update_check_run(
-                run.installation_id, run.repo_full_name, check_run_id,
-                status="completed", conclusion="failure",
-                title="Checkout Failed", summary=f"Error checking out repository: {e}",
+                run.id, status="failure", exit_code=1, error_message=str(e), log_path=str(main_log_path),
             )
         return
 
     try:
-        tool, has_ci, has_cd = await _discover_targets(ws)
-        if not has_ci and not has_cd:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write("\nNo 'ci' or 'cd' target found in justfile or Makefile. Skipping.\n")
+        tool, ci_targets, cd_targets = await discover_targets(ws)
+        if not ci_targets and not cd_targets:
+            with open(main_log_path, "a", encoding="utf-8") as f:
+                f.write("\nNo 'ci-*' or 'cd-*' targets found in justfile or Makefile. Skipping.\n")
             async with SessionLocal() as session:
                 await CiRepository(session).finish_run(
-                    run.id, status="success", exit_code=0, log_path=str(log_path),
+                    run.id, status="success", exit_code=0, log_path=str(main_log_path),
                 )
+            check_run_id = await checks.create_check_run(
+                run.installation_id, run.repo_full_name, run.commit_sha, run.id,
+                name="ci / check",
+            )
             if check_run_id:
                 await checks.update_check_run(
                     run.installation_id, run.repo_full_name, check_run_id,
                     status="completed", conclusion="neutral",
-                    title="No Targets Found", summary="Neither `justfile` nor `Makefile` had `ci` or `cd` targets.",
+                    title="No Targets Found", summary="Neither `justfile` nor `Makefile` had `ci-*` or `cd-*` targets.",
                 )
             return
 
@@ -266,82 +272,105 @@ async def execute_run(run_id: int) -> None:
         base_env["GITHUB_BRANCH"] = run.branch
         base_env["GITHUB_REPOSITORY"] = run.repo_full_name
 
-        if has_ci:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"\n>>> Running CI target ({tool} ci)\n")
+        async def _run_job(target: str, stage: str, env: dict[str, str]) -> int:
             async with SessionLocal() as session:
-                await CiRepository(session).finish_run(run.id, status="in_progress", current_stage="ci")
+                job_row = await CiRepository(session).create_job(run.id, target, stage)
 
-            cmd = [tool, "ci"]
-            code = await _run_command_pty(run.id, cmd, ws, base_env, log_path)
-            if code != 0:
+            display_name = f"{stage} / {target.removeprefix(f'{stage}-')}"
+            check_run_id = await checks.create_check_run(
+                run.installation_id,
+                run.repo_full_name,
+                run.commit_sha,
+                run.id,
+                name=display_name,
+                job_name=target,
+            )
+            if check_run_id:
                 async with SessionLocal() as session:
-                    await CiRepository(session).finish_run(
-                        run.id, status="failure", exit_code=code, current_stage="ci",
-                        error_message=f"target 'ci' exited with code {code}", log_path=str(log_path),
+                    await CiRepository(session).set_job_check_run_id(job_row.id, check_run_id)
+
+            async with SessionLocal() as session:
+                await CiRepository(session).start_job(job_row.id)
+
+            job_log_path = LOGS_DIR / f"{run.id}_{target}.log"
+            with open(job_log_path, "w", encoding="utf-8") as f:
+                f.write(f"=== Running {tool} {target} ===\n")
+
+            cmd = [tool, target]
+            exit_code = await _run_command_pty(run.id, cmd, ws, env, job_log_path, job_name=target)
+
+            tail_log = ""
+            try:
+                with open(job_log_path, encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()
+                    tail_log = "".join(lines[-40:])
+            except Exception:
+                pass
+
+            if exit_code == 0:
+                async with SessionLocal() as session:
+                    await CiRepository(session).finish_job(
+                        job_row.id, status="success", exit_code=0, log_path=str(job_log_path),
                     )
                 if check_run_id:
-                    tail_log = ""
-                    try:
-                        with open(log_path, encoding="utf-8", errors="replace") as f:
-                            lines = f.readlines()
-                            tail_log = "".join(lines[-40:])
-                    except Exception:
-                        pass
+                    await checks.update_check_run(
+                        run.installation_id, run.repo_full_name, check_run_id,
+                        status="completed", conclusion="success",
+                        title=f"{target} Succeeded",
+                        summary=f"`{tool} {target}` passed successfully.",
+                        text=f"```\n{tail_log}\n```",
+                    )
+            else:
+                async with SessionLocal() as session:
+                    await CiRepository(session).finish_job(
+                        job_row.id, status="failure", exit_code=exit_code,
+                        error_message=f"`{tool} {target}` exited with code {exit_code}",
+                        log_path=str(job_log_path),
+                    )
+                if check_run_id:
                     await checks.update_check_run(
                         run.installation_id, run.repo_full_name, check_run_id,
                         status="completed", conclusion="failure",
-                        title="CI Failed",
-                        summary=f"`{tool} ci` failed with exit code {code}",
+                        title=f"{target} Failed",
+                        summary=f"`{tool} {target}` failed with exit code {exit_code}.",
                         text=f"```\n{tail_log}\n```",
                     )
-                return
+            return exit_code
 
-        if run.is_default_branch and has_cd:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"\n>>> Running CD target on default branch ({tool} cd)\n")
+        ci_codes = []
+        if ci_targets:
+            async with SessionLocal() as session:
+                await CiRepository(session).finish_run(run.id, status="in_progress", current_stage="ci")
+            ci_codes = await asyncio.gather(*[_run_job(t, "ci", base_env) for t in ci_targets])
+
+        all_ci_ok = all(c == 0 for c in ci_codes) if ci_codes else True
+
+        cd_codes = []
+        if all_ci_ok and run.is_default_branch and cd_targets:
             async with SessionLocal() as session:
                 await CiRepository(session).finish_run(run.id, status="in_progress", current_stage="cd")
                 secrets = await CiRepository(session).get_secrets(run.repo_full_name)
 
             cd_env = base_env.copy()
             cd_env.update(secrets)
+            cd_codes = await asyncio.gather(*[_run_job(t, "cd", cd_env) for t in cd_targets])
 
-            cmd = [tool, "cd"]
-            code = await _run_command_pty(run.id, cmd, ws, cd_env, log_path)
-            if code != 0:
-                async with SessionLocal() as session:
-                    await CiRepository(session).finish_run(
-                        run.id, status="failure", exit_code=code, current_stage="cd",
-                        error_message=f"target 'cd' exited with code {code}", log_path=str(log_path),
-                    )
-                if check_run_id:
-                    tail_log = ""
-                    try:
-                        with open(log_path, encoding="utf-8", errors="replace") as f:
-                            lines = f.readlines()
-                            tail_log = "".join(lines[-40:])
-                    except Exception:
-                        pass
-                    await checks.update_check_run(
-                        run.installation_id, run.repo_full_name, check_run_id,
-                        status="completed", conclusion="failure",
-                        title="CD Failed",
-                        summary=f"`{tool} cd` failed with exit code {code}",
-                        text=f"```\n{tail_log}\n```",
-                    )
-                return
+        all_cd_ok = all(c == 0 for c in cd_codes) if cd_codes else True
+        final_ok = all_ci_ok and all_cd_ok
+
+        with open(main_log_path, "a", encoding="utf-8") as f:
+            for t in ci_targets + cd_targets:
+                job_log = LOGS_DIR / f"{run.id}_{t}.log"
+                if job_log.is_file():
+                    f.write(f"\n--- [Job: {t}] ---\n")
+                    f.write(job_log.read_text(encoding="utf-8", errors="replace"))
 
         async with SessionLocal() as session:
             await CiRepository(session).finish_run(
-                run.id, status="success", exit_code=0, log_path=str(log_path),
-            )
-        if check_run_id:
-            summary = f"All targets passed successfully using `{tool}`."
-            await checks.update_check_run(
-                run.installation_id, run.repo_full_name, check_run_id,
-                status="completed", conclusion="success",
-                title="CI/CD Succeeded", summary=summary,
+                run.id,
+                status="success" if final_ok else "failure",
+                exit_code=0 if final_ok else 1,
+                log_path=str(main_log_path),
             )
 
     finally:

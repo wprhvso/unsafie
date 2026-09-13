@@ -131,12 +131,12 @@
 
   <div class="example">
     <span class="example-title">1. Bulk Upload <code>.env</code> file:</span>
-    <pre class="code-box">curl -X PUT https://ci.unsafie.com/api/ci/secrets/owner/repo/bulk   -H "Authorization: Bearer uci_live_YOUR_TOKEN"   -H "Content-Type: text/plain"   --data-binary @.env.production</pre>
+    <pre class="code-box">curl -X PUT https://unsafie.com/api/ci/secrets/owner/repo/bulk   -H "Authorization: Bearer uci_live_YOUR_TOKEN"   -H "Content-Type: text/plain"   --data-binary @.env.production</pre>
   </div>
 
   <div class="example">
     <span class="example-title">2. Set a Single Key:</span>
-    <pre class="code-box">curl -X POST https://ci.unsafie.com/api/ci/secrets/owner/repo   -H "Authorization: Bearer uci_live_YOUR_TOKEN"   -H "Content-Type: application/json"   -d '&#123;"key": "PORT", "value": "8080"&#125;'</pre>
+    <pre class="code-box">curl -X POST https://unsafie.com/api/ci/secrets/owner/repo   -H "Authorization: Bearer uci_live_YOUR_TOKEN"   -H "Content-Type: application/json"   -d '&#123;"key": "PORT", "value": "8080"&#125;'</pre>
   </div>
 </div>
 

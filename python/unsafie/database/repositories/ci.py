@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unsafie.database.models.ci import (
     CiApiToken,
+    CiJob,
     CiRun,
     CiRunMetric,
     CiSecret,
@@ -224,3 +225,53 @@ class CiRepository:
         stmt = select(CiRunMetric).where(CiRunMetric.run_id == run_id).order_by(CiRunMetric.recorded_at.asc())
         res = await self.session.scalars(stmt)
         return list(res)
+
+    async def create_job(self, run_id: int, name: str, stage: str) -> CiJob:
+        job = CiJob(run_id=run_id, name=name, stage=stage, status="pending")
+        self.session.add(job)
+        await self.session.commit()
+        await self.session.refresh(job)
+        return job
+
+    async def list_jobs(self, run_id: int) -> list[CiJob]:
+        stmt = select(CiJob).where(CiJob.run_id == run_id).order_by(CiJob.id.asc())
+        res = await self.session.scalars(stmt)
+        return list(res)
+
+    async def get_job(self, run_id: int, name: str) -> CiJob | None:
+        stmt = select(CiJob).where(CiJob.run_id == run_id, CiJob.name == name)
+        return await self.session.scalar(stmt)
+
+    async def set_job_check_run_id(self, job_id: int, check_run_id: int) -> None:
+        stmt = update(CiJob).where(CiJob.id == job_id).values(check_run_id=check_run_id, updated_at=datetime.now(UTC))
+        await self.session.execute(stmt)
+        await self.session.commit()
+
+    async def start_job(self, job_id: int) -> None:
+        now = datetime.now(UTC)
+        stmt = update(CiJob).where(CiJob.id == job_id).values(status="in_progress", started_at=now, updated_at=now)
+        await self.session.execute(stmt)
+        await self.session.commit()
+
+    async def finish_job(
+        self,
+        job_id: int,
+        *,
+        status: str,
+        exit_code: int | None = None,
+        error_message: str | None = None,
+        log_path: str | None = None,
+    ) -> None:
+        now = datetime.now(UTC)
+        values = {
+            "status": status,
+            "completed_at": now,
+            "exit_code": exit_code,
+            "error_message": error_message,
+            "updated_at": now,
+        }
+        if log_path:
+            values["log_path"] = log_path
+        stmt = update(CiJob).where(CiJob.id == job_id).values(**values)
+        await self.session.execute(stmt)
+        await self.session.commit()

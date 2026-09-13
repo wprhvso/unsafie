@@ -24,24 +24,24 @@ def test_monitor_helpers():
 async def test_target_discovery():
     with tempfile.TemporaryDirectory() as tmp:
         td = Path(tmp)
-        t, ci, cd = await runner._discover_targets(td)
+        t, ci, cd = await runner.discover_targets(td)
         assert t == "none"
-        assert ci is False
-        assert cd is False
+        assert ci == []
+        assert cd == []
 
-        (td / "Makefile").write_text("ci:\n\techo ci\ncd:\n\techo cd\n")
+        (td / "Makefile").write_text("ci:\n\techo ignore\nci-test:\n\techo test\ncd-deploy:\n\techo deploy\n")
         if shutil.which("make"):
-            t, ci, cd = await runner._discover_targets(td)
+            t, ci, cd = await runner.discover_targets(td)
             assert t == "make"
-            assert ci is True
-            assert cd is True
+            assert ci == ["ci-test"]
+            assert cd == ["cd-deploy"]
 
-        (td / "justfile").write_text("ci:\n  echo 1\ncd:\n  echo 2\n")
+        (td / "justfile").write_text("ci:\n  echo ignore\nci-lint:\n  echo lint\nci-test:\n  echo test\ncd-prod:\n  echo prod\n")
         if shutil.which("just"):
-            t, ci, cd = await runner._discover_targets(td)
+            t, ci, cd = await runner.discover_targets(td)
             assert t == "just"
-            assert ci is True
-            assert cd is True
+            assert ci == ["ci-lint", "ci-test"]
+            assert cd == ["cd-prod"]
 
 def test_api_token_hashing():
     raw = f"uci_live_{secrets.token_hex(24)}"

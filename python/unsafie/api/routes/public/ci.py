@@ -31,9 +31,7 @@ CI_COOKIE = "unsafie_ci_session"
 LOGS_DIR = Path("/var/lib/unsafie/ci/logs")
 
 def _ci_callback_url(request: Request) -> str:
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "ci.unsafie.com"
-    proto = request.headers.get("x-forwarded-proto") or "https"
-    return f"{proto}://{host}/api/ci/auth/callback"
+    return f"{settings.public_origin}/api/ci/auth/callback"
 
 def _sign_session(login: str, avatar: str = "") -> str:
     exp = int(time.time()) + 30 * 86400
@@ -206,9 +204,11 @@ async def list_runs(
 @router.get("/runs/{run_id}")
 async def get_run(run_id: int, user: CurrentUser):
     async with SessionLocal() as session:
-        r = await CiRepository(session).get_run(run_id)
+        ci_repo = CiRepository(session)
+        r = await ci_repo.get_run(run_id)
         if not r:
             raise HTTPException(404, "run not found")
+        jobs = await ci_repo.list_jobs(run_id)
         return {
             "id": r.id,
             "repo_full_name": r.repo_full_name,
@@ -227,6 +227,19 @@ async def get_run(run_id: int, user: CurrentUser):
             "current_stage": r.current_stage,
             "error_message": r.error_message,
             "created_at": r.created_at.isoformat(),
+            "jobs": [
+                {
+                    "id": j.id,
+                    "name": j.name,
+                    "stage": j.stage,
+                    "status": j.status,
+                    "exit_code": j.exit_code,
+                    "started_at": j.started_at.isoformat() if j.started_at else None,
+                    "completed_at": j.completed_at.isoformat() if j.completed_at else None,
+                    "error_message": j.error_message,
+                }
+                for j in jobs
+            ],
         }
 
 @router.post("/runs/{run_id}/rerun")
@@ -252,16 +265,24 @@ async def get_run_metrics(run_id: int, user: CurrentUser):
         ]
 
 @router.get("/runs/{run_id}/logs/raw")
-async def get_raw_logs(run_id: int, user: CurrentUser):
-    log_file = LOGS_DIR / f"{run_id}.log"
+async def get_raw_logs(run_id: int, user: CurrentUser, job: str | None = None):
+    filename = f"{run_id}_{job}.log" if job else f"{run_id}.log"
+    log_file = LOGS_DIR / filename
+    if not log_file.is_file():
+        log_file = LOGS_DIR / f"{run_id}.log"
     if not log_file.is_file():
         raise HTTPException(404, "log not found")
     return PlainTextResponse(log_file.read_text(encoding="utf-8", errors="replace"))
 
 @router.get("/runs/{run_id}/stream")
-async def stream_run(run_id: int, request: Request):
+async def stream_run(run_id: int, request: Request, job: str | None = None):
     await get_current_ci_user(request)
-    log_file = LOGS_DIR / f"{run_id}.log"
+    filename = f"{run_id}_{job}.log" if job else f"{run_id}.log"
+    log_file = LOGS_DIR / filename
+    if not log_file.is_file() and not job:
+        log_file = LOGS_DIR / f"{run_id}.log"
+
+    sub_channel = f"ci:run:{run_id}:{job}:stream" if job else f"ci:run:{run_id}:stream"
 
     async def _generator():
         offset = 0
@@ -269,12 +290,12 @@ async def stream_run(run_id: int, request: Request):
             try:
                 data = log_file.read_bytes()
                 offset = len(data)
-                yield f"data: {json.dumps({'type': 'init', 'log': data.decode('utf-8', 'replace')})}\n\n"
+                yield f"data: {json.dumps({'type': 'init', 'log': data.decode('utf-8', 'replace'), 'job': job})}\n\n"
             except Exception:
                 pass
 
         pubsub = cluster.client().pubsub()
-        await pubsub.subscribe(f"ci:run:{run_id}:stream")
+        await pubsub.subscribe(sub_channel)
         try:
             while True:
                 if await request.is_disconnected():
@@ -297,7 +318,7 @@ async def stream_run(run_id: int, request: Request):
                         yield f"data: {json.dumps({'type': 'status', 'status': run.status, 'exit_code': run.exit_code})}\n\n"
                         break
         finally:
-            await pubsub.unsubscribe(f"ci:run:{run_id}:stream")
+            await pubsub.unsubscribe(sub_channel)
 
     return StreamingResponse(_generator(), media_type="text/event-stream")
 
