@@ -110,6 +110,11 @@ def main(argv: list[str] | None = None) -> int:
     p_email.add_argument("email")
     p_email.add_argument("--raw", action="store_true", default=False)
 
+    p_img = subs.add_parser("image")
+    p_img.add_argument("prompt", nargs="?", default="Create a photo of a cute cat")
+    p_img.add_argument("-o", "--output", default=None)
+    p_img.add_argument("--timeout", type=float, default=120.0)
+
     p_pages = subs.add_parser("pages", aliases=["page"])
     s_pages = p_pages.add_subparsers(dest="subcmd")
 
@@ -399,6 +404,11 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stdout.flush()
                 return 0
             return _out({"code": code, "result": code, "email": args.email})
+
+        if args.cmd == "image":
+            from unsafie.cli import image
+
+            return _out(image.generate(prompt=args.prompt, output=args.output, timeout=args.timeout))
 
         if args.cmd in ("pages", "page"):
             if not getattr(args, "subcmd", None):
