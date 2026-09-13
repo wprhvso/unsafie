@@ -7,9 +7,24 @@ from typing import Any
 
 import orjson
 import structlog
+from structlog.contextvars import (
+    bind_contextvars,
+    clear_contextvars,
+    unbind_contextvars,
+)
 
 from unsafie.settings import settings
 from unsafie.telemetry.logs import otel_trace_processor
+
+__all__ = [
+    "bind_contextvars",
+    "clear_contextvars",
+    "get_logger",
+    "level",
+    "setup",
+    "short",
+    "unbind_contextvars",
+]
 
 _SECRET_KEYS = frozenset(
     {
