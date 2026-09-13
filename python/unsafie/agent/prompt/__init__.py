@@ -23,7 +23,13 @@ All `unsafie` commands output valid JSON to stdout.
 - `unsafie page delete <slug>` -> Deletes web page.
 
 ## 3. `unsafie browser` — Real Chrome Automation (CDP)
-- `unsafie browser start`, `unsafie browser goto <url>`, `unsafie browser click <sel>`, `unsafie browser type <sel> <text>`, `unsafie browser press <key>`, `unsafie browser wait`, `unsafie browser text [<sel>]`, `unsafie browser html [<sel>]`, `unsafie browser eval <expr>`, `unsafie browser cookies [--set <json>]`, `unsafie browser shot`, `unsafie browser stop`.
+- Lifecycle: `unsafie browser start [--profile <name>] [--size 1920x1080] [--headless]`, `unsafie browser stop`
+- Navigation: `unsafie browser goto <url> [--wait load|none] [--timeout 30]`, `unsafie browser back`, `unsafie browser forward`, `unsafie browser reload [--ignore-cache]`, `unsafie browser url`, `unsafie browser title`
+- Interaction: `unsafie browser click <sel> [--button left|right] [--clicks 1]`, `unsafie browser hover <sel>`, `unsafie browser type <sel> "<text>" [--clear]`, `unsafie browser press <key>`, `unsafie browser drag <from> <to> [--steps 5]`, `unsafie browser scroll [--by x,y | --to <sel> | --top | --bottom]`, `unsafie browser upload <sel> <file>`
+- DOM & Inspection: `unsafie browser query <sel> [--limit 20]`, `unsafie browser text [<sel>]`, `unsafie browser html [<sel>]`, `unsafie browser eval "<expr>"`, `unsafie browser shot [-o <path>] [--full]`
+- Waiting: `unsafie browser wait [<sel>] [--state visible|hidden|attached|detached] [--url <pat>] [--js <expr>] [--timeout 30]`, `unsafie browser wait --network-idle [--idle-time 0.5]`
+- Network & Traffic: `unsafie browser network [--filter <pat>] [--limit 50] [--clear]`, `unsafie browser block [patterns...] [--presets images,fonts,trackers] [--clear]`, `unsafie browser intercept <pattern> [--block|--no-block] [--click <sel>] [--timeout 30]`, `unsafie browser cookies [--set <json>]`
+- Windows & Frames: `unsafie browser tabs`, `unsafie browser tab (new [url] | switch <id> | close [id])`, `unsafie browser frame (switch <sel|id> | main | --list)`, `unsafie browser console [--level error|warn|info|all] [--limit 50] [--clear]`
 
 ## 4. `unsafie github` — GitHub Credentials
 - `unsafie github logins`, `unsafie github use <login>`, `unsafie github token`, `unsafie github identity`.
@@ -43,4 +49,4 @@ All `unsafie` commands output valid JSON to stdout.
 
 SUBAGENT_SYSTEM_PROMPT = SYSTEM_PROMPT
 
-__all__ = ["SUBAGENT_SYSTEM_PROMPT", "SYSTEM_PROMPT",]
+__all__ = ["SUBAGENT_SYSTEM_PROMPT", "SYSTEM_PROMPT"]
