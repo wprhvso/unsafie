@@ -1,8 +1,8 @@
 <script>
-  let { state, empty = 'Nothing here yet.', children } = $props();
+  let { state = null, empty = 'Nothing here yet.', children } = $props();
 </script>
 
-{#if state.loading && !state.data}
+{#if !state || (state.loading && !state.data)}
   <p class="muted pad">Loading…</p>
 {:else if state.error}
   <p class="pad bad">{state.error}</p>
