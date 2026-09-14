@@ -55,9 +55,10 @@ class CiRepository:
     async def create_api_token(
         self, login: str, name: str, token_hash: str, prefix: str
     ) -> CiApiToken:
-        item = CiApiToken(
-            github_login=login.lower(), name=name, token_hash=token_hash, token_prefix=prefix
-        )
+        clean = login.strip().lstrip("@").lower()
+        if not await self.is_whitelisted(clean):
+            await self.add_to_whitelist(clean, added_by="system")
+        item = CiApiToken(github_login=clean, name=name, token_hash=token_hash, token_prefix=prefix)
         self.session.add(item)
         await self.session.commit()
         await self.session.refresh(item)
@@ -259,10 +260,17 @@ class CiRepository:
         return list(res)
 
     async def record_metrics(
-        self, run_id: int, cpu_percent: float, memory_rss_mb: float, rx_kbps: float, tx_kbps: float
+        self,
+        run_id: int,
+        cpu_percent: float,
+        memory_rss_mb: float,
+        rx_kbps: float,
+        tx_kbps: float,
+        job_name: str | None = None,
     ) -> None:
         item = CiRunMetric(
             run_id=run_id,
+            job_name=job_name,
             cpu_percent=cpu_percent,
             memory_rss_mb=memory_rss_mb,
             network_rx_kbps=rx_kbps,
@@ -271,12 +279,11 @@ class CiRepository:
         self.session.add(item)
         await self.session.commit()
 
-    async def get_metrics(self, run_id: int) -> list[CiRunMetric]:
-        stmt = (
-            select(CiRunMetric)
-            .where(CiRunMetric.run_id == run_id)
-            .order_by(CiRunMetric.recorded_at.asc())
-        )
+    async def get_metrics(self, run_id: int, job_name: str | None = None) -> list[CiRunMetric]:
+        stmt = select(CiRunMetric).where(CiRunMetric.run_id == run_id)
+        if job_name:
+            stmt = stmt.where(CiRunMetric.job_name == job_name)
+        stmt = stmt.order_by(CiRunMetric.recorded_at.asc())
         res = await self.session.scalars(stmt)
         return list(res)
 

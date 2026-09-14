@@ -175,6 +175,10 @@ class Settings(BaseSettings):
 
     admin_token: str = ""
     admin_session_days: int = 30
+    secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SECRET_KEY", "ADMIN_TOKEN"),
+    )
 
     chats_dir: Path = Field(default=ROOT / "chats", validation_alias=AliasChoices("CHATS_DIR"))
 

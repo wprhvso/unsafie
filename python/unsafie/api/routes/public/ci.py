@@ -36,10 +36,19 @@ def _ci_callback_url(request: Request) -> str:
     return f"{settings.public_origin}/api/ci/auth/callback"
 
 
+def _secret() -> bytes:
+    key = (
+        getattr(settings, "secret_key", "")
+        or getattr(settings, "admin_token", "")
+        or "unsafie-ci-secret"
+    )
+    return key.encode()
+
+
 def _sign_session(login: str, avatar: str = "") -> str:
     exp = int(time.time()) + 30 * 86400
     payload = f"{login.lower()}:{exp}:{avatar}"
-    sig = hmac.new(settings.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(_secret(), payload.encode(), hashlib.sha256).hexdigest()
     return base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode().rstrip("=")
 
 
@@ -54,7 +63,7 @@ def _verify_session(cookie: str | None) -> tuple[str, str] | None:
     if int(exp_str) < time.time():
         return None
     expected_sig = hmac.new(
-        settings.secret_key.encode(), f"{login}:{exp_str}:{avatar}".encode(), hashlib.sha256
+        _secret(), f"{login}:{exp_str}:{avatar}".encode(), hashlib.sha256
     ).hexdigest()
     if not hmac.compare_digest(sig, expected_sig):
         return None
@@ -270,7 +279,9 @@ async def rerun(run_id: int, user: CurrentUser):
 @router.get("/runs/{run_id}/metrics")
 async def get_run_metrics(run_id: int, user: CurrentUser, job: str | None = None):
     async with SessionLocal() as session:
-        metrics = await CiRepository(session).get_metrics(run_id, job_name=job)
+        metrics = await CiRepository(session).get_metrics(run_id)
+        if job:
+            metrics = [m for m in metrics if m.job_name == job]
         return [
             {
                 "time": m.recorded_at.isoformat(),
