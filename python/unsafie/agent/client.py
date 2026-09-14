@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 import time
 from collections.abc import AsyncIterator, Callable
@@ -19,6 +20,7 @@ RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
 RETRYABLE_KINDS = frozenset(
     {"RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "ABORTED"},
 )
+NON_RETRYABLE_FINISH_REASONS = frozenset({"SAFETY", "RECITATION", "OTHER"})
 
 _session: aiohttp.ClientSession | None = None
 _lock = asyncio.Lock()
@@ -125,8 +127,9 @@ def headers(access_token: str) -> dict[str, str]:
 
 
 class Builder:
-    def __init__(self, model: str) -> None:
-        self.reply = Reply(model=model)
+    def __init__(self, model: str, existing_reply: Reply | None = None) -> None:
+        self.reply = existing_reply if existing_reply is not None else Reply(model=model)
+        self.has_finish_reason: bool = bool(self.reply.stop_reason)
 
     def feed(self, data: dict, on_event: Callable[[str, dict], None] | None) -> None:
         self.reply.raw.append(data)
@@ -157,8 +160,9 @@ class Builder:
                         on_event("text_delta", {"text": text})
 
             finish_reason = candidate.get("finishReason")
-            if finish_reason:
+            if finish_reason is not None:
                 self.reply.stop_reason = str(finish_reason)
+                self.has_finish_reason = True
 
         usage = data.get("usageMetadata")
         if isinstance(usage, dict):
@@ -226,9 +230,11 @@ async def _read(
     stream: aiohttp.StreamReader,
     model: str,
     on_event: Callable[[str, dict], None] | None,
-) -> Reply:
-    builder = Builder(model=model)
-    if on_event:
+    existing_reply: Reply | None = None,
+    emit_message_start: bool = True,
+) -> tuple[Reply, bool]:
+    builder = Builder(model=model, existing_reply=existing_reply)
+    if on_event and emit_message_start:
         on_event("message_start", {"model": model})
     async for data in _events(stream):
         if "error" in data:
@@ -239,7 +245,50 @@ async def _read(
                 error.get("message") or "stream returned error",
             )
         builder.feed(data, on_event)
-    return builder.result()
+    return builder.result(), builder.has_finish_reason
+
+
+def _merge_parts(parts: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    for part in parts:
+        if not merged:
+            merged.append(dict(part))
+            continue
+        last = merged[-1]
+        can_merge_text = (
+            "text" in part
+            and "text" in last
+            and part.get("thought") == last.get("thought")
+            and "thoughtSignature" not in part
+            and "thoughtSignature" not in last
+            and "signature" not in part
+            and "signature" not in last
+        )
+        if can_merge_text:
+            last["text"] = str(last.get("text", "")) + str(part.get("text", ""))
+        else:
+            merged.append(dict(part))
+    return merged
+
+
+def _continuation_body(original_body: dict, reply: Reply) -> dict:
+    new_body = copy.deepcopy(original_body)
+    contents = new_body.get("contents")
+    if not isinstance(contents, list):
+        contents = []
+        new_body["contents"] = contents
+
+    parts = _merge_parts(reply.raw_parts)
+    if not parts and reply.text:
+        parts = [{"text": reply.text}]
+
+    if contents and contents[-1].get("role") in ("model", "assistant"):
+        existing_parts = contents[-1].get("parts") or []
+        contents[-1]["parts"] = _merge_parts(existing_parts + parts)
+    else:
+        contents.append({"role": "model", "parts": parts})
+
+    return new_body
 
 
 async def _once(
@@ -248,7 +297,9 @@ async def _once(
     body: dict,
     attempt: int,
     on_event: Callable[[str, dict], None] | None,
-) -> Reply:
+    existing_reply: Reply | None = None,
+    emit_message_start: bool = True,
+) -> tuple[Reply, bool]:
     http = await session()
     url = f"{settings.gemini_api_url.rstrip('/')}/{model}:streamGenerateContent?alt=sse"
     sent = headers(access_token)
@@ -285,11 +336,13 @@ async def _once(
                         request_id,
                         response.headers.get("retry-after"),
                     )
-                reply = await _read(response.content, model, on_event)
-                if not reply.text or not reply.text.strip():
-                    raise ApiError(
-                        0, "UNAVAILABLE", "model response contained no text blocks", request_id
-                    )
+                reply, has_finish = await _read(
+                    response.content,
+                    model,
+                    on_event,
+                    existing_reply=existing_reply,
+                    emit_message_start=emit_message_start,
+                )
         except TimeoutError as e:
             raise ApiError(
                 0,
@@ -314,7 +367,7 @@ async def _once(
         reply.usage.get("output_tokens"),
         (time.perf_counter() - started) * 1000,
     )
-    return reply
+    return reply, has_finish
 
 
 async def send(
@@ -328,12 +381,58 @@ async def send(
     token = access_token
     current_cred_id = credential_id
     tried_cred_ids: set[int] = {credential_id} if credential_id is not None else set()
+
+    current_body = body
+    reply: Reply | None = None
+    emit_start = True
+
     for attempt in range(1, settings.gemini_retries + 1):
         try:
-            reply = await _once(token, model, body, attempt, on_event)
+            reply, has_finish = await _once(
+                token,
+                model,
+                current_body,
+                attempt,
+                on_event,
+                existing_reply=reply,
+                emit_message_start=emit_start,
+            )
+            emit_start = False
             reply.credential_id = current_cred_id
             reply.access_token = token
-            return reply
+
+            if has_finish and reply.stop_reason is not None:
+                if reply.stop_reason in NON_RETRYABLE_FINISH_REASONS:
+                    logger.warning(
+                        "gemini %s received non-retryable finishReason=%s",
+                        model,
+                        reply.stop_reason,
+                    )
+                    return reply
+                if not reply.text or not reply.text.strip():
+                    raise ApiError(
+                        0,
+                        "UNAVAILABLE",
+                        "model response contained no text blocks",
+                    )
+                return reply
+
+            telemetry.event(
+                "gemini.stream_cut_off",
+                {
+                    "attempt": attempt,
+                    "stop_reason": reply.stop_reason,
+                    "text_len": len(reply.text),
+                    "thoughts_len": len(reply.thoughts),
+                },
+            )
+            logger.warning(
+                "gemini stream ended without valid finishReason (stop=%s, text_len=%s); continuing stream",
+                reply.stop_reason,
+                len(reply.text),
+            )
+            current_body = _continuation_body(body, reply)
+
         except ApiError as e:
             if not e.retryable or attempt >= settings.gemini_retries:
                 raise
@@ -346,4 +445,12 @@ async def send(
             if picked is not None:
                 current_cred_id, token = picked
                 tried_cred_ids.add(current_cred_id)
+            if reply is not None and (reply.text or reply.raw_parts):
+                current_body = _continuation_body(body, reply)
+
+    if reply is not None and (reply.text or reply.raw_parts):
+        reply.credential_id = current_cred_id
+        reply.access_token = token
+        return reply
+
     raise ApiError(0, "INTERNAL", "retries exhausted")
