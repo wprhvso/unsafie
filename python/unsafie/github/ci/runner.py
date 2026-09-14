@@ -215,9 +215,7 @@ async def _run_command_pty(
         with contextlib.suppress(Exception):
             await cluster.client().publish(f"ci:run:{run_id}:stream", metric_payload)
             if job_name:
-                await cluster.client().publish(
-                    f"ci:run:{run_id}:{job_name}:stream", metric_payload
-                )
+                await cluster.client().publish(f"ci:run:{run_id}:{job_name}:stream", metric_payload)
 
     async def _heartbeat_and_monitor():
         hb_counter = 0
