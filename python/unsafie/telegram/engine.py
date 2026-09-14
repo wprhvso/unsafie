@@ -158,10 +158,8 @@ class TelegramEngine(Loop):
 
         while not self._stopped:
             try:
-                try:
+                with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(inbox_wake_event.wait(), timeout=1.0)
-                except TimeoutError:
-                    pass
                 inbox_wake_event.clear()
 
                 while not self._stopped:

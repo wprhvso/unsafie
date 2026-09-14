@@ -53,7 +53,7 @@ class Block:
         lines = [line for line in (self.output or "").strip().splitlines() if line.strip()]
         return lines[-1][:REASON_LIMIT] if lines else ""
 
-    def _dur(self) -> str:
+    def dur(self) -> str:
         if self.seconds < 1.0:
             return f"{max(1, round(self.seconds * 1000))}ms"
         return f"{self.seconds:.1f}s"
@@ -63,11 +63,11 @@ class Block:
         if self.error:
             return f"[block {self.index}] {where}: {self.error}"
         if self.exit_code is None:
-            return f"[block {self.index}] {where}: never came back, {self._dur()}"
+            return f"[block {self.index}] {where}: never came back, {self.dur()}"
         if self.ok:
-            return f"[block {self.index}] {where} · ok in {self._dur()}"
+            return f"[block {self.index}] {where} · ok in {self.dur()}"
         tail = self.reason()
-        head = f"[block {self.index}] {where} · exit {self.exit_code} in {self._dur()}"
+        head = f"[block {self.index}] {where} · exit {self.exit_code} in {self.dur()}"
         return f"{head}: {tail}" if tail else head
 
 
@@ -401,7 +401,7 @@ class Runner:
             self.ctx.prefix,
             block.index,
             block.machine,
-            block.error or f"exit={block.exit_code} in {block._dur()}",
+            block.error or f"exit={block.exit_code} in {block.dur()}",
         )
 
     def content(self) -> list[dict]:
