@@ -18,9 +18,13 @@ def _slice_utf16(text: str, offset: int, length: int) -> str:
 
 def addressed_to_bot(message: Message, bot_id: int, username: str | None) -> bool:
     reply = message.reply_to_message
-    if reply is not None and reply.from_user is not None and reply.from_user.id == bot_id:
-        if getattr(reply, "forum_topic_created", None) is None:
-            return True
+    if (
+        reply is not None
+        and reply.from_user is not None
+        and reply.from_user.id == bot_id
+        and getattr(reply, "forum_topic_created", None) is None
+    ):
+        return True
 
     text = message.text or message.caption or ""
     entities = message.entities or message.caption_entities or []
