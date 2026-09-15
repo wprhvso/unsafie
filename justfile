@@ -1,10 +1,13 @@
 set dotenv-load := true
 
+sync:
+    cd python && uv sync --all-groups --all-extras
+
 fix:
     cd python && ruff format
     cd python && ruff check --fix --unsafe-fixes
 
-ci-basedpyright:
+ci-basedpyright: sync
     cd python && basedpyright
 
 ci-ruff:
@@ -13,7 +16,7 @@ ci-ruff:
 ci-ruff-format:
     cd python && ruff format --check
 
-ci-pytest:
+ci-pytest: sync
     cd python && pytest tests/
 
 cd-ansible *args:
