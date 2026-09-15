@@ -17,4 +17,6 @@ def extract_code(text: str | None) -> str:
         code = STRIP_START_RE.sub("", text)
         code = STRIP_END_RE.sub("", code)
         return code.strip()
+    if "```" not in text:
+        return text.strip()
     return ""
