@@ -5,6 +5,7 @@ commands-start =
     /wipe — eliminar todo el historial de conversaciones, archivos de sandbox y artefactos
     /stop — detener: como respuesta, lo que inició ese mensaje; sin respuesta, todo
     /effort — esfuerzo de pensamiento
+    /load — cargar archivos del repositorio en el contexto
     /gh — token y repositorios de GitHub
     /ssh — servidores por SSH
     /pool — máquinas del pool y ejecutores de CI
@@ -86,3 +87,12 @@ cmd-long-expired = Se agotó el tiempo: no se envió nada
 cmd-runs-empty = No hay tareas activas en este chat
 
 commands-wipe-success = Se ha eliminado permanentemente todo el historial de conversaciones, contexto, archivos de sandbox y artefactos de este chat.
+
+commands-load-usage = Uso: /load owner/repo [owner2/repo2 ...]
+commands-load-success =
+    Se cargaron con éxito { $chars } caracteres de { $repos } ({ $files } archivos).
+    Responde a este mensaje para continuar la conversación con el contexto del repositorio.
+commands-load-all-failed =
+    Error al cargar repositorios:
+    { $errors }
+commands-load-partial-failed = Error al cargar: { $failed }
