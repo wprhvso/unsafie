@@ -6,6 +6,7 @@ commands-start =
     /stop — stop: as a reply, whatever that message started; without a reply, everything
     /pipe — sequential execution of lines as separate turns
     /effort — thinking effort
+    /load — load repository files into context
     /gh — GitHub token and repositories
     /ssh — servers over SSH
     /pool — pool machines and CI runners
@@ -88,3 +89,12 @@ cmd-long-expired = Timed out — nothing was sent
 cmd-runs-empty = No active runs in this chat
 
 commands-wipe-success = All conversation history, context, sandbox files, and artifacts for this chat have been permanently deleted.
+
+commands-load-usage = Usage: /load owner/repo [owner2/repo2 ...]
+commands-load-success =
+    Successfully loaded { $chars } characters from { $repos } ({ $files } files).
+    Reply to this message to continue the conversation with the repository context.
+commands-load-all-failed =
+    Failed to load repositories:
+    { $errors }
+commands-load-partial-failed = Failed to load: { $failed }

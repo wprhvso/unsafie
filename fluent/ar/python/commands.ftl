@@ -5,6 +5,7 @@ commands-start =
     /wipe — حذف جميع سجل المحادثات وملفات بيئة الاختبار والمخرجات
     /stop — إيقاف: كرد يوقف ما بدأته تلك الرسالة، ودون رد يوقف كل شيء
     /effort — جهد التفكير
+    /load — تحميل ملفات المستودع في السياق
     /gh — رمز ومستودعات GitHub
     /ssh — خوادم عبر SSH
     /pool — أجهزة المجمع ومُشغلات CI
@@ -83,3 +84,12 @@ cmd-long-expired = انتهت المهلة — لم يُرسل شيء
 cmd-runs-empty = لا توجد مهام نشطة في هذه الدردشة
 
 commands-wipe-success = تم حذف جميع سجل المحادثات والسياق وملفات بيئة الاختبار والمخرجات لهذه المحادثة نهائيًا.
+
+commands-load-usage = الاستخدام: /load owner/repo [owner2/repo2 ...]
+commands-load-success =
+    تم تحميل { $chars } حرف بنجاح من { $repos } ({ $files } ملفات).
+    قم بالرد على هذه الرسالة لمتابعة المحادثة مع سياق المستودع.
+commands-load-all-failed =
+    فشل تحميل المستودعات:
+    { $errors }
+commands-load-partial-failed = فشل تحميل: { $failed }

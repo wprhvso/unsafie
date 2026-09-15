@@ -5,6 +5,7 @@ commands-start =
     /wipe — supprimer tout l'historique des conversations, les fichiers du bac à sable et les artefacts
     /stop — arrêter : en réponse, ce que ce message a initié ; sans réponse, tout
     /effort — effort de réflexion
+    /load — charger les fichiers du dépôt dans le contexte
     /gh — token et dépôts GitHub
     /ssh — serveurs via SSH
     /pool — machines du pool et runners CI
@@ -86,3 +87,12 @@ cmd-long-expired = Délai dépassé — rien n'a été envoyé
 cmd-runs-empty = Aucune tâche active dans cette discussion
 
 commands-wipe-success = Tout l'historique des conversations, le contexte, les fichiers du bac à sable et les artefacts de ce chat ont été définitivement supprimés.
+
+commands-load-usage = Utilisation : /load owner/repo [owner2/repo2 ...]
+commands-load-success =
+    { $chars } caractères chargés avec succès depuis { $repos } ({ $files } fichiers).
+    Répondez à ce message pour continuer la conversation avec le contexte du dépôt.
+commands-load-all-failed =
+    Échec du chargement des dépôts :
+    { $errors }
+commands-load-partial-failed = Échec du chargement de : { $failed }
