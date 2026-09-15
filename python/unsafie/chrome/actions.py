@@ -545,15 +545,16 @@ def intercept_request(
                 if body:
                     with contextlib.suppress(Exception):
                         body_json = json.loads(body)
-                target_session = ev.get("sessionId") or cdp.session_id
+                target_session = ev.get("sessionId")
+                kwargs = {"session": target_session} if target_session else {}
                 if block:
                     cdp.call(
                         "Fetch.failRequest",
                         {"requestId": req_id, "errorReason": "BlockedByClient"},
-                        session=target_session,
+                        **kwargs,
                     )
                 else:
-                    cdp.call("Fetch.continueRequest", {"requestId": req_id}, session=target_session)
+                    cdp.call("Fetch.continueRequest", {"requestId": req_id}, **kwargs)
                 return {
                     "intercepted": True,
                     "url": url,

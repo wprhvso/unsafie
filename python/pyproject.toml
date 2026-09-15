@@ -63,7 +63,7 @@ members = ["unsafie-wire"]
 unsafie-wire = { workspace = true }
 
 [dependency-groups]
-dev = ["basedpyright>=1.39", "ruff>=0.16"]
+dev = ["basedpyright>=1.39", "pytest>=8.0.0", "pytest-asyncio>=0.24.0", "ruff>=0.16"]
 
 [tool.ruff]
 line-length = 100
