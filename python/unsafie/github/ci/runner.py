@@ -229,6 +229,9 @@ async def _run_command_pty(
 
     monitor_task = asyncio.create_task(_heartbeat_and_monitor())
 
+    async def _publish(channel: str, message: str) -> None:
+        await cluster.client().publish(channel, message)
+
     def _read_output():
         with open(log_file_path, "ab") as lf:
             while True:
@@ -242,7 +245,7 @@ async def _run_command_pty(
                         lf.flush()
                         chunk_str = data.decode("utf-8", "replace")
                         asyncio.run_coroutine_threadsafe(
-                            cluster.client().publish(
+                            _publish(
                                 f"ci:run:{run_id}:stream",
                                 json.dumps({"type": "log", "chunk": chunk_str, "job": job_name}),
                             ),
@@ -250,7 +253,7 @@ async def _run_command_pty(
                         )
                         if job_name:
                             asyncio.run_coroutine_threadsafe(
-                                cluster.client().publish(
+                                _publish(
                                     f"ci:run:{run_id}:{job_name}:stream",
                                     json.dumps(
                                         {"type": "log", "chunk": chunk_str, "job": job_name}

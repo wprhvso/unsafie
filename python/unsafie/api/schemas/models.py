@@ -94,6 +94,7 @@ class TurnRead(Base):
     finished_at: datetime | None = None
     is_subagent: bool = False
     title: str | None = None
+    slug: str | None = None
 
 
 class ResponseRead(Base):

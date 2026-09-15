@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from unsafie.github.app import auth
 from unsafie.github.client.base import session as http_session
@@ -63,19 +64,20 @@ async def update_check_run(
     text: str | None = None,
 ) -> bool:
     headers = await _headers(installation_id)
-    payload = {
+    output: dict[str, str] = {
+        "title": title[:255],
+        "summary": summary[:65535],
+    }
+    if text:
+        output["text"] = text[:65535]
+    payload: dict[str, Any] = {
         "status": status,
-        "output": {
-            "title": title[:255],
-            "summary": summary[:65535],
-        },
+        "output": output,
     }
     if conclusion:
         payload["conclusion"] = conclusion
     if status == "completed":
         payload["completed_at"] = datetime.now(UTC).isoformat()
-    if text:
-        payload["output"]["text"] = text[:65535]
     http = await http_session()
     url = f"{settings.github_api_url}/repos/{repo_full_name}/check-runs/{check_run_id}"
     async with http.patch(url, json=payload, headers=headers) as resp:

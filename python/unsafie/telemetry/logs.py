@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from opentelemetry import trace
+from structlog.typing import EventDict
 
 
 class TraceIds(logging.Filter):
@@ -16,9 +17,7 @@ class TraceIds(logging.Filter):
         return True
 
 
-def otel_trace_processor(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def otel_trace_processor(logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
     context = trace.get_current_span().get_span_context()
     if context.is_valid:
         event_dict["trace_id"] = format(context.trace_id, "032x")

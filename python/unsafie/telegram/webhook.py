@@ -5,7 +5,7 @@ from aiogram import Dispatcher
 from unsafie import cluster
 from unsafie.log import get_logger
 from unsafie.settings import settings
-from unsafie.telegram.engine import telegram_engine
+from unsafie.telegram.engine import TelegramEngine, telegram_engine
 from unsafie.telegram.handlers import build_router
 from unsafie.telegram.middleware import UpdateMiddleware
 
@@ -16,6 +16,7 @@ dispatcher.update.outer_middleware(UpdateMiddleware())
 dispatcher.include_router(build_router())
 
 supervisor = telegram_engine
+Supervisor = TelegramEngine
 
 
 def mark_name(bot_id: int) -> str:
