@@ -1,6 +1,6 @@
 import contextlib
 import json
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 import aiohttp
@@ -40,7 +40,7 @@ async def list_turns(
             status,
         )
         turn_ids = [r.id for r in rows]
-        slug_map = {}
+        slug_map: dict[UUID, str] = {}
         if turn_ids:
             from sqlalchemy import select
 
@@ -48,7 +48,7 @@ async def list_turns(
 
             stmt = select(Artifact.turn_id, Artifact.slug).where(Artifact.turn_id.in_(turn_ids))
             res = await session.execute(stmt)
-            slug_map = dict(res.all())
+            slug_map = {row[0]: row[1] for row in res.all() if row[0] is not None}
     items = []
     for r in rows:
         item = TurnRead.model_validate(r)
@@ -71,6 +71,7 @@ async def live_link(turn_id: UUID):
 async def get_turn_trace(turn_id: UUID):
     spans = []
     logs_data = []
+    all_traces: list[dict[str, Any]] = []
 
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5.0)) as client:
         try:

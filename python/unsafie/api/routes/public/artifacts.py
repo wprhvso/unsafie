@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -32,7 +34,7 @@ async def page_json(slug: str):
         artifact = await repo.by_slug(slug)
         if artifact is None:
             raise HTTPException(404, "Not Found")
-        payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
+        payload: dict[str, Any] = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
         if artifact.turn_id:
             payload["turn_id"] = str(artifact.turn_id)
             if artifact.kind == ArtifactKind.TURN:
@@ -92,7 +94,7 @@ async def spa(path: str, request: Request):
         artifact = await repo.by_slug(slug)
         if artifact is None:
             return HTMLResponse(static.not_found(slug), status_code=404)
-        payload = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
+        payload: dict[str, Any] = {"slug": slug, "kind": artifact.kind, "title": artifact.title}
         if artifact.turn_id:
             payload["turn_id"] = str(artifact.turn_id)
             if artifact.kind == ArtifactKind.TURN:

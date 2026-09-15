@@ -353,7 +353,9 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
                             outcome.status if outcome.error is None else short(outcome.error, 1000)
                         )
                         logger.info("%s finished with %s", prefix, outcome.status)
-                        telemetry_slug = await artifacts.telemetry_for_turn(turn)
+                        telemetry_slug = await artifacts.telemetry_for_turn(
+                            turn.id, turn.bot_id, turn.chat_id
+                        )
                         telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
                         await notify(
                             bot,
@@ -395,7 +397,7 @@ async def run_turn(bot: Bot, plan: turns.Plan, prompt: str, locale: str) -> None
             logger.exception("%s turn crashed", prefix)
             await queue.clear(turn.id)
             note = "crashed"
-            telemetry_slug = await artifacts.telemetry_for_turn(turn)
+            telemetry_slug = await artifacts.telemetry_for_turn(turn.id, turn.bot_id, turn.chat_id)
             telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
             await notify(
                 bot,
@@ -934,7 +936,9 @@ async def resume_turn(turn_id: UUID) -> None:
                     await queue.clear(turn.id)
                     note = outcome.status if outcome.error is None else short(outcome.error, 1000)
                     logger.info("%s resume finished with %s", prefix, outcome.status)
-                    telemetry_slug = await artifacts.telemetry_for_turn(turn)
+                    telemetry_slug = await artifacts.telemetry_for_turn(
+                        turn.id, turn.bot_id, turn.chat_id
+                    )
                     telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
                     await notify(
                         bot,
@@ -973,7 +977,7 @@ async def resume_turn(turn_id: UUID) -> None:
         logger.exception("%s resume turn crashed", prefix)
         await queue.clear(turn.id)
         note = "crashed"
-        telemetry_slug = await artifacts.telemetry_for_turn(turn)
+        telemetry_slug = await artifacts.telemetry_for_turn(turn.id, turn.bot_id, turn.chat_id)
         telemetry_url = artifacts.url(telemetry_slug) if telemetry_slug else None
         await notify(
             bot,

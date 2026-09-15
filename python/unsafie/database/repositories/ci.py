@@ -45,7 +45,7 @@ class CiRepository:
         stmt = delete(CiWhitelist).where(func.lower(CiWhitelist.github_login) == clean)
         res = await self.session.execute(stmt)
         await self.session.commit()
-        return (res.rowcount or 0) > 0
+        return bool(getattr(res, "rowcount", 0))
 
     async def list_whitelist(self) -> list[CiWhitelist]:
         stmt = select(CiWhitelist).order_by(CiWhitelist.created_at.desc())
@@ -87,7 +87,7 @@ class CiRepository:
         )
         res = await self.session.execute(stmt)
         await self.session.commit()
-        return (res.rowcount or 0) > 0
+        return bool(getattr(res, "rowcount", 0))
 
     async def get_secrets(self, repo_full_name: str) -> dict[str, str]:
         stmt = select(CiSecret).where(CiSecret.repo_full_name == repo_full_name)
@@ -126,7 +126,7 @@ class CiRepository:
         )
         res = await self.session.execute(stmt)
         await self.session.commit()
-        return (res.rowcount or 0) > 0
+        return bool(getattr(res, "rowcount", 0))
 
     async def enqueue_run(
         self,
@@ -203,7 +203,7 @@ class CiRepository:
         )
         res = await self.session.execute(stmt)
         await self.session.commit()
-        return (res.rowcount or 0) > 0
+        return bool(getattr(res, "rowcount", 0))
 
     async def set_check_run_id(self, run_id: int, check_run_id: int) -> None:
         stmt = (

@@ -1,6 +1,5 @@
 import json
 import logging
-import logging.config
 import re
 import sys
 from typing import Any
@@ -12,6 +11,7 @@ from structlog.contextvars import (
     clear_contextvars,
     unbind_contextvars,
 )
+from structlog.typing import EventDict
 
 from unsafie.settings import settings
 from unsafie.telemetry.logs import otel_trace_processor
@@ -71,9 +71,7 @@ def level() -> str:
     return value
 
 
-def scrub_secrets_processor(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def scrub_secrets_processor(logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
     for key, val in list(event_dict.items()):
         if any(secret in key.lower() for secret in _SECRET_KEYS):
             event_dict[key] = "***MASKED***"
@@ -82,9 +80,7 @@ def scrub_secrets_processor(
     return event_dict
 
 
-def ensure_message_processor(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def ensure_message_processor(logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
     if "event" in event_dict and "message" not in event_dict:
         event_dict["message"] = event_dict["event"]
     elif "message" in event_dict and "event" not in event_dict:
