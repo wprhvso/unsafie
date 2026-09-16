@@ -472,6 +472,18 @@ wheels = [
 ]
 
 [[package]]
+name = "deprecated"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/49/85/12f0a49a7c4ffb70572b6c2ef13c90c88fd190debda93b23f026b25f9634/deprecated-1.3.1.tar.gz", hash = "sha256:b1b50e0ff0c1fddaa5708a2c6b0a6588bb09b892825ab2b214ac9ea9d92a5223", size = 2932523, upload-time = "2025-10-30T08:19:02.757Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/d0/205d54408c08b13550c733c4b85429e7ead111c7f0014309637425520a9a/deprecated-1.3.1-py2.py3-none-any.whl", hash = "sha256:597bfef186b6f60181535a29fbe44865ce137a5079f295b479886c82729d5f3f", size = 11298, upload-time = "2025-10-30T08:19:00.758Z" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.141.1"
 source = { registry = "https://pypi.org/simple" }
@@ -680,6 +692,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5f/f7/abb373e5757eaec4b922b92f97ec8d6d7e057cf06778247604fbc4e7c3f3/idna-3.19.tar.gz", hash = "sha256:5e0811a4383b21dc5838069f801c4fb62113b7447663d2530d2bd6e77b49bf15", size = 215237, upload-time = "2026-08-18T05:14:24.27Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/57/b0/0e52c878c53f245edd3a11020f20979b3f490f245af532c7cae3027754b5/idna-3.19-py3-none-any.whl", hash = "sha256:815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4", size = 68550, upload-time = "2026-08-18T05:14:22.343Z" },
+]
+
+[[package]]
+name = "inflection"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/dc/3986343faf9631d8bc61d8a6a1331b5f4f08723dbce3b39f524c367a1621/inflection-0.4.0.tar.gz", hash = "sha256:32a5c3341d9583ec319548b9015b7fbdf8c429cbcb575d326c33ae3a0e90d52c", size = 14536, upload-time = "2020-04-06T19:35:37.724Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/c1/36be286d85dbd76527fb613527222a795d7c071da195fa916e7bf3cb03cb/inflection-0.4.0-py2.py3-none-any.whl", hash = "sha256:9a15d3598f01220e93f2207c432cfede50daff53137ce660fb8be838ef1ca6cc", size = 5789, upload-time = "2020-04-06T19:35:36.732Z" },
 ]
 
 [[package]]
@@ -1517,6 +1538,16 @@ wheels = [
 ]
 
 [[package]]
+name = "python-cdp"
+version = "1.4.0"
+source = { git = "https://github.com/HMaker/python-cdp.git?rev=latest#c1b7fc906b56c61455b07e6bceb9064073e01d34" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "deprecated" },
+    { name = "inflection" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -1708,6 +1739,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "alembic" },
     { name = "asyncssh" },
+    { name = "attrs" },
     { name = "charset-normalizer" },
     { name = "defusedxml" },
     { name = "fastapi" },
@@ -1731,6 +1763,7 @@ dependencies = [
     { name = "pynacl" },
     { name = "pypdfium2" },
     { name = "python-calamine" },
+    { name = "python-cdp" },
     { name = "python-pptx" },
     { name = "redis", extra = ["hiredis"] },
     { name = "sqlalchemy" },
@@ -1755,6 +1788,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.0" },
     { name = "alembic", specifier = ">=1.19.1" },
     { name = "asyncssh", specifier = ">=2.19.0" },
+    { name = "attrs", specifier = ">=26.1.0" },
     { name = "charset-normalizer", specifier = ">=3.5.1" },
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "fastapi", specifier = ">=0.141.1" },
@@ -1774,10 +1808,11 @@ requires-dist = [
     { name = "pillow", specifier = ">=12.3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.5" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
-    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10.0" },
+    { name = "pyjwt", extras = ["crypto"] },
     { name = "pynacl", specifier = ">=1.5.0" },
     { name = "pypdfium2", specifier = ">=5.13" },
     { name = "python-calamine", specifier = ">=0.8.2" },
+    { name = "python-cdp", git = "https://github.com/HMaker/python-cdp.git?rev=latest" },
     { name = "python-pptx", specifier = ">=1.0.2" },
     { name = "redis", extras = ["hiredis"], specifier = ">=8.1.0" },
     { name = "sqlalchemy", specifier = ">=2.0.52" },

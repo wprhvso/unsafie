@@ -1,29 +1,19 @@
-import asyncio
+from __future__ import annotations
+
 import copy
-import json
-import time
-from collections.abc import AsyncIterator, Callable
+import uuid
 from dataclasses import dataclass, field
-from urllib.parse import urlparse
+from typing import TYPE_CHECKING
 
-import aiohttp
+from unsafie.aistudio.browser import RateLimitError
+from unsafie.aistudio.client import get_default_client
+from unsafie.aistudio.formatter import format_chat_prompt
+from unsafie.log import get_logger
 
-from unsafie import telemetry
-from unsafie.agent import opal
-from unsafie.log import get_logger, short
-from unsafie.settings import settings
-from unsafie.telemetry import attrs
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
-
-RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
-RETRYABLE_KINDS = frozenset(
-    {"RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "ABORTED"},
-)
-NON_RETRYABLE_FINISH_REASONS = frozenset({"SAFETY", "RECITATION", "OTHER"})
-
-_session: aiohttp.ClientSession | None = None
-_lock = asyncio.Lock()
 
 
 class ApiError(Exception):
@@ -44,7 +34,13 @@ class ApiError(Exception):
 
     @property
     def retryable(self) -> bool:
-        return self.status in RETRYABLE_STATUS or self.kind in RETRYABLE_KINDS
+        return self.status in (408, 409, 425, 429, 500, 502, 503, 504) or self.kind in (
+            "RESOURCE_EXHAUSTED",
+            "UNAVAILABLE",
+            "DEADLINE_EXCEEDED",
+            "INTERNAL",
+            "ABORTED",
+        )
 
     def describe(self) -> str:
         tail = f" (request {self.request_id})" if self.request_id else ""
@@ -74,7 +70,6 @@ class Reply:
         return []
 
     def as_message(self) -> dict:
-        # Сохраняем raw_parts (мысли + сигнатуры + код), обеспечивая сохранение цепочки рассуждений в многоходовом диалоге
         return {"role": "assistant", "content": self.raw_parts or self.text}
 
     def dump(self) -> dict:
@@ -91,161 +86,6 @@ class Reply:
         if self.id:
             data["id"] = self.id
         return data
-
-
-async def session() -> aiohttp.ClientSession:
-    global _session
-    if _session is not None and not _session.closed:
-        return _session
-    async with _lock:
-        if _session is None or _session.closed:
-            connector = aiohttp.TCPConnector(
-                limit=settings.gemini_connections,
-                limit_per_host=settings.gemini_connections,
-                ttl_dns_cache=300,
-            )
-            _session = aiohttp.ClientSession(connector=connector)
-            logger.info("gemini http pool opened (limit=%s)", settings.gemini_connections)
-    return _session
-
-
-async def close_session() -> None:
-    global _session
-    if _session is not None and not _session.closed:
-        await _session.close()
-        logger.info("gemini http pool closed")
-    _session = None
-
-
-def headers(access_token: str) -> dict[str, str]:
-    return {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {access_token}",
-        "Origin": "https://opal.google",
-        "User-Agent": "unsafie",
-    }
-
-
-class Builder:
-    def __init__(self, model: str, existing_reply: Reply | None = None) -> None:
-        self.reply = existing_reply if existing_reply is not None else Reply(model=model)
-        self.has_finish_reason: bool = bool(self.reply.stop_reason)
-
-    def feed(self, data: dict, on_event: Callable[[str, dict], None] | None) -> None:
-        self.reply.raw.append(data)
-        candidates = data.get("candidates") or []
-        for candidate in candidates:
-            content = candidate.get("content") or {}
-            parts = content.get("parts") or []
-            for part in parts:
-                self.reply.raw_parts.append(dict(part))
-
-                sig = part.get("thoughtSignature") or part.get("signature")
-                if sig:
-                    self.reply.thought_signatures.append(sig)
-                    if on_event:
-                        on_event("thought_signature", {"signature": sig})
-
-                text = part.get("text")
-                if not text:
-                    continue
-
-                if part.get("thought") is True:
-                    self.reply.thoughts += text
-                    if on_event:
-                        on_event("thought_delta", {"thought": text})
-                else:
-                    self.reply.text += text
-                    if on_event:
-                        on_event("text_delta", {"text": text})
-
-            finish_reason = candidate.get("finishReason")
-            if finish_reason is not None:
-                self.reply.stop_reason = str(finish_reason)
-                self.has_finish_reason = True
-
-        usage = data.get("usageMetadata")
-        if isinstance(usage, dict):
-            mapped = {
-                "input_tokens": usage.get("promptTokenCount", 0),
-                "output_tokens": usage.get("candidatesTokenCount", 0),
-                "total_tokens": usage.get("totalTokenCount", 0),
-            }
-            self.reply.usage.update(mapped)
-            if on_event:
-                on_event("message_delta", {"usage": mapped, "stop_reason": self.reply.stop_reason})
-
-    def result(self) -> Reply:
-        return self.reply
-
-
-async def _lines(stream: aiohttp.StreamReader) -> AsyncIterator[bytes]:
-    buffer = b""
-    async for chunk in stream.iter_any():
-        buffer += chunk
-        while True:
-            cut = buffer.find(b"\n")
-            if cut < 0:
-                break
-            line, buffer = buffer[:cut], buffer[cut + 1 :]
-            yield line.rstrip(b"\r")
-    if buffer:
-        yield buffer.rstrip(b"\r")
-
-
-async def _events(stream: aiohttp.StreamReader) -> AsyncIterator[dict]:
-    async for raw in _lines(stream):
-        line = raw.decode("utf-8", "replace").strip()
-        if not line or not line.startswith("data:"):
-            continue
-        payload = line[5:].strip()
-        if not payload or payload == "[DONE]":
-            continue
-        try:
-            data = json.loads(payload)
-        except ValueError:
-            logger.warning("gemini sent unparsable sse data: %s", short(payload, 300))
-            continue
-        if isinstance(data, dict):
-            yield data
-
-
-def _failure(status: int, raw: bytes, request_id: str | None, retry_after: str | None) -> ApiError:
-    kind = "HTTP_ERROR"
-    message = short(raw.decode("utf-8", "replace"), 500)
-    try:
-        body = json.loads(raw)
-    except ValueError:
-        body = None
-    if isinstance(body, dict):
-        error = body.get("error")
-        if isinstance(error, dict):
-            kind = error.get("status") or str(error.get("code") or kind)
-            message = error.get("message") or message
-    wait = float(retry_after.strip()) if retry_after and retry_after.strip().isdigit() else None
-    return ApiError(status, kind, message, request_id, wait)
-
-
-async def _read(
-    stream: aiohttp.StreamReader,
-    model: str,
-    on_event: Callable[[str, dict], None] | None,
-    existing_reply: Reply | None = None,
-    emit_message_start: bool = True,
-) -> tuple[Reply, bool]:
-    builder = Builder(model=model, existing_reply=existing_reply)
-    if on_event and emit_message_start:
-        on_event("message_start", {"model": model})
-    async for data in _events(stream):
-        if "error" in data:
-            error = data["error"] or {}
-            raise ApiError(
-                200,
-                error.get("status") or "API_ERROR",
-                error.get("message") or "stream returned error",
-            )
-        builder.feed(data, on_event)
-    return builder.result(), builder.has_finish_reason
 
 
 def _merge_parts(parts: list[dict]) -> list[dict]:
@@ -291,83 +131,12 @@ def _continuation_body(original_body: dict, reply: Reply) -> dict:
     return new_body
 
 
-async def _once(
-    access_token: str,
-    model: str,
-    body: dict,
-    attempt: int,
-    on_event: Callable[[str, dict], None] | None,
-    existing_reply: Reply | None = None,
-    emit_message_start: bool = True,
-) -> tuple[Reply, bool]:
-    http = await session()
-    url = f"{settings.gemini_api_url.rstrip('/')}/{model}:streamGenerateContent?alt=sse"
-    sent = headers(access_token)
-    timeout = aiohttp.ClientTimeout(
-        total=settings.gemini_timeout,
-        connect=settings.gemini_connect_timeout,
-        sock_read=settings.gemini_read_timeout,
-    )
-    started = time.perf_counter()
-    with telemetry.span(
-        f"gemini POST {model}:streamGenerateContent",
-        kind=telemetry.CLIENT,
-        attributes={
-            attrs.HTTP_METHOD: "POST",
-            attrs.HTTP_URL: url,
-            attrs.SERVER_ADDRESS: urlparse(url).hostname,
-            attrs.GEN_AI_SYSTEM: "gemini",
-            attrs.GEN_AI_MODEL: model,
-            attrs.ATTEMPT: attempt if attempt > 1 else None,
-        },
-    ) as span:
-        try:
-            async with http.post(url, headers=sent, json=body, timeout=timeout) as response:
-                request_id = response.headers.get("x-request-id")
-                telemetry.set_attrs(
-                    span,
-                    {attrs.HTTP_STATUS: response.status, attrs.REQUEST_ID: request_id},
-                )
-                if response.status >= 400:
-                    raw = await response.read()
-                    raise _failure(
-                        response.status,
-                        raw,
-                        request_id,
-                        response.headers.get("retry-after"),
-                    )
-                reply, has_finish = await _read(
-                    response.content,
-                    model,
-                    on_event,
-                    existing_reply=existing_reply,
-                    emit_message_start=emit_message_start,
-                )
-        except TimeoutError as e:
-            raise ApiError(
-                0,
-                "DEADLINE_EXCEEDED",
-                f"no answer in {settings.gemini_timeout:.0f}s",
-            ) from e
-        except aiohttp.ClientError as e:
-            raise ApiError(0, "UNAVAILABLE", f"{type(e).__name__}: {e}") from e
-        telemetry.set_attrs(
-            span,
-            {
-                attrs.GEN_AI_INPUT_TOKENS: reply.usage.get("input_tokens"),
-                attrs.GEN_AI_OUTPUT_TOKENS: reply.usage.get("output_tokens"),
-                attrs.GEN_AI_FINISH_REASONS: [reply.stop_reason] if reply.stop_reason else None,
-            },
-        )
-    logger.info(
-        "gemini %s stop=%s in=%s out=%s (%.0fms)",
-        model,
-        reply.stop_reason,
-        reply.usage.get("input_tokens"),
-        reply.usage.get("output_tokens"),
-        (time.perf_counter() - started) * 1000,
-    )
-    return reply, has_finish
+async def close_session() -> None:
+    pass
+
+
+async def session() -> Any:
+    return None
 
 
 async def send(
@@ -378,79 +147,37 @@ async def send(
     credential_id: int | None = None,
     on_event: Callable[[str, dict], None] | None = None,
 ) -> Reply:
-    token = access_token
-    current_cred_id = credential_id
-    tried_cred_ids: set[int] = {credential_id} if credential_id is not None else set()
+    formatted_prompt = format_chat_prompt(body)
+    if on_event:
+        on_event("message_start", {"model": model})
 
-    current_body = body
-    reply: Reply | None = None
-    emit_start = True
+    ai_client = get_default_client()
+    try:
+        response_text = await ai_client.generate(formatted_prompt)
+        raw_text = str(response_text)
+    except RateLimitError as e:
+        raise ApiError(429, "RESOURCE_EXHAUSTED", str(e)) from e
+    except Exception as e:
+        raise ApiError(500, "INTERNAL", str(e)) from e
 
-    for attempt in range(1, settings.gemini_retries + 1):
-        try:
-            reply, has_finish = await _once(
-                token,
-                model,
-                current_body,
-                attempt,
-                on_event,
-                existing_reply=reply,
-                emit_message_start=emit_start,
-            )
-            emit_start = False
-            reply.credential_id = current_cred_id
-            reply.access_token = token
+    if on_event:
+        on_event("text_delta", {"text": raw_text})
 
-            if has_finish and reply.stop_reason is not None:
-                if reply.stop_reason in NON_RETRYABLE_FINISH_REASONS:
-                    logger.warning(
-                        "gemini %s received non-retryable finishReason=%s",
-                        model,
-                        reply.stop_reason,
-                    )
-                    return reply
-                if not reply.text or not reply.text.strip():
-                    raise ApiError(
-                        0,
-                        "UNAVAILABLE",
-                        "model response contained no text blocks",
-                    )
-                return reply
+    usage = {
+        "input_tokens": max(1, len(formatted_prompt) // 4),
+        "output_tokens": max(1, len(raw_text) // 4),
+        "total_tokens": max(2, (len(formatted_prompt) + len(raw_text)) // 4),
+    }
+    if on_event:
+        on_event("message_delta", {"usage": usage, "stop_reason": "STOP"})
 
-            telemetry.event(
-                "gemini.stream_cut_off",
-                {
-                    "attempt": attempt,
-                    "stop_reason": reply.stop_reason,
-                    "text_len": len(reply.text),
-                    "thoughts_len": len(reply.thoughts),
-                },
-            )
-            logger.warning(
-                "gemini stream ended without valid finishReason (stop=%s, text_len=%s); continuing stream",
-                reply.stop_reason,
-                len(reply.text),
-            )
-            current_body = _continuation_body(body, reply)
-
-        except ApiError as e:
-            if not e.retryable or attempt >= settings.gemini_retries:
-                raise
-            telemetry.event(
-                "gemini.retry",
-                {"attempt": attempt, "status": e.status, "kind": e.kind},
-            )
-            logger.warning("gemini %s, retrying immediately", e.describe())
-            picked = await opal.get_random_access_token(exclude=tried_cred_ids)
-            if picked is not None:
-                current_cred_id, token = picked
-                tried_cred_ids.add(current_cred_id)
-            if reply is not None and (reply.text or reply.raw_parts):
-                current_body = _continuation_body(body, reply)
-
-    if reply is not None and (reply.text or reply.raw_parts):
-        reply.credential_id = current_cred_id
-        reply.access_token = token
-        return reply
-
-    raise ApiError(0, "INTERNAL", "retries exhausted")
+    return Reply(
+        id=uuid.uuid4().hex,
+        model=model,
+        text=raw_text,
+        stop_reason="STOP",
+        usage=usage,
+        raw_parts=[{"text": raw_text}],
+        credential_id=credential_id,
+        access_token=access_token,
+    )

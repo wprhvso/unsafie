@@ -12,7 +12,11 @@ dependencies = [
     "asyncssh>=2.19.0",
     "fastapi>=0.141.1",
     "fluent.runtime>=0.4.0",
-    "pyjwt[crypto]>=2.10.0",
+    "pyjwt[crypto]",
+    "attrs>=26.1.0",
+    "kameleo-local-api-client>=5.2.0",
+    "python-cdp",
+    "structlog>=26.1.0",
     "pynacl>=1.5.0",
     "llmmd>=0.1.7",
     "opentelemetry-sdk>=1.44.0",
@@ -26,7 +30,6 @@ dependencies = [
     "sqlalchemy>=2.0.52",
     "unsafie-wire",
     "uvicorn>=0.52.4",
-    "kameleo-local-api-client>=5.2.0",
     "websockets[standard]>=17.1",
     "charset-normalizer>=3.5.1",
     "defusedxml>=0.7.1",
@@ -39,7 +42,6 @@ dependencies = [
     "python-calamine>=0.8.2",
     "python-pptx>=1.0.2",
     "striprtf>=0.0.33",
-    "structlog>=26.1.0",
     "orjson>=3.12.0",
 ]
 
@@ -60,10 +62,16 @@ module-root = ""
 members = ["unsafie-wire"]
 
 [tool.uv.sources]
+python-cdp = { git = "https://github.com/HMaker/python-cdp.git", rev = "latest" }
 unsafie-wire = { workspace = true }
 
 [dependency-groups]
-dev = ["basedpyright>=1.39", "pytest>=8.0.0", "pytest-asyncio>=0.24.0", "ruff>=0.16"]
+dev = [
+    "basedpyright>=1.39",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.16",
+]
 
 [tool.ruff]
 line-length = 100
@@ -72,33 +80,39 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "D",       # pydocstyle
-    "CPY",     # flake8-copyright
-    "COM812",  # missing-trailing-comma
-    "ISC001",  # implicit-str-concat
-    "E501",    # line-too-long
-    "ANN",     # flake8-annotations
-    "PLC0415", # import-outside-top-level
-    "PLR",     # pylint-refactor
-    "PLW",     # pylint-warnings
-    "C901",    # mccabe complexity
-    "BLE001",  # blind-except
-    "S",       # flake8-bandit
-    "FBT",     # flake8-boolean-trap
-    "INP001",  # implicit-namespace-package
-    "ASYNC",   # flake8-async
-    "ARG",     # flake8-unused-arguments
-    "N818",    # error-suffix-on-exception-name
-    "A",       # flake8-builtins
-    "PTH",     # flake8-use-pathlib
-    "RUF001",  # ambiguous-unicode-character-string
-    "TRY",     # tryceratops
-    "DTZ",     # flake8-datetimez
-    "PERF",    # perflint
+    "D",
+    "CPY",
+    "COM812",
+    "ISC001",
+    "E501",
+    "ANN",
+    "PLC0415",
+    "PLR",
+    "PLW",
+    "C901",
+    "BLE001",
+    "S",
+    "FBT",
+    "INP001",
+    "ASYNC",
+    "ARG",
+    "N818",
+    "A",
+    "PTH",
+    "RUF001",
+    "TRY",
+    "DTZ",
+    "PERF",
 ]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body", "fastapi.Path"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Body",
+    "fastapi.Path",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["unsafie", "unsafie_wire"]

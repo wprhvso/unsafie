@@ -83,6 +83,8 @@ def _usage(span, result: loop.Result) -> None:
 
 
 async def _punish(session_row, result: loop.Result) -> None:
+    if session_row is None:
+        return
     await opal.invalidate(session_row.id)
     async with SessionLocal() as session:
         creds = OpalSessionRepository(session)
@@ -123,37 +125,12 @@ async def _execute(
     async with SessionLocal() as session:
         creds = OpalSessionRepository(session)
         session_row = await creds.pick()
-        if session_row is None:
-            next_at = await creds.next_cooldown()
-            logger.warning("%s no usable opal session", prefix)
-            return Outcome("no_credentials", next_at=next_at)
         user = await UserRepository(session).get_or_create(ctx.user_id)
         model = settings.gemini_model
         effort = user.effort or settings.gemini_thinking_level
 
-    try:
-        with telemetry.span("auth.opal_token", attributes={attrs.TURN_ID: str(ctx.turn_id)}):
-            access_token = await opal.get_access_token(
-                session_row.id,
-                session_row.refresh_token,
-            )
-    except opal.OpalRefreshFailed as e:
-        logger.warning("%s opal session %s refresh failed: %s", prefix, session_row.id, e)
-        await _punish(
-            session_row,
-            loop.Result(status="failed", error=str(e), failure=credentials.Failure.AUTH),
-        )
-        return Outcome("failed", error=str(e))
-
-    logger.info(
-        "%s session=%s model=%s effort=%s messages=%s machine=%s",
-        prefix,
-        session_row.id,
-        model,
-        effort,
-        len(messages),
-        ctx.machine_name,
-    )
+    session_id = session_row.id if session_row else 1
+    access_token = "aistudio"
 
     started = time.perf_counter()
     with telemetry.span(
@@ -165,7 +142,7 @@ async def _execute(
             attrs.GEN_AI_MODEL: model,
             attrs.EFFORT: effort,
             attrs.TURN_ID: str(ctx.turn_id),
-            attrs.CREDENTIAL_ID: session_row.id,
+            attrs.CREDENTIAL_ID: session_id,
         },
     ) as query_span:
         result = await loop.run(
@@ -176,7 +153,7 @@ async def _execute(
             prompt=system_prompt,
             effort=effort,
             recorder=Recorder(prefix, live.of(ctx.turn_id)),
-            credential_id=session_row.id,
+            credential_id=session_id,
             initial_checkpoint=initial_checkpoint,
         )
         elapsed = (time.perf_counter() - started) * 1000
@@ -198,11 +175,11 @@ async def _execute(
                 RuntimeError(short(result.error or result.status, 300)),
             )
 
-    used_cred_id = result.credential_id or session_row.id
+    used_cred_id = result.credential_id or session_id
     async with SessionLocal() as session:
         await TurnRepository(session).record(
             ctx.turn_id,
-            credential_id=used_cred_id,
+            credential_id=used_cred_id if session_row else None,
             num_turns=result.steps,
             result=result.text,
         )
@@ -216,22 +193,17 @@ async def _execute(
     )
 
     if result.status == "ok":
-        async with SessionLocal() as session:
-            await OpalSessionRepository(session).succeeded(used_cred_id)
+        if session_row is not None:
+            async with SessionLocal() as session:
+                await OpalSessionRepository(session).succeeded(used_cred_id)
         return Outcome("ok")
     if result.status == "paused":
         return Outcome("paused")
     if result.failure is not None and credentials.blames_credential(result.failure):
-        logger.warning(
-            "%s session=%s failed (%s): %s",
-            prefix,
-            used_cred_id,
-            result.failure,
-            short(result.error, 600),
-        )
-        async with SessionLocal() as session:
-            cred_row = await OpalSessionRepository(session).get(used_cred_id)
-        await _punish(cred_row or session_row, result)
+        if session_row is not None:
+            async with SessionLocal() as session:
+                cred_row = await OpalSessionRepository(session).get(used_cred_id)
+            await _punish(cred_row or session_row, result)
     return Outcome("failed", error=result.error)
 
 
