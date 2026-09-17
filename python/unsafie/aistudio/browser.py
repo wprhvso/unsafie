@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import aiohttp
-from pycdp.cdp import fetch, input_, network, page, runtime, target
+from pycdp.cdp import emulation, fetch, input_, network, page, runtime, target
 
 from unsafie.log import get_logger
 from unsafie.settings import settings
@@ -254,6 +254,7 @@ class AistudioBrowser:
         self.mouse = HumanMouse(browser=self)
         self._is_busy: bool = False
         self._idle_mouse_task: asyncio.Task[None] | None = None
+        self._keepalive_task: asyncio.Task[None] | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -301,6 +302,49 @@ class AistudioBrowser:
                 break
             except Exception:
                 await asyncio.sleep(2.0)
+
+    async def _keepalive_loop(self) -> None:
+        while True:
+            try:
+                await asyncio.sleep(12.0)
+                if not self._is_busy and self.is_connected and self._current_session_id:
+                    try:
+                        res, _ = await asyncio.wait_for(
+                            self.execute(
+                                runtime.evaluate(expression="1 + 1", return_by_value=True)
+                            ),
+                            timeout=3.0,
+                        )
+                        if not res or res.value != 2:
+                            logger.warning(
+                                "aistudio.keepalive.unexpected_result",
+                                profile_id=self.profile.get("id"),
+                            )
+                    except Exception as err:
+                        logger.warning(
+                            "aistudio.keepalive.failed",
+                            profile_id=self.profile.get("id"),
+                            error=str(err),
+                        )
+                        if self._ws and not self._ws.closed:
+                            with contextlib.suppress(Exception):
+                                await self._ws.close()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(4.0)
+
+    async def ping(self, timeout: float = 2.0) -> bool:
+        if not self.is_connected or not self._current_session_id:
+            return False
+        try:
+            res, _ = await asyncio.wait_for(
+                self.execute(runtime.evaluate(expression="1 + 1", return_by_value=True)),
+                timeout=timeout,
+            )
+            return bool(res and res.value == 2)
+        except Exception:
+            return False
 
     async def capture_error_video(self, reason: str = "error") -> str | None:
         pid = self.profile.get("id", "unknown")
@@ -416,11 +460,28 @@ class AistudioBrowser:
                         else:
                             fut.set_result(payload.get("result", {}))
                     else:
+                        method = payload.get("method", "")
+                        params = payload.get("params", {})
+                        if (
+                            method
+                            in (
+                                "Target.detachedFromTarget",
+                                "Inspector.detached",
+                                "Inspector.targetCrashed",
+                            )
+                            and params.get("sessionId") == self._current_session_id
+                        ):
+                            logger.warning(
+                                "aistudio.cdp.session_invalidated",
+                                profile_id=pid,
+                                method=method,
+                            )
+                            self._current_session_id = None
+
                         event_session = payload.get("sessionId")
                         if self._current_session_id and event_session != self._current_session_id:
                             continue
 
-                        method = payload.get("method", "")
                         loop_time = asyncio.get_running_loop().time()
 
                         if method == "Fetch.requestPaused":
@@ -451,6 +512,11 @@ class AistudioBrowser:
             pass
         except Exception as e:
             logger.exception("aistudio.reader.exception", profile_id=pid, error=str(e))
+        finally:
+            for fut in list(self._pending_cmds.values()):
+                if not fut.done():
+                    fut.set_exception(ConnectionResetError("CDP WebSocket disconnected"))
+            self._pending_cmds.clear()
 
     async def execute(
         self,
@@ -476,9 +542,18 @@ class AistudioBrowser:
 
         fut: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
         self._pending_cmds[cmd_id] = fut
-        await self._ws.send_json(req)
+        try:
+            await self._ws.send_json(req)
+        except Exception as e:
+            self._pending_cmds.pop(cmd_id, None)
+            raise ConnectionResetError(f"Failed to send CDP command {method_name}: {e}") from e
 
-        result = await fut
+        try:
+            result = await asyncio.wait_for(fut, timeout=15.0)
+        except TimeoutError:
+            self._pending_cmds.pop(cmd_id, None)
+            raise RuntimeError(f"CDP command {req.get('method')} timed out after 15s")
+
         try:
             cdp_generator.send(result)
         except StopIteration as e:
@@ -517,17 +592,35 @@ class AistudioBrowser:
     async def reconnect(self) -> None:
         profile_id = self.profile["id"]
         logger.info("aistudio.browser.reconnecting", profile_id=profile_id)
+
+        if self._keepalive_task and not self._keepalive_task.done():
+            self._keepalive_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._keepalive_task
+        self._keepalive_task = None
+
         if self._idle_mouse_task and not self._idle_mouse_task.done():
             self._idle_mouse_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._idle_mouse_task
+        self._idle_mouse_task = None
 
         if self._reader_task and not self._reader_task.done():
             self._reader_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
+        self._reader_task = None
+
+        for fut in list(self._pending_cmds.values()):
+            if not fut.done():
+                fut.set_exception(ConnectionResetError("Reconnecting CDP"))
+        self._pending_cmds.clear()
 
         if self._ws and not self._ws.closed:
             await self._ws.close()
         self._ws = None
+        self._current_session_id = None
+        self._current_target_id = None
 
         await self.__aenter__()
         await self.monopolize_tabs("https://aistudio.google.com")
@@ -535,6 +628,15 @@ class AistudioBrowser:
 
     async def ensure_connected(self) -> None:
         if not self.is_connected:
+            await self.reconnect()
+            return
+
+        alive = await self.ping(timeout=2.0)
+        if not alive:
+            logger.warning(
+                "aistudio.browser.ping_failed_reconnecting",
+                profile_id=self.profile.get("id"),
+            )
             await self.reconnect()
 
     async def __aenter__(self) -> Self:
@@ -548,7 +650,11 @@ class AistudioBrowser:
         last_err = None
         for attempt in range(30):
             try:
-                self._ws = await self.session.ws_connect(ws_url, max_msg_size=0)
+                self._ws = await self.session.ws_connect(
+                    ws_url,
+                    max_msg_size=0,
+                    heartbeat=15.0,
+                )
                 logger.info("aistudio.ws.connected", profile_id=profile_id, attempt=attempt + 1)
                 break
             except Exception as err:
@@ -586,8 +692,16 @@ class AistudioBrowser:
         await self.execute(page.enable())
         await self.execute(runtime.enable())
 
+        with contextlib.suppress(Exception):
+            await self.execute(emulation.set_focus_emulation_enabled(enabled=True))
+        with contextlib.suppress(Exception):
+            await self.execute(emulation.set_cpu_throttling_rate(rate=1.0))
+
         if self._idle_mouse_task is None or self._idle_mouse_task.done():
             self._idle_mouse_task = asyncio.create_task(self._idle_mouse_loop())
+
+        if self._keepalive_task is None or self._keepalive_task.done():
+            self._keepalive_task = asyncio.create_task(self._keepalive_loop())
 
         return self
 
@@ -595,6 +709,12 @@ class AistudioBrowser:
         profile_id = self.profile["id"]
         logger.info("aistudio.browser.closing", profile_id=profile_id, stop_profile=stop_profile)
         self.stop_recording()
+
+        if self._keepalive_task and not self._keepalive_task.done():
+            self._keepalive_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._keepalive_task
+        self._keepalive_task = None
 
         if self._idle_mouse_task and not self._idle_mouse_task.done():
             self._idle_mouse_task.cancel()
@@ -606,6 +726,12 @@ class AistudioBrowser:
             self._reader_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
+        self._reader_task = None
+
+        for fut in list(self._pending_cmds.values()):
+            if not fut.done():
+                fut.set_exception(ConnectionResetError("CDP browser closed"))
+        self._pending_cmds.clear()
 
         if self._ws and not self._ws.closed:
             await self._ws.close()
@@ -887,19 +1013,25 @@ class AistudioBrowser:
             return null;
         })()
         """
+
         card_coords = await self._query_element_center(model_card_js)
         if not card_coords:
             tune_btn_js = """
             (() => {
-                const isVisible = (el) => el && el.getBoundingClientRect().width > 0;
+                const isVisible = (el) => el && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+                const btn = document.querySelector('.runsettings-toggle-button, button.runsettings-toggle-button, [data-test-id*="runsettings"]');
+                if (btn && isVisible(btn)) {
+                    const r = btn.getBoundingClientRect();
+                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                }
                 const buttons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(isVisible);
-                const btn = buttons.find(b => {
+                const fallback = buttons.find(b => {
                     const aria = (b.getAttribute('aria-label') || '').toLowerCase();
                     const text = (b.textContent || '').toLowerCase();
                     return aria.includes('run settings') || aria.includes('settings') || aria.includes('tune') || text.includes('tune');
                 });
-                if (btn) {
-                    const r = btn.getBoundingClientRect();
+                if (fallback) {
+                    const r = fallback.getBoundingClientRect();
                     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
                 }
                 return null;
@@ -909,8 +1041,11 @@ class AistudioBrowser:
             if tune_coords:
                 logger.info("aistudio.model.opening_settings_drawer", coords=tune_coords)
                 await mouse.click_at(tune_coords["x"], tune_coords["y"])
-                await asyncio.sleep(0.5)
-                card_coords = await self._query_element_center(model_card_js)
+                for _ in range(12):
+                    await asyncio.sleep(0.25)
+                    card_coords = await self._query_element_center(model_card_js)
+                    if card_coords:
+                        break
 
         if not card_coords:
             raise RuntimeError("Model selector element not found on page")
@@ -1038,6 +1173,11 @@ class AistudioBrowser:
         await self.execute(network.enable())
         await self.execute(page.enable())
         await self.execute(runtime.enable())
+
+        with contextlib.suppress(Exception):
+            await self.execute(emulation.set_focus_emulation_enabled(enabled=True))
+        with contextlib.suppress(Exception):
+            await self.execute(emulation.set_cpu_throttling_rate(rate=1.0))
 
         for old_id in old_page_ids:
             if str(old_id) != str(new_target_id):

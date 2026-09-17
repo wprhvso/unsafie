@@ -127,7 +127,9 @@ class AistudioPoolManager:
                     await b.monopolize_tabs("https://aistudio.google.com")
                     await b.check_welcome_page()
                     logger.info("aistudio.pool.worker.ready", profile_id=pid, name=name)
-                    return ManagedProfile(profile_id=pid, profile_data=p, browser=b, is_running=True)
+                    return ManagedProfile(
+                        profile_id=pid, profile_data=p, browser=b, is_running=True
+                    )
                 except Exception as e:
                     logger.warning(
                         "aistudio.pool.worker.failed_to_start",
@@ -174,7 +176,11 @@ class AistudioPoolManager:
             if not self._is_started:
                 return
 
-            logger.info("aistudio.pool.stopping", workers=list(self._managed.keys()), stop_kameleo=stop_kameleo)
+            logger.info(
+                "aistudio.pool.stopping",
+                workers=list(self._managed.keys()),
+                stop_kameleo=stop_kameleo,
+            )
             for mp in list(self._managed.values()):
                 with contextlib.suppress(Exception):
                     await mp.browser.close(stop_profile=stop_kameleo)
@@ -198,6 +204,17 @@ class AistudioPoolManager:
             for mp in list(self._managed.values()):
                 if not mp.is_busy and mp.is_running and now >= mp.rate_limited_until:
                     mp.is_busy = True
+                    try:
+                        await mp.browser.ensure_connected()
+                    except Exception as e:
+                        logger.warning(
+                            "aistudio.pool.acquire.reconnect_failed",
+                            profile_id=mp.profile_id,
+                            error=str(e),
+                        )
+                        mp.is_busy = False
+                        mp.is_running = False
+                        continue
                     logger.info(
                         "aistudio.pool.acquire.granted",
                         profile_id=mp.profile_id,
@@ -215,7 +232,9 @@ class AistudioPoolManager:
                     pid = spare["id"]
                     logger.info("aistudio.pool.spawning_spare_worker", profile_id=pid)
                     assert self._session is not None
-                    b = AistudioBrowser(session=self._session, profile=spare, endpoint=self.endpoint)
+                    b = AistudioBrowser(
+                        session=self._session, profile=spare, endpoint=self.endpoint
+                    )
                     try:
                         await b.__aenter__()
                         await b.monopolize_tabs("https://aistudio.google.com")
@@ -321,9 +340,15 @@ class AistudioPoolManager:
                         profile_id=mp.profile_id,
                         error=str(e),
                     )
-                    if "WebSocket is not connected" in str(e) or not mp.browser.is_connected:
+                    if (
+                        isinstance(e, ConnectionResetError)
+                        or "WebSocket is not connected" in str(e)
+                        or not mp.browser.is_connected
+                    ):
                         mp.is_running = False
-                        logger.warning("aistudio.pool.marking_worker_dead", profile_id=mp.profile_id)
+                        logger.warning(
+                            "aistudio.pool.marking_worker_dead", profile_id=mp.profile_id
+                        )
                         with contextlib.suppress(Exception):
                             await mp.browser.reconnect()
                             mp.is_running = True
