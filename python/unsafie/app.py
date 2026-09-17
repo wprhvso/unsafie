@@ -70,6 +70,7 @@ async def lifespan(app: FastAPI):
                 loop.start()
             if settings.runs_worker or settings.runs_web:
                 from unsafie.aistudio.client import get_default_pool
+
                 try:
                     active_pool = await get_default_pool()
                     logger.info(
@@ -88,6 +89,7 @@ async def lifespan(app: FastAPI):
         for loop in reversed(LOOPS):
             await loop.stop()
         from unsafie.aistudio.client import get_pool_instance
+
         aistudio_pool = get_pool_instance()
         if aistudio_pool is not None:
             await aistudio_pool.stop(stop_kameleo=False)
@@ -172,16 +174,6 @@ async def health(response: Response) -> dict[str, object]:
     redis = await cluster.health()
     degraded = redis["status"] != "ok"
 
-    aistudio_status = "disabled"
-    if settings.runs_worker or settings.runs_web:
-        from unsafie.aistudio.client import get_pool_instance
-        aistudio_pool = get_pool_instance()
-        if aistudio_pool is None or not aistudio_pool.is_ready():
-            degraded = True
-            aistudio_status = "not_ready"
-        else:
-            aistudio_status = f"ready ({len(aistudio_pool._managed)} profiles)"
-
     if degraded:
         response.status_code = 503
 
@@ -190,7 +182,6 @@ async def health(response: Response) -> dict[str, object]:
         "instance": settings.instance_id,
         "role": settings.role,
         "redis": redis,
-        "aistudio": aistudio_status,
     }
 
 

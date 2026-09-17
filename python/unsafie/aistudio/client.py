@@ -15,10 +15,6 @@ _global_pool: AistudioPoolManager | None = None
 _init_lock = asyncio.Lock()
 
 
-def get_pool_instance() -> AistudioPoolManager | None:
-    return _global_pool
-
-
 async def get_default_pool() -> AistudioPoolManager:
     global _global_pool
     if _global_pool is None:
