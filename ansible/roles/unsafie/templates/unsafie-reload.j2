@@ -7,7 +7,7 @@ TMP_UPSTREAM="${CONFIG_DIR}/active-upstream.conf.tmp"
 HOST="{{ unsafie_host }}"
 BLUE_PORT={{ unsafie_blue_port | default(8001) }}
 GREEN_PORT={{ unsafie_green_port | default(8002) }}
-TIMEOUT=45
+TIMEOUT=90
 
 is_active() {
     systemctl is-active --quiet "$1"

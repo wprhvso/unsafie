@@ -1,8 +1,10 @@
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from unsafie import cluster, events, telemetry
@@ -28,7 +30,7 @@ from unsafie.pool.keeper import keeper
 from unsafie.presence import presence
 from unsafie.scheduler.runner import runner
 from unsafie.settings import settings
-from unsafie.ssh.pool import pool
+from unsafie.ssh.pool import pool as ssh_pool
 from unsafie.ssh.watchdog import watchdog
 from unsafie.telegram import bots
 from unsafie.telegram.webhook import supervisor
@@ -66,6 +68,16 @@ async def lifespan(app: FastAPI):
             await recovery_supervisor.startup_sweep()
             for loop in LOOPS:
                 loop.start()
+            if settings.runs_worker or settings.runs_web:
+                from unsafie.aistudio.client import get_default_pool
+                try:
+                    active_pool = await get_default_pool()
+                    logger.info(
+                        "app.lifespan.aistudio_pool_ready",
+                        active_workers=len(active_pool._managed),
+                    )
+                except Exception as e:
+                    logger.exception("app.lifespan.aistudio_pool_failed", error=str(e))
         logger.info("app.lifespan.ready")
     yield
     with telemetry.span("app.shutdown", kind=telemetry.INTERNAL):
@@ -75,7 +87,11 @@ async def lifespan(app: FastAPI):
             logger.warning("app.lifespan.turns_draining", running_turns_count=len(left), turns=left)
         for loop in reversed(LOOPS):
             await loop.stop()
-        await pool.close_all()
+        from unsafie.aistudio.client import get_pool_instance
+        aistudio_pool = get_pool_instance()
+        if aistudio_pool is not None:
+            await aistudio_pool.stop(stop_kameleo=False)
+        await ssh_pool.close_all()
         await bots.close_all()
         await close_session()
         await close_gemini()
@@ -129,16 +145,52 @@ app.include_router(cli_router)
 app.include_router(machines_router)
 
 
+@app.get("/api/admin/screenshots/latest")
+async def screenshot_latest():
+    base = Path("/var/lib/unsafie/screenshots")
+    target = base / "latest.png"
+    if not target.is_file():
+        files = sorted(base.glob("*.png"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if files:
+            target = files[0]
+    if not target or not target.is_file():
+        raise HTTPException(404, "no screenshots taken yet")
+    return FileResponse(target, media_type="image/png")
+
+
+@app.get("/api/admin/screenshots/{name}")
+async def screenshot_by_name(name: str):
+    clean_name = Path(name).name
+    target = Path("/var/lib/unsafie/screenshots") / clean_name
+    if not target.is_file():
+        raise HTTPException(404, "screenshot not found")
+    return FileResponse(target, media_type="image/png")
+
+
 @app.get("/health")
 async def health(response: Response) -> dict[str, object]:
     redis = await cluster.health()
-    if redis["status"] != "ok":
+    degraded = redis["status"] != "ok"
+
+    aistudio_status = "disabled"
+    if settings.runs_worker or settings.runs_web:
+        from unsafie.aistudio.client import get_pool_instance
+        aistudio_pool = get_pool_instance()
+        if aistudio_pool is None or not aistudio_pool.is_ready():
+            degraded = True
+            aistudio_status = "not_ready"
+        else:
+            aistudio_status = f"ready ({len(aistudio_pool._managed)} profiles)"
+
+    if degraded:
         response.status_code = 503
+
     return {
-        "status": "ok" if redis["status"] == "ok" else "degraded",
+        "status": "degraded" if degraded else "ok",
         "instance": settings.instance_id,
         "role": settings.role,
         "redis": redis,
+        "aistudio": aistudio_status,
     }
 
 

@@ -246,6 +246,15 @@ class Settings(BaseSettings):
     kameleo_device_type: str = "desktop"
     kameleo_browser_product: str = "chrome"
 
+    aistudio_screenshot_pattern: str = Field(
+        default="/var/lib/unsafie/screenshots/aistudio_error_{profile_id}_{timestamp}.png",
+        validation_alias=AliasChoices(
+            "AISTUDIO_SCREENSHOT_PATTERN",
+            "AISTUDIO_ERROR_SCREENSHOT_TEMPLATE",
+            "AISTUDIO_ERROR_SCREENSHOT_PATTERN",
+        ),
+    )
+
     pool_vnc_port: int = 5900
     pool_desktop_ttl: float = 7_200.0
     pool_tunnel_wait: float = 30.0

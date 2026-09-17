@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -148,17 +149,35 @@ async def send(
     on_event: Callable[[str, dict], None] | None = None,
 ) -> Reply:
     formatted_prompt = format_chat_prompt(body)
+    logger.info(
+        "agent.client.send.started",
+        model=model,
+        credential_id=credential_id,
+        prompt_len=len(formatted_prompt),
+        prompt_preview=formatted_prompt[:250],
+    )
     if on_event:
         on_event("message_start", {"model": model})
 
     ai_client = get_default_client()
+    started = time.perf_counter()
     try:
         response_text = await ai_client.generate(formatted_prompt)
         raw_text = str(response_text)
     except RateLimitError as e:
+        logger.warning("agent.client.send.rate_limit", error=str(e))
         raise ApiError(429, "RESOURCE_EXHAUSTED", str(e)) from e
     except Exception as e:
+        logger.exception("agent.client.send.failed", error=str(e))
         raise ApiError(500, "INTERNAL", str(e)) from e
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    logger.info(
+        "agent.client.send.completed",
+        duration_ms=elapsed_ms,
+        response_len=len(raw_text),
+        response_preview=raw_text[:250],
+    )
 
     if on_event:
         on_event("text_delta", {"text": raw_text})
