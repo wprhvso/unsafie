@@ -123,6 +123,7 @@
       - shellcheck
       - yamllint
       - trivy
+      - ansible
     state: present
 
 - name: imagemagick pdf policy
