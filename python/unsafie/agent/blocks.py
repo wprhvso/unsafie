@@ -175,7 +175,10 @@ class Runner:
         pythonpath_env = ":".join(dict.fromkeys(p for p in pythonpath_elements if p))
 
         resolv_path = Path("/etc/resolv.conf")
-        real_resolv = str(resolv_path.resolve()) if resolv_path.exists() else "/etc/resolv.conf"
+        try:
+            real_resolv = str(resolv_path.resolve()) if resolv_path.exists() else None
+        except Exception:
+            real_resolv = None
 
         argv.extend(
             [
@@ -202,8 +205,16 @@ class Runner:
                 "/run/systemd/resolve",
                 "/run/systemd/resolve",
                 "--ro-bind-try",
-                real_resolv,
-                "/etc/resolv.conf",
+                "/run/resolvconf",
+                "/run/resolvconf",
+            ]
+        )
+
+        if real_resolv and real_resolv != "/etc/resolv.conf":
+            argv.extend(["--ro-bind-try", real_resolv, real_resolv])
+
+        argv.extend(
+            [
                 "--ro-bind-try",
                 "/opt",
                 "/opt",
@@ -419,3 +430,9 @@ class Runner:
 
     async def settle(self) -> list[dict]:
         return self.content()
+
+    def tool_started(self, call_id: str, name: str, args: dict) -> None:
+        pass
+
+    def tool_finished(self, call_id: str, name: str, result: dict, ms: float) -> None:
+        pass
