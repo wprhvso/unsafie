@@ -126,8 +126,10 @@ class Runner:
         chat_base = Path(settings.chats_dir) / str(self.ctx.chat_id)
         workdir = chat_base / "work"
         homedir = chat_base / "home"
+        tmpdir = chat_base / "tmp"
         workdir.mkdir(parents=True, exist_ok=True)
         homedir.mkdir(parents=True, exist_ok=True)
+        tmpdir.mkdir(parents=True, exist_ok=True)
 
         argv: list[str] = []
         if shutil.which("nice"):
@@ -229,7 +231,8 @@ class Runner:
                 "--dev-bind",
                 "/dev",
                 "/dev",
-                "--tmpfs",
+                "--bind",
+                str(tmpdir),
                 "/tmp",
                 "--bind",
                 str(workdir),
